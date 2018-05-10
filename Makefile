@@ -426,6 +426,12 @@ SRCS-LINUXDVB = \
 SRCS-${CONFIG_LINUXDVB} += $(SRCS-LINUXDVB)
 I18N-C += $(SRCS-LINUXDVB)
 
+# RTLSDRDAB
+SRCS-RTLSDRDAB = \
+	src/input/mpegts/rtlsdrdab/rtlsdrdab.c
+SRCS-${CONFIG_RTLSDRDAB} += $(SRCS-RTLSDRDAB)
+I18N-C += $(SRCS-RTLSDRDAB)
+
 # SATIP Client
 SRCS-SATIP-CLIENT = \
 	src/input/mpegts/satip/satip.c \
