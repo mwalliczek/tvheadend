@@ -25,6 +25,7 @@ OPTIONS=(
   "capmt:yes"
   "constcw:yes"
   "linuxdvb:yes"
+  "rtlsdrdab:yes"
   "satip_server:yes"
   "satip_client:yes"
   "hdhomerun_client:no"
