@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <rtl-sdr.h>
 #include <unistd.h>
+#include <openssl/sha.h>
 
 #include "tvheadend.h"
 #include "input.h"
@@ -145,7 +146,7 @@ rtlsdr_adapter_new(int number, char *vendor, char *product, char *serial, char *
 		return NULL;
 	}
 
-	tvhinfo(LS_RTLSDRDAB, "adapter added %d", number);
+	tvhinfo(LS_RTLSDR, "adapter added %d", number);
 	return la;
 }
 
@@ -158,13 +159,13 @@ rtlsdr_adapter_add(int device_number)
 	char vendor[256], product[256], serial[256];
 	char *device_name;
 
-	tvhtrace(LS_RTLSDRDAB, "scanning adapter %d", device_number);
+	tvhtrace(LS_RTLSDR, "scanning adapter %d", device_number);
 	rtlsdr_get_device_usb_strings(device_number, vendor, product, serial);
 	device_name = rtlsdr_get_device_name(device_number);
 	fprintf(stderr, "  %d:  %s, %s, SN: %s, %s\n", device_number, vendor, product, serial, device_name);
 	la = rtlsdr_adapter_new(device_number, vendor, product, serial, device_name, &conf, &save);
 	if (la == NULL) {
-		tvherror(LS_RTLSDRDAB, "failed to create %s", path);
+		tvherror(LS_RTLSDR, "failed to create %d", device_number);
 		return; // Note: save to return here as global_lock is held
 	}
 	if (conf)

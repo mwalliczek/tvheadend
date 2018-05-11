@@ -48,6 +48,8 @@ struct rtlsdr_frontend
 extern const idclass_t rtlsdr_adapter_class;
 extern const idclass_t rtlsdr_frontend_dab_class;
 
+void rtlsdr_init(void);
+
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */
 
 
