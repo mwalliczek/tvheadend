@@ -85,6 +85,20 @@ const idclass_t rtlsdr_adapter_class =
 }
 };
 
+/*
+* Check if enabled
+*/
+static int
+rtlsdr_adapter_is_enabled(rtlsdr_adapter_t *la)
+{
+	rtlsdr_frontend_t *lfe;
+	LIST_FOREACH(lfe, &la->la_frontends, lfe_link) {
+		if (lfe->mi_is_enabled((mpegts_input_t*)lfe, NULL, 0, -1) != MI_IS_ENABLED_NEVER)
+			return 1;
+	}
+	return 0;
+}
+
 
 /*
 * Create
@@ -92,7 +106,7 @@ const idclass_t rtlsdr_adapter_class =
 static rtlsdr_adapter_t *
 rtlsdr_adapter_create
 (const char *uuid, htsmsg_t *conf,
-	int number, char *vendor, char *product, char *serial, char *device_name)
+	int number, char *vendor, char *product, char *serial, const char *device_name)
 {
 	rtlsdr_adapter_t *la;
 
@@ -120,7 +134,7 @@ rtlsdr_adapter_create
 *
 */
 static rtlsdr_adapter_t *
-rtlsdr_adapter_new(int number, char *vendor, char *product, char *serial, char *device_name, htsmsg_t **conf, int *save)
+rtlsdr_adapter_new(int number, char *vendor, char *product, char *serial, const char *device_name, htsmsg_t **conf, int *save)
 {
 	rtlsdr_adapter_t *la;
 	SHA_CTX sha1;
@@ -129,7 +143,7 @@ rtlsdr_adapter_new(int number, char *vendor, char *product, char *serial, char *
 
 	/* Create hash for adapter */
 	SHA1_Init(&sha1);
-	SHA1_Update(&sha1, number, sizeof(number));
+	SHA1_Update(&sha1, &number, sizeof(number));
 	SHA1_Final(uuidbin, &sha1);
 
 	bin2hex(uhex, sizeof(uhex), uuidbin, sizeof(uuidbin));
@@ -157,7 +171,7 @@ rtlsdr_adapter_add(int device_number)
 	htsmsg_t *conf = NULL;
 	int save = 0;
 	char vendor[256], product[256], serial[256];
-	char *device_name;
+	const char *device_name;
 
 	tvhtrace(LS_RTLSDR, "scanning adapter %d", device_number);
 	rtlsdr_get_device_usb_strings(device_number, vendor, product, serial);

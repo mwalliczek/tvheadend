@@ -428,7 +428,8 @@ I18N-C += $(SRCS-LINUXDVB)
 
 # RTLSDR
 SRCS-RTLSDR = \
-	src/input/mpegts/rtlsdr/rtlsdr.c
+	src/input/mpegts/rtlsdr/rtlsdr.c \
+    src/input/mpegts/rtlsdr/rtlsdr_dab_frontend.c
 SRCS-${CONFIG_RTLSDR} += $(SRCS-RTLSDR)
 I18N-C += $(SRCS-RTLSDR)
 
