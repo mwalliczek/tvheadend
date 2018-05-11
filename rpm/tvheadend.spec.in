@@ -28,6 +28,7 @@ BuildRequires:  dbus-devel
 BuildRequires:  avahi-devel
 BuildRequires:  avahi-libs
 BuildRequires:  libdvbcsa-devel
+BuildRequires:  librtlsdr-devel
 BuildRequires:  openssl-devel
 BuildRequires:  wget python git
 BuildRequires:  cmake
