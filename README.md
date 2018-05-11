@@ -5,7 +5,7 @@ Tvheadend
 Status
 ------
 
-[![Build Status](https://travis-ci.org/tvheadend/tvheadend.svg?branch=master)](https://travis-ci.org/tvheadend/tvheadend)
+[![Build Status](https://travis-ci.org/mwka/tvheadend.svg?branch=master)](https://travis-ci.org/mwka/tvheadend)
 
 [![Download](https://api.bintray.com/packages/tvheadend/deb/tvheadend/images/download.svg)](https://bintray.com/tvheadend/deb/tvheadend/)
 
@@ -27,6 +27,8 @@ It supports the following inputs:
   * IPTV
     * UDP
     * HTTP
+  * RTL SDR
+    * DAB
 
 It supports the following outputs:
 
