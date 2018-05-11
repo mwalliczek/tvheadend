@@ -17,6 +17,7 @@
         "liburiparser-dev",
         "libpcre3-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache",
@@ -44,6 +45,7 @@
         "liburiparser-dev",
         "libpcre3-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -70,6 +72,7 @@
         "liburiparser-dev",
         "libpcre2-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -95,6 +98,7 @@
         "liburiparser-dev",
         "libpcre2-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -122,6 +126,7 @@
         "liburiparser-dev",
         "libpcre3-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -149,6 +154,7 @@
         "liburiparser-dev",
         "libpcre3-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -176,6 +182,7 @@
         "liburiparser-dev",
         "libpcre3-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -203,6 +210,7 @@
         "liburiparser-dev",
         "libpcre3-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -229,6 +237,7 @@
         "liburiparser-dev",
         "libpcre2-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -255,6 +264,7 @@
         "liburiparser-dev",
         "libpcre3-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -281,6 +291,7 @@
         "liburiparser-dev",
         "libpcre2-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -307,6 +318,7 @@
         "liburiparser-dev",
         "libpcre2-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
@@ -333,6 +345,7 @@
         "openssl-devel",
         "zlib-devel",
         "libdvbcsa-devel",
+		"librtlsdr-dev",
         "wget",
         "bzip2",
         "uriparser-devel",
@@ -362,6 +375,7 @@
         "openssl-devel",
         "zlib-devel",
         "libdvbcsa-devel",
+		"librtlsdr-dev",
         "wget",
         "bzip2",
         "uriparser-devel",
@@ -391,6 +405,7 @@
         "openssl-devel",
         "zlib-devel",
         "libdvbcsa-devel",
+		"librtlsdr-dev",
         "wget",
         "bzip2",
         "uriparser-devel",
@@ -420,6 +435,7 @@
         "liburiparser-dev",
         "libpcre2-dev",
         "libdvbcsa-dev",
+		"librtlsdr-dev",
         "python",
         "debhelper",
         "ccache"
