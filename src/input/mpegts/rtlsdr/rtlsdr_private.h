@@ -50,6 +50,11 @@ extern const idclass_t rtlsdr_frontend_dab_class;
 
 void rtlsdr_init(void);
 
+static inline void rtlsdr_adapter_changed(rtlsdr_adapter_t *la)
+{
+	idnode_changed(&la->th_id);
+}
+
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */
 
 
