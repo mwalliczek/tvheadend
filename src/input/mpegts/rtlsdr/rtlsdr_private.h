@@ -33,6 +33,21 @@ struct rtlsdr_adapter
 	int(*la_is_enabled) (rtlsdr_adapter_t *la);
 };
 
+struct rtlsdr_frontend
+{
+	mpegts_input_t;
+
+	/*
+	* Adapter
+	*/
+	rtlsdr_adapter_t           *lfe_adapter;
+	LIST_ENTRY(rtlsdr_frontend) lfe_link;
+
+};
+
+extern const idclass_t rtlsdr_adapter_class;
+extern const idclass_t rtlsdr_frontend_dab_class;
+
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */
 
 

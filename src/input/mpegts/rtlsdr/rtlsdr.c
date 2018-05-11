@@ -175,19 +175,20 @@ rtlsdr_adapter_add(int device_number)
 }
 
 void rtlsdr_init() {
+	int i, device_count;
 	idclass_register(&rtlsdr_adapter_class);
 	idclass_register(&rtlsdr_frontend_dab_class);
 	/*---------------------------------------------------
 	Looking for device and open connection
 	----------------------------------------------------*/
-	int device_count = rtlsdr_get_device_count();
+	device_count = rtlsdr_get_device_count();
 	if (!device_count) {
 		fprintf(stderr, "No supported devices found.\n");
 		exit(1);
 	}
 
 	fprintf(stderr, "Found %d device(s):\n", device_count);
-	for (int i = 0; i < device_count; i++) {
+	for (i = 0; i < device_count; i++) {
 		rtlsdr_adapter_add(i);
 	}
 	fprintf(stderr, "\n");
