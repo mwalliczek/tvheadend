@@ -25,7 +25,7 @@ OPTIONS=(
   "capmt:yes"
   "constcw:yes"
   "linuxdvb:yes"
-  "rtlsdrdab:yes"
+  "rtlsdr:yes"
   "satip_server:yes"
   "satip_client:yes"
   "hdhomerun_client:no"
@@ -363,6 +363,18 @@ if enabled linuxdvb; then
   fi
 else
   disable ddci
+fi
+
+#
+# RTL SDR
+#
+check_cc_header 'rtl-sdr' rtlsdr_h
+if enabled_or_auto rtlsdr; then
+  if enabled rtlsdr_h; then
+    enable rtlsdr
+  elif enabled rtlsdr; then
+    die "rtl-sdr.h not found (use --disable-rtlsdr)"
+  fi
 fi
 
 #

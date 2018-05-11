@@ -87,7 +87,7 @@ mpegts_init ( int linuxdvb_mask, int nosatip, str_list_t *satip_client,
 #endif
 
   /* RTL SDR DAB */
-#if ENABLE_RTLSDRDAB
+#if ENABLE_RTLSDR
   rtlsdrdab_init();
 #endif
 }
