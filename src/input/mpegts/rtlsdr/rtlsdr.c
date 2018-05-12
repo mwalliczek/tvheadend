@@ -168,7 +168,7 @@ static void
 rtlsdr_adapter_add(int device_number)
 {
 	rtlsdr_adapter_t *la = NULL;
-	htsmsg_t *conf = NULL;
+	htsmsg_t *conf = NULL, *feconf = NULL;
 	int save = 0;
 	char vendor[256], product[256], serial[256];
 	const char *device_name;
@@ -182,6 +182,8 @@ rtlsdr_adapter_add(int device_number)
 		tvherror(LS_RTLSDR, "failed to create %d", device_number);
 		return; // Note: save to return here as global_lock is held
 	}
+	feconf = htsmsg_get_map(conf, "frontends");
+	rtlsdr_frontend_create(feconf, la);
 	if (conf)
 		htsmsg_destroy(conf);
 	/* Save configuration */

@@ -56,10 +56,9 @@ static inline void rtlsdr_adapter_changed(rtlsdr_adapter_t *la)
 	idnode_changed(&la->th_id);
 }
 
-int rtlsdr_frontend_tune0
-(rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq);
-int rtlsdr_frontend_tune1
-(rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq);
+rtlsdr_frontend_t *
+rtlsdr_frontend_create
+(htsmsg_t *conf, rtlsdr_adapter_t *la);
 
 
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */
