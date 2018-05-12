@@ -19,7 +19,7 @@ static htsmsg_t *
 rtlsdr_adapter_class_save(idnode_t *in, char *filename, size_t fsize)
 {
 	rtlsdr_adapter_t *la = (rtlsdr_adapter_t*)in;
-	htsmsg_t *m, *l;
+	htsmsg_t *m;
 	char ubuf[UUID_HEX_SIZE];
 
 	m = htsmsg_create_map();
@@ -52,7 +52,7 @@ rtlsdr_adapter_class_active_get(void *obj)
 static idnode_set_t *
 rtlsdr_adapter_class_get_childs(idnode_t *in)
 {
-	rtlsdr_adapter_t *la = (rtlsdr_adapter_t*)in;
+//	rtlsdr_adapter_t *la = (rtlsdr_adapter_t*)in;
 	idnode_set_t *is = idnode_set_create(0);
 	return is;
 }

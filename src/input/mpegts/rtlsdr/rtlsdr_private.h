@@ -43,6 +43,7 @@ struct rtlsdr_frontend
 	rtlsdr_adapter_t           *lfe_adapter;
 	LIST_ENTRY(rtlsdr_frontend) lfe_link;
 
+	char                     *lfe_sysfs;
 };
 
 extern const idclass_t rtlsdr_adapter_class;
@@ -54,6 +55,12 @@ static inline void rtlsdr_adapter_changed(rtlsdr_adapter_t *la)
 {
 	idnode_changed(&la->th_id);
 }
+
+int rtlsdr_frontend_tune0
+(rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq);
+int rtlsdr_frontend_tune1
+(rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq);
+
 
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */
 
