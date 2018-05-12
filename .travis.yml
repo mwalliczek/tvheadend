@@ -14,3 +14,5 @@ deploy:
   file: "/home/travis/build/mwka/*"
   on:
     repo: mwka/tvheadend
+  skip_cleanup: true
+  
