@@ -7,12 +7,12 @@ before_install:
 - sudo ./Autobuild.sh -t raspbianstretch-armhf -o deps
 script:
 - sudo ./Autobuild.sh -t raspbianstretch-armhf
-deploy:
-  provider: releases
-  api_key:
-    secure: riiUcJkpNxIcKKfjQ3ZZuWeoXbzKEtSr+PCYeHrBSbzbHO9snbPcwuHsKINNxJLQ6mDffZ5zH9gFyZLz6rc2WRNQCYJxNW6f9qTr6I95vycsVXy4oCPBMZwoq5osxQs6NVl75k+zeLNV/LaXHTjzdNb03oR6oWG5cSgTaorgnPqMi19/f4+MRl5ivrKNByNRc5CEyG3feB3VsN3foOXPDJK4GxhTgtmVMgvAT4DtE6v1q9FJnGlqDJku0mf86lv7rYgwU98GX/KNd5k8Tv96NWw2i4n/8gTfpQIdeMGdiyKYi00vVKoaWVd48r7mvwGa725tvjQNSXQnXwMi3sie32E/eCvY7EHW8HBsVaaiqRzNcvDst9ijfIg9T664e5edsjMTBWA9AL12NcB59PJhyMdWZJjD355FbZ0CNjsMH9DzISszc8ekV1zIznZQ+laJ9oX86n++MHegLADkLnZOzpeEhA3yJyYO8pxgWx+0jHRHW6jRNcMEmpY/y4VDfiKnVjmTmYPhaaNIHmfHMwQmmdhKRSy8/SpOGRhqeYPj+f6WRW0wSusf7aTjfiUHO/UXKpdsVeBkqFvc0RjJugR3NBv5WXrPugtibphp9G6Fm+paGprwO2291/w/9ndmDxRE6vPg9tXtw7yZH13npRV4F94Vb5e+Akbe3ASYRF1P8Rc=
-  file: "/home/travis/build/mwka/*"
-  on:
-    repo: mwka/tvheadend
-  skip_cleanup: true
+#deploy:
+#  provider: releases
+#  api_key:
+#    secure: riiUcJkpNxIcKKfjQ3ZZuWeoXbzKEtSr+PCYeHrBSbzbHO9snbPcwuHsKINNxJLQ6mDffZ5zH9gFyZLz6rc2WRNQCYJxNW6f9qTr6I95vycsVXy4oCPBMZwoq5osxQs6NVl75k+zeLNV/LaXHTjzdNb03oR6oWG5cSgTaorgnPqMi19/f4+MRl5ivrKNByNRc5CEyG3feB3VsN3foOXPDJK4GxhTgtmVMgvAT4DtE6v1q9FJnGlqDJku0mf86lv7rYgwU98GX/KNd5k8Tv96NWw2i4n/8gTfpQIdeMGdiyKYi00vVKoaWVd48r7mvwGa725tvjQNSXQnXwMi3sie32E/eCvY7EHW8HBsVaaiqRzNcvDst9ijfIg9T664e5edsjMTBWA9AL12NcB59PJhyMdWZJjD355FbZ0CNjsMH9DzISszc8ekV1zIznZQ+laJ9oX86n++MHegLADkLnZOzpeEhA3yJyYO8pxgWx+0jHRHW6jRNcMEmpY/y4VDfiKnVjmTmYPhaaNIHmfHMwQmmdhKRSy8/SpOGRhqeYPj+f6WRW0wSusf7aTjfiUHO/UXKpdsVeBkqFvc0RjJugR3NBv5WXrPugtibphp9G6Fm+paGprwO2291/w/9ndmDxRE6vPg9tXtw7yZH13npRV4F94Vb5e+Akbe3ASYRF1P8Rc=
+#  file: "/home/travis/build/mwka/*"
+#  on:
+#    repo: mwka/tvheadend
+#  skip_cleanup: true
   

@@ -176,7 +176,7 @@ rtlsdr_adapter_add(int device_number)
 	tvhtrace(LS_RTLSDR, "scanning adapter %d", device_number);
 	rtlsdr_get_device_usb_strings(device_number, vendor, product, serial);
 	device_name = rtlsdr_get_device_name(device_number);
-	fprintf(stderr, "  %d:  %s, %s, SN: %s, %s\n", device_number, vendor, product, serial, device_name);
+	tvhinfo(LS_RTLSDR, "  %d:  %s, %s, SN: %s, %s\n", device_number, vendor, product, serial, device_name);
 	la = rtlsdr_adapter_new(device_number, vendor, product, serial, device_name, &conf, &save);
 	if (la == NULL) {
 		tvherror(LS_RTLSDR, "failed to create %d", device_number);
@@ -200,14 +200,14 @@ void rtlsdr_init() {
 	----------------------------------------------------*/
 	device_count = rtlsdr_get_device_count();
 	if (!device_count) {
-		fprintf(stderr, "No supported devices found.\n");
+		tvhinfo(LS_RTLSDR, "No supported devices found.\n");
 		exit(1);
 	}
 
-	fprintf(stderr, "Found %d device(s):\n", device_count);
+	tvhinfo(LS_RTLSDR, "Found %d device(s):\n", device_count);
 	for (i = 0; i < device_count; i++) {
 		rtlsdr_adapter_add(i);
 	}
-	fprintf(stderr, "\n");
+	tvhinfo(LS_RTLSDR, "\n");
 }
 
