@@ -11,3 +11,8 @@ before_install:
   - sudo ./Autobuild.sh -t raspbianstretch-armhf -o deps
 script:
   - sudo ./Autobuild.sh -t raspbianstretch-armhf
+deploy:
+  provider: releases
+  api_key: "b4a9ef983919981e2eb30bce84f7cd332368eec0"
+  file: "/home/travis/build/mwka/*"
+  skip_cleanup: true
