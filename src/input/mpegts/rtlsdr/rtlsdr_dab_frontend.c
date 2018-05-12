@@ -2,6 +2,17 @@
 #include "input.h"
 #include "rtlsdr_private.h"
 
+/* **************************************************************************
+* Class definition
+* *************************************************************************/
+
+static void
+rtlsdr_frontend_class_changed(idnode_t *in)
+{
+	rtlsdr_adapter_t *la = ((rtlsdr_frontend_t*)in)->lfe_adapter;
+	rtlsdr_adapter_changed(la);
+}
+
 CLASS_DOC(rtlsdr_frontend)
 
 const idclass_t rtlsdr_frontend_class =
@@ -27,18 +38,6 @@ const idclass_t rtlsdr_frontend_dab_class =
 }
 };
 
-/* **************************************************************************
-* Class definition
-* *************************************************************************/
-
-static void
-rtlsdr_frontend_class_changed(idnode_t *in)
-{
-	rtlsdr_adapter_t *la = ((rtlsdr_frontend_t*)in)->lfe_adapter;
-	rtlsdr_adapter_changed(la);
-}
-
-
 
 rtlsdr_frontend_t *
 rtlsdr_frontend_create
@@ -46,9 +45,7 @@ rtlsdr_frontend_create
 	const idclass_t *idc;
 	char id[16], lname[256], buf[256];
 	rtlsdr_frontend_t *lfe;
-	htsmsg_t *scconf;
-	const char *str, *uuid = NULL, *muuid = NULL;
-	char id[16];
+	const char *str, *uuid = NULL;
 	ssize_t r;
 
 	/* Internal config ID */
@@ -82,4 +79,5 @@ rtlsdr_frontend_create
 		if (strncmp(str = buf, "../../", 6) == 0) str += 6;
 		lfe->lfe_sysfs = strdup(str);
 	}
+	return lfe;
 }
