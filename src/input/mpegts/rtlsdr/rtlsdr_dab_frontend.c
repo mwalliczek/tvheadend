@@ -227,7 +227,7 @@ int
 rtlsdr_frontend_tune
 (rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq)
 {
-	int r = 0, i, rep;
+	int r = 0;
 	char buf1[256];
 
 	lfe->mi_display_name((mpegts_input_t*)lfe, buf1, sizeof(buf1));
