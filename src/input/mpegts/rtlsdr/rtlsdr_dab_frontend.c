@@ -227,7 +227,7 @@ int
 rtlsdr_frontend_tune
 (rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq)
 {
-	int r = 0, i, rep;
+	int r = 0;
 	char buf1[256];
 
 	lfe->mi_display_name((mpegts_input_t*)lfe, buf1, sizeof(buf1));
@@ -315,8 +315,15 @@ rtlsdr_frontend_create
 	idc = &rtlsdr_frontend_dab_class;
 
 	lfe = calloc(1, sizeof(rtlsdr_frontend_t));
+	if (!lfe) {
+		tvhtrace(LS_RTLSDR, "calloc failed!");
+		return NULL;
+	}
 	lfe = (rtlsdr_frontend_t*)mpegts_input_create0((mpegts_input_t*)lfe, idc, uuid, conf);
-	if (!lfe) return NULL;
+	if (!lfe) {
+		tvhtrace(LS_RTLSDR, "mpegts_input_create0 failed!");
+		return NULL;
+	}
 
 	/* Callbacks */
 	lfe->mi_get_weight = mpegts_input_get_weight;
