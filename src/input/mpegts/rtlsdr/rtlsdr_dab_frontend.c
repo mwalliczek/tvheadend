@@ -45,8 +45,6 @@ const idclass_t rtlsdr_frontend_dab_class =
 static void
 rtlsdr_frontend_close_fd(rtlsdr_frontend_t *lfe, int dev_index)
 {
-	char buf[256];
-
 	if (lfe->dev == NULL)
 		return;
 
@@ -106,10 +104,7 @@ static int
 rtlsdr_frontend_is_enabled
 (mpegts_input_t *mi, mpegts_mux_t *mm, int flags, int weight)
 {
-	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t*)mi, *lfe2;
-	rtlsdr_adapter_t *la;
-	tvh_hardware_t *th;
-	char ubuf[UUID_HEX_SIZE];
+	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t*)mi;
 	int w;
 
 	if (lfe->lfe_adapter == NULL)
@@ -129,7 +124,7 @@ rtlsdr_frontend_stop_mux
 (mpegts_input_t *mi, mpegts_mux_instance_t *mmi)
 {
 	char buf1[256];
-	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t*)mi, *lfe2;
+	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t*)mi;
 
 	mi->mi_display_name(mi, buf1, sizeof(buf1));
 	tvhdebug(LS_RTLSDR, "%s - stopping %s", buf1, mmi->mmi_mux->mm_nicename);
@@ -171,7 +166,7 @@ rtlsdr_frontend_warm_mux(mpegts_input_t *mi, mpegts_mux_instance_t *mmi)
 			/* Stop */
 			lmmi->mmi_mux->mm_stop(lmmi->mmi_mux, 1, SM_CODE_ABORTED);
 		}
-		rtlsdr_frontend_close_fd(lfe2, NULL);
+		rtlsdr_frontend_close_fd(lfe2, lfe->lfe_adapter->dev_index);
 	}
 	return 0;
 }
@@ -180,15 +175,15 @@ static int
 rtlsdr_frontend_start_mux
 (mpegts_input_t *mi, mpegts_mux_instance_t *mmi, int weight)
 {
-	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t*)mi, *lfe2;
-	int res, f;
+	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t*)mi;
+	int res;
 
 	assert(lfe->lfe_in_setup == 0);
 
 	lfe->lfe_refcount++;
 	lfe->lfe_in_setup = 1;
 
-	res = rtlsdr_frontend_tune1((rtlsdr_frontend_t*)mi, mmi, -1);
+	res = rtlsdr_frontend_tune((rtlsdr_frontend_t*)mi, mmi, -1);
 
 	if (res) {
 		lfe->lfe_in_setup = 0;
@@ -222,14 +217,31 @@ rtlsdr_frontend_update_pids
 static idnode_set_t *
 rtlsdr_frontend_network_list(mpegts_input_t *mi)
 {
-	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t*)mi;
-
 	tvhtrace(LS_RTLSDR, "%s: network list for DAB",
 		mi->mi_name ? : "");
 
 	return dvb_network_list_by_fe_type(DVB_TYPE_DAB);
 }
 
+int
+rtlsdr_frontend_tune
+(rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq)
+{
+	int r = 0, i, rep;
+	char buf1[256];
+
+	lfe->mi_display_name((mpegts_input_t*)lfe, buf1, sizeof(buf1));
+	tvhdebug(LS_RTLSDR, "%s - starting %s", buf1, mmi->mmi_mux->mm_nicename);
+
+	/* Tune */
+	tvhtrace(LS_RTLSDR, "%s - tuning", buf1);
+
+
+
+	lfe->lfe_in_setup = 0;
+
+	return r;
+}
 
 /* **************************************************************************
 * Creation/Config
@@ -313,7 +325,7 @@ rtlsdr_frontend_create
 
 	/* Default name */
 	if (!lfe->mi_name) {
-		lfe->mi_name = "DAB";
+		lfe->mi_name = strdup(N_("DAB"));
 	}
 
 	/* Input callbacks */

@@ -81,6 +81,8 @@ void rtlsdr_frontend_save(rtlsdr_frontend_t *lfe, htsmsg_t *m);
 
 void rtlsdr_frontend_destroy(rtlsdr_frontend_t *lfe);
 
+int rtlsdr_frontend_tune
+(rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq);
 
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */
 
