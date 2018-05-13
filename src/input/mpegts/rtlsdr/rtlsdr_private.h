@@ -1,6 +1,7 @@
 #ifndef __TVH_RTLSDR_PRIVATE_H__
 #define __TVH_RTLSDR_PRIVATE_H__
 
+#include <rtl-sdr.h>
 
 #include "input.h"
 
@@ -20,7 +21,6 @@ struct rtlsdr_adapter
 	char    *vendor;
 	char    *product;
 	char    *serial;
-
 
 						   /*
 						   * Frontends
@@ -43,13 +43,30 @@ struct rtlsdr_frontend
 	rtlsdr_adapter_t           *lfe_adapter;
 	LIST_ENTRY(rtlsdr_frontend) lfe_link;
 
-	char                     *lfe_sysfs;
+	/*
+	* Reception
+	*/
+	rtlsdr_dev_t *dev;
+	pthread_t                 lfe_dvr_thread;
+	tvh_cond_t                lfe_dvr_cond;
+	mpegts_apids_t            lfe_pids;
+	th_pipe_t                 lfe_dvr_pipe;
+
+	/*
+	* Tuning
+	*/
+	int                       lfe_refcount;
+	int                       lfe_ready;
+	int                       lfe_in_setup;
+	int                       lfe_freq;
 };
 
 extern const idclass_t rtlsdr_adapter_class;
 extern const idclass_t rtlsdr_frontend_dab_class;
 
 void rtlsdr_init(void);
+
+void rtlsdr_done(void);
 
 static inline void rtlsdr_adapter_changed(rtlsdr_adapter_t *la)
 {
@@ -59,6 +76,10 @@ static inline void rtlsdr_adapter_changed(rtlsdr_adapter_t *la)
 rtlsdr_frontend_t *
 rtlsdr_frontend_create
 (htsmsg_t *conf, rtlsdr_adapter_t *la);
+
+void rtlsdr_frontend_save(rtlsdr_frontend_t *lfe, htsmsg_t *m);
+
+void rtlsdr_frontend_destroy(rtlsdr_frontend_t *lfe);
 
 
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */

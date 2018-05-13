@@ -106,6 +106,9 @@ mpegts_done ( void )
 #if ENABLE_LINUXDVB
   tvhftrace(LS_MAIN, linuxdvb_done);
 #endif
+#if ENABLE_RTLSDR
+  tvhftrace(LS_MAIN, rtlsdr_done);
+#endif
 #if ENABLE_SATIP_CLIENT
   tvhftrace(LS_MAIN, satip_done);
 #endif

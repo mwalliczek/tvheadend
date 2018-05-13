@@ -19,13 +19,18 @@ static htsmsg_t *
 rtlsdr_adapter_class_save(idnode_t *in, char *filename, size_t fsize)
 {
 	rtlsdr_adapter_t *la = (rtlsdr_adapter_t*)in;
-	htsmsg_t *m;
+	htsmsg_t *m, *l;
+	rtlsdr_frontend_t *lfe;
 	char ubuf[UUID_HEX_SIZE];
 
 	m = htsmsg_create_map();
 	idnode_save(&la->th_id, m);
 
 	if (filename) {
+		l = htsmsg_create_map();
+		LIST_FOREACH(lfe, &la->la_frontends, lfe_link)
+			rtlsdr_frontend_save(lfe, l);
+		htsmsg_add_msg(m, "frontends", l);
 		snprintf(filename, fsize, "input/rtlsdr/adapters/%s",
 			idnode_uuid_as_str(&la->th_id, ubuf));
 	}
@@ -176,7 +181,7 @@ rtlsdr_adapter_add(int device_number)
 	tvhtrace(LS_RTLSDR, "scanning adapter %d", device_number);
 	rtlsdr_get_device_usb_strings(device_number, vendor, product, serial);
 	device_name = rtlsdr_get_device_name(device_number);
-	tvhinfo(LS_RTLSDR, "  %d:  %s, %s, SN: %s, %s\n", device_number, vendor, product, serial, device_name);
+	tvhinfo(LS_RTLSDR, "  %d:  %s, %s, SN: %s, %s", device_number, vendor, product, serial, device_name);
 	la = rtlsdr_adapter_new(device_number, vendor, product, serial, device_name, &conf, &save);
 	if (la == NULL) {
 		tvherror(LS_RTLSDR, "failed to create %d", device_number);
@@ -200,14 +205,61 @@ void rtlsdr_init() {
 	----------------------------------------------------*/
 	device_count = rtlsdr_get_device_count();
 	if (!device_count) {
-		tvhinfo(LS_RTLSDR, "No supported devices found.\n");
+		tvhinfo(LS_RTLSDR, "No supported devices found.");
 		exit(1);
 	}
 
-	tvhinfo(LS_RTLSDR, "Found %d device(s):\n", device_count);
+	tvhinfo(LS_RTLSDR, "Found %d device(s):", device_count);
 	for (i = 0; i < device_count; i++) {
 		rtlsdr_adapter_add(i);
 	}
-	tvhinfo(LS_RTLSDR, "\n");
 }
 
+static void
+rtlsdr_adapter_del(int number)
+{
+	rtlsdr_frontend_t *lfe, *lfe_next;
+	rtlsdr_adapter_t *la = NULL;
+	tvh_hardware_t *th;
+
+	LIST_FOREACH(th, &tvh_hardware, th_link)
+		if (idnode_is_instance(&th->th_id, &rtlsdr_adapter_class)) {
+			la = (rtlsdr_adapter_t*)th;
+			if (number == la->dev_index)
+				break;
+		}
+	if (!th) return;
+
+	idnode_save_check(&la->th_id, 0);
+
+	/* Delete the frontends */
+	for (lfe = LIST_FIRST(&la->la_frontends); lfe != NULL; lfe = lfe_next) {
+		lfe_next = LIST_NEXT(lfe, lfe_link);
+		rtlsdr_frontend_destroy(lfe);
+	}
+	/* Free memory */
+	free(la->device_name);
+	free(la->product);
+	free(la->serial);
+	free(la->vendor);
+
+	/* Delete */
+	tvh_hardware_delete((tvh_hardware_t*)la);
+
+	free(la);
+}
+
+void
+rtlsdr_done(void)
+{
+	rtlsdr_adapter_t *la;
+	tvh_hardware_t *th, *n;
+
+	for (th = LIST_FIRST(&tvh_hardware); th != NULL; th = n) {
+		n = LIST_NEXT(th, th_link);
+		if (idnode_is_instance(&th->th_id, &rtlsdr_adapter_class)) {
+			la = (rtlsdr_adapter_t*)th;
+			rtlsdr_adapter_del(la->dev_index);
+		}
+	}
+}
