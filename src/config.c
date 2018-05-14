@@ -196,8 +196,10 @@ config_migrate_v1_dvb_network
     htsmsg_add_str(net, "class", "linuxdvb_network_dvbs");
   else if (!strcmp(str, "DVB-C"))
     htsmsg_add_str(net, "class", "linuxdvb_network_dvbc");
-  else
+  else if (!strcmp(str, "DVB-T"))
     htsmsg_add_str(net, "class", "linuxdvb_network_dvbt");
+  else
+    htsmsg_add_str(net, "class", "linuxdvb_network_dab");
   if (!htsmsg_get_u32(tun, "autodiscovery", &u32))
     htsmsg_add_u32(net, "autodiscovery",  u32);
   if (!htsmsg_get_u32(tun, "skip_initialscan", &u32))
@@ -254,8 +256,10 @@ config_migrate_v1_dvb_network
       htsmsg_add_str(mux, "delsys", "DVBS");
     else if (!strcmp(type, "DVB-C"))
       htsmsg_add_str(mux, "delsys", "DVBC_ANNEX_AC");
-    else
+    else if (!strcmp(type, "DVB-T"))
       htsmsg_add_str(mux, "delsys", "DVBT");
+    else
+      htsmsg_add_str(mux, "delsys", "DAB");
 
     /* Save */
     uuid_set(&muxu, NULL);

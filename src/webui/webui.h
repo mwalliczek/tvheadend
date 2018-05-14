@@ -48,7 +48,7 @@ int page_static_file(http_connection_t *hc, const char *remain, void *opaque);
 int page_xmltv(http_connection_t *hc, const char *remain, void *opaque);
 int page_markdown(http_connection_t *hc, const char *remain, void *opaque);
 
-#if ENABLE_LINUXDVB
+#if ENABLE_LINUXDVB || ENABLE_RTLSDR
 void extjs_start_dvb(void);
 #endif
 

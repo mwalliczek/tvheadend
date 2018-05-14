@@ -19,7 +19,7 @@ const idclass_t rtlsdr_frontend_class =
 {
 	.ic_super = &mpegts_input_class,
 	.ic_class = "rtlsdr_frontend",
-	.ic_caption = N_("Linux DVB frontend"),
+	.ic_caption = N_("RTL SDR frontend"),
 	.ic_doc = tvh_doc_rtlsdr_frontend_class,
 	.ic_changed = rtlsdr_frontend_class_changed,
 	.ic_properties = (const property_t[]) {
