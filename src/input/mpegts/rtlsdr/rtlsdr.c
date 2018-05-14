@@ -57,6 +57,8 @@ rtlsdr_adapter_class_active_get(void *obj)
 static idnode_set_t *
 rtlsdr_adapter_class_get_childs(idnode_t *in)
 {
+	rtlsdr_frontend_t *lfe;
+
 	rtlsdr_adapter_t *la = (rtlsdr_adapter_t*)in;
 	idnode_set_t *is = idnode_set_create(0);
 	LIST_FOREACH(lfe, &la->la_frontends, lfe_link)
