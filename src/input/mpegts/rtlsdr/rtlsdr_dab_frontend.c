@@ -324,6 +324,7 @@ rtlsdr_frontend_create
 (htsmsg_t *conf, rtlsdr_adapter_t *la) {
 	const idclass_t *idc;
 	rtlsdr_frontend_t *lfe;
+	char lname[256];
 	const char *str, *uuid = NULL;
 
 	/* Internal config ID */
@@ -361,7 +362,8 @@ rtlsdr_frontend_create
 
 	/* Default name */
 	if (!lfe->mi_name) {
-		lfe->mi_name = strdup(N_("DAB"));
+		snprintf(lname, sizeof(lname), "%s : %s", la->device_name, N_("DAB"));
+		lfe->mi_name = strdup(lname);
 	}
 
 	/* Input callbacks */
