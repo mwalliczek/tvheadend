@@ -229,6 +229,8 @@ rtlsdr_frontend_tune
 {
 	int r = 0;
 	char buf1[256];
+	dvb_mux_t *lm = (dvb_mux_t*)mmi->mmi_mux;
+	dvb_mux_conf_t *dmc;
 
 	lfe->mi_display_name((mpegts_input_t*)lfe, buf1, sizeof(buf1));
 	tvhdebug(LS_RTLSDR, "%s - starting %s", buf1, mmi->mmi_mux->mm_nicename);
@@ -236,7 +238,34 @@ rtlsdr_frontend_tune
 	/* Tune */
 	tvhtrace(LS_RTLSDR, "%s - tuning", buf1);
 
+	if (tvhtrace_enabled()) {
+		char buf2[256];
+		dvb_mux_conf_str(&lm->lm_tuning, buf2, sizeof(buf2));
+		tvhtrace(LS_RTLSDR, "tuner %s tuning to %s (freq %i)", buf1, buf2, freq);
+	}
+	dmc = &lm->lm_tuning;
+	if (freq != (uint32_t)-1)
+		lfe->lfe_freq = freq;
+	else
+		freq = dmc->dmc_fe_freq;
 
+	r = rtlsdr_set_sample_rate(lfe->dev, 2048000);
+	if (r < 0)
+		tvherror(LS_RTLSDR, "WARNING: Failed to set sample rate.\n");
+
+	/*------------------------------------------------
+	Setting gain
+	-------------------------------------------------*/
+	r = rtlsdr_set_tuner_gain_mode(lfe->dev, 0);
+	if (r != 0)
+		tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain.\n");
+
+	/* Set the frequency */
+	r = rtlsdr_set_center_freq(lfe->dev, freq);
+	if (r < 0)
+		tvherror(LS_RTLSDR, "WARNING: Failed to set center freq.\n");
+	else
+		lfe->lfe_ready = 1;
 
 	lfe->lfe_in_setup = 0;
 
