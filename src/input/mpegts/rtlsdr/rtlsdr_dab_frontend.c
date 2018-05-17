@@ -303,8 +303,8 @@ rtlsdr_frontend_monitor(void *aux)
 	char buf[256];
 	rtlsdr_frontend_t *lfe = aux;
 	mpegts_mux_instance_t *mmi = LIST_FIRST(&lfe->mi_mux_active);
-	mpegts_mux_t *mm;
-	service_t *s;
+//	mpegts_mux_t *mm;
+//	service_t *s;
 	uint32_t period = MINMAX(lfe->lfe_status_period, 250, 8000);
 
 	lfe->mi_display_name((mpegts_input_t*)lfe, buf, sizeof(buf));
@@ -327,7 +327,7 @@ rtlsdr_frontend_monitor(void *aux)
 	mtimer_arm_rel(&lfe->lfe_monitor_timer, rtlsdr_frontend_monitor, lfe, ms2mono(period));
 
 	/* Get current mux */
-	mm = mmi->mmi_mux;
+//	mm = mmi->mmi_mux;
 
 	/* Waiting for lock */
 	if (!lfe->lfe_reading) {
@@ -337,14 +337,6 @@ rtlsdr_frontend_monitor(void *aux)
 	} else {
 		lfe->lfe_locked = lfe->dab->locked;
 		lfe->lfe_status = lfe->dab->locked ? SIGNAL_GOOD : SIGNAL_NONE;
-	}
-
-
-
-	LIST_FOREACH(s, &mmi->mmi_mux->mm_transports, s_active_link) {
-		pthread_mutex_lock(&s->s_stream_mutex);
-		streaming_service_deliver(s, streaming_msg_clone(&sm));
-		pthread_mutex_unlock(&s->s_stream_mutex);
 	}
 }
 
@@ -507,7 +499,7 @@ rtlsdr_frontend_create
 	lfe->mi_start_mux = rtlsdr_frontend_start_mux;
 	lfe->mi_stop_mux = rtlsdr_frontend_stop_mux;
 	lfe->mi_network_list = rtlsdr_frontend_network_list;
-	lfe->mi_update_pids = mpegts_mux_update_pids;
+//	lfe->mi_update_pids = mpegts_mux_update_pids;
 	lfe->mi_enabled_updated = rtlsdr_frontend_enabled_updated;
 	lfe->mi_empty_status = mpegts_input_empty_status;
 
