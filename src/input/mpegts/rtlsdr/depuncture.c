@@ -26,6 +26,7 @@
 
 #include "dab.h"
 #include "dab_tables.h"
+#include "depuncture.h"
 
 #define BLKSIZE 128
 
