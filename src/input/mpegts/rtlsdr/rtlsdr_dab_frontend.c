@@ -6,8 +6,6 @@
 
 static void
 rtlsdr_frontend_monitor(void *aux);
-static void *
-rtlsdr_frontend_input_thread(void *aux);
 
 /* **************************************************************************
 * Class definition
@@ -240,7 +238,6 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 	struct dab_state_t *dab;
 	struct sdr_state_t *sdr = calloc(1, sizeof(struct sdr_state_t));
-	int i, j;
 
 	init_dab_state(&dab, &sdr, rtlsdr_eti_callback);
 	lfe->dab = dab;
@@ -249,7 +246,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	sdr->frequency = lfe->lfe_freq;
 
 	rtlsdr_reset_buffer(lfe->dev);
-	sdr_init(&sdr);
+	sdr_init(sdr);
 	rtlsdr_read_async(lfe->dev, rtlsdr_dab_callback, (void *)(&sdr),
 		DEFAULT_ASYNC_BUF_NUMBER, DEFAULT_BUF_LENGTH);
 
@@ -292,9 +289,9 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 		}
 
-		//if (sdr->frequency != prev_freq) {
-		//  fprintf(stderr,"Adjusting centre-frequency to %dHz\n",sdr->frequency);
-		//}    
+		if (sdr->frequency != prev_freq) {
+		  tvhtrace(LS_RTLSDR, "Adjusting centre-frequency to %dHz\n",sdr->frequency);
+		}    
 	}
 	return 0;
 }
@@ -350,15 +347,6 @@ rtlsdr_frontend_monitor(void *aux)
 		pthread_mutex_unlock(&s->s_stream_mutex);
 	}
 }
-
-static void *
-rtlsdr_frontend_input_thread(void *aux)
-{
-	rtlsdr_frontend_t *lfe = aux;
-	mpegts_mux_instance_t *mmi;
-	return NULL;
-}
-
 
 /* **************************************************************************
 * Tuning

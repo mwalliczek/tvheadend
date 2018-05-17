@@ -66,6 +66,8 @@ struct rtlsdr_frontend
 	int                       lfe_freq;
 	time_t                    lfe_monitor;
 	mtimer_t                  lfe_monitor_timer;
+	
+	uint32_t                  lfe_status_period;
 };
 
 extern const idclass_t rtlsdr_adapter_class;

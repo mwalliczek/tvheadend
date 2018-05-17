@@ -3,7 +3,7 @@
 
 //extern int mettab[2][256];
 
-int init_viterbi();
+int init_viterbi(void);
 
 int viterbi(void *p,unsigned char *symbols, unsigned char *data, unsigned int framebits);
 

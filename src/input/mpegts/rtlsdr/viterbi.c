@@ -105,7 +105,33 @@ int Rate = N;
 int Syms[1 << K];
 int VDInit = 0;
 
+static int mettab[2][256];	/* Metric table, [sent sym][rx symbol] */
 
+int
+gen_met(
+int mettab[2][256],     /* Metric table, [sent sym][rx symbol] */
+int amp,                /* Signal amplitude, units */
+double noise,           /* Relative noise voltage */
+double bias,            /* Metric bias; 0 for viterbi, rate for sequential */
+int scale               /* Scale factor */
+);
+
+int encode(
+unsigned char *symbols,
+unsigned char *data,
+unsigned int nbytes,
+unsigned int startstate,
+unsigned int endstate);
+
+
+int init_viterbi(void)
+{
+    int amp = 1;
+    double noise = 1.0;
+
+    gen_met(mettab,amp,noise,0.,4);
+    return 0;
+}
 
 
 
@@ -122,15 +148,6 @@ int VDInit = 0;
 
 /* Logarithm base 2 */
 #define	log2(x)	(log(x)*M_LOG2E)
-
-int
-gen_met(
-int mettab[2][256],     /* Metric table, [sent sym][rx symbol] */
-int amp,                /* Signal amplitude, units */
-double noise,           /* Relative noise voltage */
-double bias,            /* Metric bias; 0 for viterbi, rate for sequential */
-int scale               /* Scale factor */
-);
 
 /* Generate log-likelihood metrics for 8-bit soft quantized channel
  * assuming AWGN and BPSK
@@ -330,13 +347,6 @@ static int parity(int x)
 }
 
 
-int encode(
-unsigned char *symbols,
-unsigned char *data,
-unsigned int nbytes,
-unsigned int startstate,
-unsigned int endstate);
-
 /* Convolutionally encode data into binary symbols */
 int encode(
 unsigned char *symbols,
@@ -364,8 +374,6 @@ unsigned int endstate)
   }
   return 0;
 }
-
-static int mettab[2][256];	/* Metric table, [sent sym][rx symbol] */
 
 /* Viterbi decoder */
 int
@@ -470,12 +478,3 @@ unsigned int nbits	/* Number of output bits */
   return 0;
 }
 
-//-----
-int init_viterbi()
-{
-    int amp = 1;
-    double noise = 1.0;
-
-    gen_met(mettab,amp,noise,0.,4);
-    return 0;
-}
