@@ -25,6 +25,8 @@ david.may.muc@googlemail.com
 
 #define dbg 0
 
+float mag_squared(fftw_complex sample);
+
 float mag_squared(fftw_complex sample) {
     float x = sample[0];
     float y = sample[1];
@@ -74,8 +76,8 @@ int32_t dab_fine_time_sync(fftw_complex * frame){
      e.g. J.Cho "PC-based receiver for Eureka-147" 2001
      e.g. K.Taura "A DAB receiver" 1996
   */
-  int k;
 #if dbg
+  int k;
   FILE *fh0;
   fh0 = fopen("prs_received.dat","w+");
   for(k=0;k<2552;k++) {
@@ -126,7 +128,7 @@ int32_t dab_fine_time_sync(fftw_complex * frame){
      however we can simply shift the bins */
   fftw_complex prs_rec_shift[1536];
   // TODO allow for coarse frequency shift !=0 
-  int32_t cf_shift = 0;
+//  int32_t cf_shift = 0;
   // matlab notation (!!!-1)
   // 769:1536+s
   //  2:769+s why 2? I dont remember, but peak is very strong
@@ -235,13 +237,13 @@ int32_t dab_coarse_freq_sync_2(fftw_complex * symbols){
     fclose(fh0);
 #endif
     
-    uint32_t maxPos=0;
+//    uint32_t maxPos=0;
     float tempVal = 0;
     float maxVal=-99999;
     for (s=0;s<len;s++) {
       tempVal = sqrt((convoluted_prs_time[s][0]*convoluted_prs_time[s][0])+(convoluted_prs_time[s][1]*convoluted_prs_time[s][1]));
       if (tempVal>maxVal) {
-	maxPos = s;
+//	maxPos = s;
 	maxVal = tempVal;
       }
     }

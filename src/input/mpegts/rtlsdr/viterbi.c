@@ -45,6 +45,9 @@ unsigned int Poly615[] = { 042631, 047245, 073363, 056507, 077267, 064537 }; /* 
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+
+#include "viterbi.h"
+
 #define NULL ((void *)0)
 
 /* There ought to be a more general way to do this efficiently ... */
@@ -119,6 +122,15 @@ int VDInit = 0;
 
 /* Logarithm base 2 */
 #define	log2(x)	(log(x)*M_LOG2E)
+
+int
+gen_met(
+int mettab[2][256],     /* Metric table, [sent sym][rx symbol] */
+int amp,                /* Signal amplitude, units */
+double noise,           /* Relative noise voltage */
+double bias,            /* Metric bias; 0 for viterbi, rate for sequential */
+int scale               /* Scale factor */
+);
 
 /* Generate log-likelihood metrics for 8-bit soft quantized channel
  * assuming AWGN and BPSK
@@ -317,6 +329,13 @@ static int parity(int x)
   return Partab[x & 0xff];
 }
 
+
+int encode(
+unsigned char *symbols,
+unsigned char *data,
+unsigned int nbytes,
+unsigned int startstate,
+unsigned int endstate);
 
 /* Convolutionally encode data into binary symbols */
 int encode(
