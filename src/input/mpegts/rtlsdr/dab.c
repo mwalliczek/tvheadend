@@ -5,6 +5,7 @@
 #include "dab.h"
 #include "viterbi.h"
 #include "fic.h"
+#include "misc.h"
 
 void init_dab_state(struct dab_state_t **dab, void* device_state, void (* eti_callback)(uint8_t *eti))
 {
