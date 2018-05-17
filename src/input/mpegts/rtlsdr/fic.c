@@ -5,7 +5,7 @@
 
 #include "dab.h"
 #include "fic.h"
-// #include "depuncture.h"
+#include "depuncture.h"
 #include "viterbi.h"
 #include "dab_tables.h"
 
