@@ -2,8 +2,11 @@
 #define __TVH_RTLSDR_PRIVATE_H__
 
 #include <rtl-sdr.h>
+#include <semaphore.h>
 
 #include "input.h"
+#include "dab.h"
+#include "input_sdr.h"
 
 typedef struct rtlsdr_hardware    rtlsdr_hardware_t;
 typedef struct rtlsdr_adapter     rtlsdr_adapter_t;
@@ -47,18 +50,22 @@ struct rtlsdr_frontend
 	* Reception
 	*/
 	rtlsdr_dev_t *dev;
-	pthread_t                 lfe_dvr_thread;
-	tvh_cond_t                lfe_dvr_cond;
-	mpegts_apids_t            lfe_pids;
-	th_pipe_t                 lfe_dvr_pipe;
+	struct dab_state_t *dab;
+	pthread_t demod_thread;
+	sem_t data_ready;
 
 	/*
 	* Tuning
 	*/
 	int                       lfe_refcount;
 	int                       lfe_ready;
+	int						  lfe_reading;
 	int                       lfe_in_setup;
+	int                       lfe_locked;
+	int                       lfe_status;
 	int                       lfe_freq;
+	time_t                    lfe_monitor;
+	mtimer_t                  lfe_monitor_timer;
 };
 
 extern const idclass_t rtlsdr_adapter_class;

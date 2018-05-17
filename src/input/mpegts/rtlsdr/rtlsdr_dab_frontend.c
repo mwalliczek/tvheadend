@@ -2,6 +2,13 @@
 #include "input.h"
 #include "rtlsdr_private.h"
 
+#define DEFAULT_ASYNC_BUF_NUMBER 32
+
+static void
+rtlsdr_frontend_monitor(void *aux);
+static void *
+rtlsdr_frontend_input_thread(void *aux);
+
 /* **************************************************************************
 * Class definition
 * *************************************************************************/
@@ -130,21 +137,24 @@ rtlsdr_frontend_stop_mux
 	tvhdebug(LS_RTLSDR, "%s - stopping %s", buf1, mmi->mmi_mux->mm_nicename);
 
 	/* Stop thread */
-	if (lfe->lfe_dvr_pipe.wr > 0) {
-		tvh_write(lfe->lfe_dvr_pipe.wr, "", 1);
+	if (lfe->lfe_reading != 0) {
+		lfe->lfe_reading = 0;
 		tvhtrace(LS_RTLSDR, "%s - waiting for dvr thread", buf1);
-		pthread_join(lfe->lfe_dvr_thread, NULL);
-		tvh_pipe_close(&lfe->lfe_dvr_pipe);
+		pthread_join(lfe->demod_thread, NULL);
 		tvhdebug(LS_RTLSDR, "%s - stopped dvr thread", buf1);
 	}
 
 	/* Not locked */
 	lfe->lfe_ready = 0;
+	lfe->lfe_locked = 0;
+	lfe->lfe_status = 0;
+
+	/* Ensure it won't happen immediately */
+	mtimer_arm_rel(&lfe->lfe_monitor_timer, rtlsdr_frontend_monitor, lfe, sec2mono(2));
 
 	lfe->lfe_refcount--;
 	lfe->lfe_in_setup = 0;
 	lfe->lfe_freq = 0;
-	mpegts_pid_done(&lfe->lfe_pids);
 }
 
 static int
@@ -192,28 +202,6 @@ rtlsdr_frontend_start_mux
 	return res;
 }
 
-static void
-rtlsdr_frontend_update_pids
-(mpegts_input_t *mi, mpegts_mux_t *mm)
-{
-	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t*)mi;
-	mpegts_pid_t *mp;
-	mpegts_pid_sub_t *mps;
-
-	mpegts_pid_done(&lfe->lfe_pids);
-	RB_FOREACH(mp, &mm->mm_pids, mp_link) {
-		if (mp->mp_pid == MPEGTS_FULLMUX_PID)
-			lfe->lfe_pids.all = 1;
-		else if (mp->mp_pid < MPEGTS_FULLMUX_PID) {
-			RB_FOREACH(mps, &mp->mp_subs, mps_link)
-				mpegts_pid_add(&lfe->lfe_pids, mp->mp_pid, mps->mps_weight);
-		}
-	}
-
-	if (lfe->lfe_dvr_pipe.wr > 0)
-		tvh_write(lfe->lfe_dvr_pipe.wr, "c", 1);
-}
-
 static idnode_set_t *
 rtlsdr_frontend_network_list(mpegts_input_t *mi)
 {
@@ -222,6 +210,159 @@ rtlsdr_frontend_network_list(mpegts_input_t *mi)
 
 	return dvb_network_list_by_fe_type(DVB_TYPE_DAB);
 }
+
+static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
+{
+	rtlsdr_frontend_t *lfe = ctx;
+	struct sdr_state_t *sdr = lfe->dab->device_state;
+	int dr_val;
+	if (!ctx) {
+		return;
+	}
+	if (!lfe->lfe_reading) {
+		return;
+	}
+	memcpy(sdr->input_buffer, buf, len);
+	sdr->input_buffer_len = len;
+	sem_getvalue(&lfe->data_ready, &dr_val);
+	if (!dr_val) {
+		sem_post(&lfe->data_ready);
+	}
+}
+
+static void rtlsdr_eti_callback(uint8_t* eti)
+{
+}
+
+static void *rtlsdr_demod_thread_fn(void *arg)
+{
+	rtlsdr_frontend_t *lfe = arg;
+
+	struct dab_state_t *dab;
+	struct sdr_state_t *sdr = calloc(1, sizeof(struct sdr_state_t));
+	int i, j;
+
+	init_dab_state(&dab, &sdr, rtlsdr_eti_callback);
+	lfe->dab = dab;
+
+	memset(&sdr, 0, sizeof(struct sdr_state_t));
+	sdr->frequency = lfe->lfe_freq;
+
+	rtlsdr_reset_buffer(lfe->dev);
+	sdr_init(&sdr);
+	rtlsdr_read_async(lfe->dev, rtlsdr_dab_callback, (void *)(&sdr),
+		DEFAULT_ASYNC_BUF_NUMBER, DEFAULT_BUF_LENGTH);
+
+	while (lfe->lfe_reading) {
+		sem_wait(&lfe->data_ready);
+		int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
+		if (ok) {
+			dab_process_frame(dab);
+		}
+		//dab_fic_parser(dab->fib,&sinfo,&ana);
+		// calculate error rates
+		//dab_analyzer_calculate_error_rates(&ana,dab);
+
+		int prev_freq = sdr->frequency;
+		if (abs(sdr->coarse_freq_shift)>1) {
+			if (sdr->coarse_freq_shift<0)
+				sdr->frequency = sdr->frequency - 1000;
+			else
+				sdr->frequency = sdr->frequency + 1000;
+
+			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+
+		}
+
+		if (abs(sdr->coarse_freq_shift) == 1) {
+
+			if (sdr->coarse_freq_shift<0)
+				sdr->frequency = sdr->frequency - rand() % 1000;
+			else
+				sdr->frequency = sdr->frequency + rand() % 1000;
+
+			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+			//fprintf(stderr,"new center freq : %i\n",rtlsdr_get_center_freq(dev));
+
+		}
+		if (abs(sdr->coarse_freq_shift)<1 && (abs(sdr->fine_freq_shift) > 50)) {
+			sdr->frequency = sdr->frequency + (sdr->fine_freq_shift / 3);
+			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+			//fprintf(stderr,"ffs : %f\n",sdr->fine_freq_shift);
+
+		}
+
+		//if (sdr->frequency != prev_freq) {
+		//  fprintf(stderr,"Adjusting centre-frequency to %dHz\n",sdr->frequency);
+		//}    
+	}
+	return 0;
+}
+
+
+static void
+rtlsdr_frontend_monitor(void *aux)
+{
+	char buf[256];
+	rtlsdr_frontend_t *lfe = aux;
+	mpegts_mux_instance_t *mmi = LIST_FIRST(&lfe->mi_mux_active);
+	mpegts_mux_t *mm;
+	service_t *s;
+	uint32_t period = MINMAX(lfe->lfe_status_period, 250, 8000);
+
+	lfe->mi_display_name((mpegts_input_t*)lfe, buf, sizeof(buf));
+	tvhtrace(LS_RTLSDR, "%s - checking FE status%s", buf, lfe->lfe_ready ? " (ready)" : "");
+
+	/* Disabled */
+	if (!lfe->mi_enabled && mmi)
+		mmi->mmi_mux->mm_stop(mmi->mmi_mux, 1, SM_CODE_ABORTED);
+
+	/* Close FE */
+	if (lfe->dev != NULL && !lfe->lfe_refcount) {
+		rtlsdr_frontend_close_fd(lfe, lfe->lfe_adapter->dev_index);
+		return;
+	}
+
+	/* Stop timer */
+	if (!mmi || !lfe->lfe_ready) return;
+
+	/* re-arm */
+	mtimer_arm_rel(&lfe->lfe_monitor_timer, rtlsdr_frontend_monitor, lfe, ms2mono(period));
+
+	/* Get current mux */
+	mm = mmi->mmi_mux;
+
+	/* Waiting for lock */
+	if (!lfe->lfe_reading) {
+		lfe->lfe_reading = 1;
+		tvhthread_create(&lfe->demod_thread, NULL,
+			rtlsdr_demod_thread_fn, lfe, "rtlsdr-front");
+	} else {
+		lfe->lfe_locked = lfe->dab->locked;
+		lfe->lfe_status = lfe->dab->locked ? SIGNAL_GOOD : SIGNAL_NONE;
+	}
+
+
+
+	LIST_FOREACH(s, &mmi->mmi_mux->mm_transports, s_active_link) {
+		pthread_mutex_lock(&s->s_stream_mutex);
+		streaming_service_deliver(s, streaming_msg_clone(&sm));
+		pthread_mutex_unlock(&s->s_stream_mutex);
+	}
+}
+
+static void *
+rtlsdr_frontend_input_thread(void *aux)
+{
+	rtlsdr_frontend_t *lfe = aux;
+	mpegts_mux_instance_t *mmi;
+	return NULL;
+}
+
+
+/* **************************************************************************
+* Tuning
+* *************************************************************************/
 
 int
 rtlsdr_frontend_tune
@@ -247,7 +388,7 @@ rtlsdr_frontend_tune
 	if (freq != (uint32_t)-1)
 		lfe->lfe_freq = freq;
 	else
-		freq = dmc->dmc_fe_freq;
+		freq = lfe->lfe_freq = dmc->dmc_fe_freq;
 
 	r = rtlsdr_set_sample_rate(lfe->dev, 2048000);
 	if (r < 0)
@@ -264,8 +405,12 @@ rtlsdr_frontend_tune
 	r = rtlsdr_set_center_freq(lfe->dev, freq);
 	if (r < 0)
 		tvherror(LS_RTLSDR, "WARNING: Failed to set center freq.\n");
-	else
+	else {
+		time(&lfe->lfe_monitor);
+		lfe->lfe_monitor += 4;
+		mtimer_arm_rel(&lfe->lfe_monitor_timer, rtlsdr_frontend_monitor, lfe, ms2mono(50));
 		lfe->lfe_ready = 1;
+	}
 
 	lfe->lfe_in_setup = 0;
 
@@ -374,16 +519,13 @@ rtlsdr_frontend_create
 	lfe->mi_start_mux = rtlsdr_frontend_start_mux;
 	lfe->mi_stop_mux = rtlsdr_frontend_stop_mux;
 	lfe->mi_network_list = rtlsdr_frontend_network_list;
-	lfe->mi_update_pids = rtlsdr_frontend_update_pids;
+	lfe->mi_update_pids = mpegts_mux_update_pids;
 	lfe->mi_enabled_updated = rtlsdr_frontend_enabled_updated;
 	lfe->mi_empty_status = mpegts_input_empty_status;
 
 	/* Adapter link */
 	lfe->lfe_adapter = la;
 	LIST_INSERT_HEAD(&la->la_frontends, lfe, lfe_link);
-
-	tvh_cond_init(&lfe->lfe_dvr_cond);
-	mpegts_pid_init(&lfe->lfe_pids);
 
 	/* Double check enabled */
 	rtlsdr_frontend_enabled_updated((mpegts_input_t*)lfe);
