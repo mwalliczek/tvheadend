@@ -56,7 +56,7 @@ CFLAGS  += -I${BUILDDIR} -I${ROOTDIR}/src -I${ROOTDIR}
 ifeq ($(CONFIG_ANDROID),yes)
 LDFLAGS += -ldl -lm
 else
-LDFLAGS += -ldl -lpthread -lm
+LDFLAGS += -ldl -lpthread -lfftw3 -lm
 endif
 LDFLAGS += -pie -Wl,-z,now
 ifeq ($(CONFIG_LIBICONV),yes)

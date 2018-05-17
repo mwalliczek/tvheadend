@@ -239,10 +239,10 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	struct dab_state_t *dab;
 	struct sdr_state_t *sdr = calloc(1, sizeof(struct sdr_state_t));
 
-	init_dab_state(&dab, &sdr, rtlsdr_eti_callback);
+	init_dab_state(&dab, sdr, rtlsdr_eti_callback);
 	lfe->dab = dab;
 
-	memset(&sdr, 0, sizeof(struct sdr_state_t));
+	memset(sdr, 0, sizeof(struct sdr_state_t));
 	sdr->frequency = lfe->lfe_freq;
 
 	rtlsdr_reset_buffer(lfe->dev);
