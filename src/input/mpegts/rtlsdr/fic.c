@@ -9,7 +9,7 @@
 #include "viterbi.h"
 #include "dab_tables.h"
 
-static int dump_buffer(char *name, char *buf, int blen)
+/*static int dump_buffer(char *name, char *buf, int blen)
 {
   int i;
 
@@ -34,7 +34,7 @@ void dump_tf_info(struct tf_info_t* info)
       fprintf(stderr,"SubChId=%d, slForm=%d, StartAddress=%d, size=%d, bitrate=%d, ASCTy=0x%02x\n",sc->id,sc->slForm,sc->start_cu,sc->size,sc->bitrate,sc->ASCTy);
     }
   }
-}
+}*/
 
 /* Simple FIB/FIG parser to extract information from FIG 0/0
    (Ensemble Information - CIFCount) and FIG 0/1 (Sub-channel
@@ -53,8 +53,8 @@ void fib_parse(struct tf_info_t* info, uint8_t* fib)
     if (type == 0) {
       int ext = fib[i] & 0x1f;
       int PD = (fib[i] & 0x20) >> 5;
-      int OE = (fib[i] & 0x40) >> 6;
-      int CN = (fib[i] & 0x80) >> 7;
+//      int OE = (fib[i] & 0x40) >> 6;
+//      int CN = (fib[i] & 0x80) >> 7;
       //fprintf(stderr,"Type 0 - ext=%d\n",ext);
 
       if (ext == 0) {  // FIG 0/0
@@ -89,12 +89,12 @@ void fib_parse(struct tf_info_t* info, uint8_t* fib)
       } else if (ext == 2) { // FIG 0/2
         j = i + 1;
         while (j < i + len) {
-          int sid;
+//          int sid;
           if (PD == 0) { // Audio stream
-            sid = (fib[j] << 8) | fib[j+1];
+//            sid = (fib[j] << 8) | fib[j+1];
             j += 2;
           } else { // Data stream
-            sid = (fib[j] << 24) | (fib[j+1] << 16) | (fib[j+2] << 8) | fib[j+3];
+//            sid = (fib[j] << 24) | (fib[j+1] << 16) | (fib[j+2] << 8) | fib[j+3];
             j += 4;
           }
           int n = fib[j++] & 0x0f;
@@ -113,7 +113,7 @@ void fib_parse(struct tf_info_t* info, uint8_t* fib)
               fprintf(stderr,"Unhandled TMid %d for subchannel %d\n",TMid,id);
             } else if (TMid == 3) {
               int id = (fib[j+1] << 4) | (fib[j+2]&0xf0) >> 4;
-              //fprintf(stderr,"Unhandled TMid %d for subchannel %d\n",TMid,id);
+              fprintf(stderr,"Unhandled TMid %d for subchannel %d\n",TMid,id);
             }
             j += 2;
           }
@@ -155,7 +155,7 @@ static uint8_t null_fib[32] = {
 void fic_decode(struct dab_state_t *dab, struct demapped_transmission_frame_t *tf)
 {
   uint8_t tmp[3096];
-  int i,j,k;
+  int i,j;
 
   tf->fibs.ok_count = 0;
 
