@@ -53,6 +53,9 @@ CFLAGS  += -Wmissing-prototypes
 CFLAGS  += -fms-extensions -funsigned-char -fno-strict-aliasing
 CFLAGS  += -D_FILE_OFFSET_BITS=64
 CFLAGS  += -I${BUILDDIR} -I${ROOTDIR}/src -I${ROOTDIR}
+ifeq ($(CONFIG_RTLSDR),yes)
+LDFLAGS += -lfftw3
+endif
 ifeq ($(CONFIG_ANDROID),yes)
 LDFLAGS += -ldl -lm
 else
