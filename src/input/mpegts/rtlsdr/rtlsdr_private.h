@@ -6,7 +6,6 @@
 
 #include "input.h"
 #include "dab.h"
-#include "input_sdr.h"
 
 typedef struct rtlsdr_hardware    rtlsdr_hardware_t;
 typedef struct rtlsdr_adapter     rtlsdr_adapter_t;

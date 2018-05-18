@@ -21,7 +21,6 @@ david.may.muc@googlemail.com
 
 #include "dab.h"
 #include "dab_tables.h"
-#include "input_sdr.h"
 #include "sdr_sync.h"
 
 int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr){
