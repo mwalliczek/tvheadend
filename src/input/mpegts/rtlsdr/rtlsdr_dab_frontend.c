@@ -243,7 +243,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	lfe->dab = dab;
 	sdr = &dab->device_state;
 
-	memset(&sdr, 0, sizeof(struct sdr_state_t));
+	memset(sdr, 0, sizeof(struct sdr_state_t));
 	sdr->frequency = lfe->lfe_freq;
 
 	rtlsdr_reset_buffer(lfe->dev);
