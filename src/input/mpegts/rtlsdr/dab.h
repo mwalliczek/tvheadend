@@ -2,6 +2,7 @@
 #define _DAB_H
 
 #include <stdint.h>
+#include "input_sdr.h"
 
 /* A demapped transmission frame represents a transmission frame in
    the final state before the FIC-specific and MSC-specific decoding
@@ -64,7 +65,7 @@ struct ens_info_t {
 
 struct dab_state_t
 {
-  void* device_state;
+  struct sdr_state_t device_state;
   struct demapped_transmission_frame_t tfs[5]; /* We need buffers for 5 tranmission frames - the four previous, plus the new */
   struct tf_info_t tf_info;
   struct ens_info_t ens_info;

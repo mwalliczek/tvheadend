@@ -212,7 +212,7 @@ rtlsdr_frontend_network_list(mpegts_input_t *mi)
 static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
-	struct sdr_state_t *sdr = lfe->dab->device_state;
+	struct sdr_state_t *sdr = &lfe->dab->device_state;
 	int dr_val;
 	if (!ctx) {
 		return;
@@ -237,10 +237,11 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	rtlsdr_frontend_t *lfe = arg;
 
 	struct dab_state_t *dab;
-	struct sdr_state_t *sdr = calloc(1, sizeof(struct sdr_state_t));
+	struct sdr_state_t *sdr;
 
-	init_dab_state(&dab, &sdr, rtlsdr_eti_callback);
+	init_dab_state(&dab, rtlsdr_eti_callback);
 	lfe->dab = dab;
+	sdr = &dab->device_state;
 
 	memset(&sdr, 0, sizeof(struct sdr_state_t));
 	sdr->frequency = lfe->lfe_freq;
