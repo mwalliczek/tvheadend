@@ -248,7 +248,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 	rtlsdr_reset_buffer(lfe->dev);
 	sdr_init(sdr);
-	rtlsdr_read_async(lfe->dev, rtlsdr_dab_callback, (void *)(&sdr),
+	rtlsdr_read_async(lfe->dev, rtlsdr_dab_callback, (void *)lfe,
 		DEFAULT_ASYNC_BUF_NUMBER, DEFAULT_BUF_LENGTH);
 
 	while (lfe->lfe_reading) {
