@@ -335,7 +335,7 @@ rtlsdr_frontend_monitor(void *aux)
 		lfe->lfe_reading = 1;
 		tvhthread_create(&lfe->demod_thread, NULL,
 			rtlsdr_demod_thread_fn, lfe, "rtlsdr-front");
-	} else {
+	} else if (lfe->dab != NULL) {
 		lfe->lfe_locked = lfe->dab->locked;
 		lfe->lfe_status = lfe->dab->locked ? SIGNAL_GOOD : SIGNAL_NONE;
 	}
