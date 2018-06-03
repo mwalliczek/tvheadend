@@ -43,7 +43,7 @@ void dab_process_frame(struct dab_state_t *dab)
     dab->okcount++;
     if ((dab->okcount >= 10) && (!dab->locked)) { // 10 successive 100% perfect sets of FICs, we are locked.
       dab->locked = 1;
-	  tvhtrace(LS_RTLSDR, "Locked with center-frequency %dHz",dab->device_state->frequency);
+	  tvhtrace(LS_RTLSDR, "Locked with center-frequency %dHz",dab->device_state.frequency);
 	  tvhdebug(LS_RTLSDR, "Locked");
     }
   } else {
