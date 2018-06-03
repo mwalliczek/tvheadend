@@ -1,4 +1,5 @@
 #include "tvheadend.h"
+#include "tvhpoll.h"
 #include "input.h"
 #include "rtlsdr_private.h"
 
@@ -135,10 +136,11 @@ rtlsdr_frontend_stop_mux
 	tvhdebug(LS_RTLSDR, "%s - stopping %s", buf1, mmi->mmi_mux->mm_nicename);
 
 	/* Stop thread */
-	if (lfe->lfe_reading != 0) {
-		lfe->lfe_reading = 0;
+	if (lfe->lfe_dvr_pipe.wr > 0) {
+		tvh_write(lfe->lfe_dvr_pipe.wr, "", 1);
 		tvhtrace(LS_RTLSDR, "%s - waiting for dvr thread", buf1);
 		pthread_join(lfe->demod_thread, NULL);
+		tvh_pipe_close(&lfe->lfe_dvr_pipe);
 		tvhdebug(LS_RTLSDR, "%s - stopped dvr thread", buf1);
 	}
 
@@ -217,15 +219,12 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	if (!ctx) {
 		return;
 	}
-	if (!lfe->lfe_reading) {
+	if (lfe->lfe_dvr_pipe.wr <= 0) {
 		return;
 	}
 	memcpy(sdr->input_buffer, buf, len);
 	sdr->input_buffer_len = len;
-	sem_getvalue(&lfe->data_ready, &dr_val);
-	if (!dr_val) {
-		sem_post(&lfe->data_ready);
-	}
+	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
 }
 
 static void rtlsdr_eti_callback(uint8_t* eti)
@@ -235,13 +234,20 @@ static void rtlsdr_eti_callback(uint8_t* eti)
 static void *rtlsdr_demod_thread_fn(void *arg)
 {
 	rtlsdr_frontend_t *lfe = arg;
+	char b;
 
 	struct dab_state_t *dab;
 	struct sdr_state_t *sdr;
 
+	tvhpoll_event_t ev[2];
+	tvhpoll_t *efd;
+
+	int nfds;
+
 	init_dab_state(&dab, rtlsdr_eti_callback);
 	lfe->dab = dab;
 	sdr = &dab->device_state;
+	tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
 	memset(sdr, 0, sizeof(struct sdr_state_t));
 	sdr->frequency = lfe->lfe_freq;
@@ -251,8 +257,28 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	rtlsdr_read_async(lfe->dev, rtlsdr_dab_callback, (void *)lfe,
 		DEFAULT_ASYNC_BUF_NUMBER, DEFAULT_BUF_LENGTH);
 
-	while (lfe->lfe_reading) {
-		sem_wait(&lfe->data_ready);
+	/* Setup poll */
+	efd = tvhpoll_create(2);
+	memset(ev, 0, sizeof(ev));
+	ev[0].events = TVHPOLL_IN;
+	ev[0].fd = lfe->lfe_control_pipe.rd;
+	ev[0].ptr = lfe;
+	ev[1].events = TVHPOLL_IN;
+	ev[1].fd = lfe->lfe_dvr_pipe.rd;
+	ev[1].ptr = &lfe->lfe_dvr_pipe;
+	tvhpoll_add(efd, ev, 2);
+
+	/* Read */
+	while (tvheadend_is_running()) {
+		nfds = tvhpoll_wait(efd, ev, 1, 150);
+		if (nfds < 1) continue;
+		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
+			if (read(lfe->lfe_dvr_pipe.rd, &b, 1) > 0) {
+				break;
+			}
+			continue;
+		}
+		if (ev[0].ptr != lfe) break;
 		int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
 		if (ok) {
 			dab_process_frame(dab);
@@ -331,8 +357,9 @@ rtlsdr_frontend_monitor(void *aux)
 //	mm = mmi->mmi_mux;
 
 	/* Waiting for lock */
-	if (!lfe->lfe_reading) {
-		lfe->lfe_reading = 1;
+	if (lfe->lfe_dvr_pipe.wr <= 0) {
+		/* Start input */
+		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
 		tvhthread_create(&lfe->demod_thread, NULL,
 			rtlsdr_demod_thread_fn, lfe, "rtlsdr-front");
 	} else if (lfe->dab != NULL) {
