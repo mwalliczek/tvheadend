@@ -1,3 +1,5 @@
+#include <fcntl.h>
+
 #include "tvheadend.h"
 #include "tvhpoll.h"
 #include "input.h"
@@ -215,7 +217,6 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
 	struct sdr_state_t *sdr = &lfe->dab->device_state;
-	int dr_val;
 	if (!ctx) {
 		return;
 	}
