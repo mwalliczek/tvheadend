@@ -144,6 +144,7 @@ rtlsdr_frontend_stop_mux
 		pthread_join(lfe->demod_thread, NULL);
 		tvh_pipe_close(&lfe->lfe_dvr_pipe);
 		tvhdebug(LS_RTLSDR, "%s - stopped dvr thread", buf1);
+		rtlsdr_cancel_async(lfe->dev);
 	}
 
 	/* Not locked */
@@ -238,26 +239,13 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	rtlsdr_frontend_t *lfe = arg;
 	char b;
 
-	struct dab_state_t *dab;
-	struct sdr_state_t *sdr;
+	struct dab_state_t *dab = lfe->dab;
+	struct sdr_state_t *sdr = &dab->device_state;
 
 	tvhpoll_event_t ev[2];
 	tvhpoll_t *efd;
 
 	int nfds;
-
-	init_dab_state(&dab, rtlsdr_eti_callback);
-	lfe->dab = dab;
-	sdr = &dab->device_state;
-	tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
-
-	memset(sdr, 0, sizeof(struct sdr_state_t));
-	sdr->frequency = lfe->lfe_freq;
-
-	rtlsdr_reset_buffer(lfe->dev);
-	sdr_init(sdr);
-	rtlsdr_read_async(lfe->dev, rtlsdr_dab_callback, (void *)lfe,
-		DEFAULT_ASYNC_BUF_NUMBER, DEFAULT_BUF_LENGTH);
 
 	/* Setup poll */
 	efd = tvhpoll_create(2);
@@ -327,6 +315,13 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	return 0;
 }
 
+static void *rtlsdr_read_thread_fn(void *arg)
+{
+	rtlsdr_frontend_t *lfe = arg;
+	rtlsdr_read_async(lfe->dev, rtlsdr_dab_callback, (void *)lfe,
+		DEFAULT_ASYNC_BUF_NUMBER, DEFAULT_BUF_LENGTH);
+	return 0;
+}
 
 static void
 rtlsdr_frontend_monitor(void *aux)
@@ -337,6 +332,7 @@ rtlsdr_frontend_monitor(void *aux)
 //	mpegts_mux_t *mm;
 //	service_t *s;
 	uint32_t period = MINMAX(lfe->lfe_status_period, 250, 8000);
+	struct sdr_state_t *sdr;
 
 	lfe->mi_display_name((mpegts_input_t*)lfe, buf, sizeof(buf));
 	tvhtrace(LS_RTLSDR, "%s - checking FE status%s", buf, lfe->lfe_ready ? " (ready)" : "");
@@ -364,8 +360,20 @@ rtlsdr_frontend_monitor(void *aux)
 	if (lfe->lfe_dvr_pipe.wr <= 0) {
 		/* Start input */
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
+		init_dab_state(&lfe->dab, rtlsdr_eti_callback);
+		sdr = &lfe->dab->device_state;
+		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
+
+		memset(sdr, 0, sizeof(struct sdr_state_t));
+		sdr->frequency = lfe->lfe_freq;
+
+		rtlsdr_reset_buffer(lfe->dev);
+		sdr_init(sdr);
 		tvhthread_create(&lfe->demod_thread, NULL,
 			rtlsdr_demod_thread_fn, lfe, "rtlsdr-front");
+		tvhthread_create(&lfe->read_thread, NULL,
+			rtlsdr_read_thread_fn, lfe, "rtlsdr-front-read");
+
 	} else if (lfe->dab != NULL) {
 		lfe->lfe_locked = lfe->dab->locked;
 		lfe->lfe_status = lfe->dab->locked ? SIGNAL_GOOD : SIGNAL_NONE;

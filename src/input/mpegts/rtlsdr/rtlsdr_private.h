@@ -50,6 +50,7 @@ struct rtlsdr_frontend
 	rtlsdr_dev_t *dev;
 	struct dab_state_t *dab;
 	pthread_t demod_thread;
+	pthread_t read_thread;
 	th_pipe_t                 lfe_dvr_pipe;
 	th_pipe_t                 lfe_control_pipe;
 
