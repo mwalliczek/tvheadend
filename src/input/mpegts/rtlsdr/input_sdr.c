@@ -19,6 +19,7 @@ david.may.muc@googlemail.com
 
 */
 
+#include "tvheadend.h"
 #include "dab.h"
 #include "dab_tables.h"
 #include "sdr_sync.h"
@@ -49,7 +50,7 @@ int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr)
   /* give the AGC some time to settle */
   if (sdr->startup_delay<=GAIN_SETTLE_TIME) {
     sdr->startup_delay+=1;
-    fprintf(stderr,"startup_delay=%i\n",sdr->startup_delay);
+	tvhdebug(LS_RTLSDR, "startup_delay=%i",sdr->startup_delay);
     return 0;
   }
   
@@ -70,7 +71,7 @@ int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr)
   // we are not in sync so -> next frame
   sdr->force_timesync=0;
   if (sdr->coarse_timeshift) {
-    //printf("coarse time shift\n");
+	tvhdebug(LS_RTLSDR, "coarse time shift");
     return 0;
   }
 

@@ -309,7 +309,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		}
 
 		if (sdr->frequency != prev_freq) {
-		  tvhtrace(LS_RTLSDR, "Adjusting centre-frequency to %dHz\n",sdr->frequency);
+		  tvhtrace(LS_RTLSDR, "Adjusting centre-frequency to %dHz",sdr->frequency);
 		}    
 	}
 	return 0;
