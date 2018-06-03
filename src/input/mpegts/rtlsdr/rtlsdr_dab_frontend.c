@@ -270,7 +270,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	tvhpoll_add(efd, ev, 2);
 
 	/* Read */
-	while (tvheadend_is_running()) {
+	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0) {
 		nfds = tvhpoll_wait(efd, ev, 1, 150);
 		if (nfds < 1) continue;
 		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
