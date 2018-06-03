@@ -217,8 +217,6 @@ rtlsdr_frontend_network_list(mpegts_input_t *mi)
 static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
-	struct sdr_state_t *sdr = &lfe->dab->device_state;
-	int i;
 	tvhtrace(LS_RTLSDR, "callback with %d bytes", len);
 	if (!ctx) {
 		return;
@@ -271,6 +269,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		}
 		if (ev[0].ptr != lfe) break;
 		sdr->input_buffer_len = read(lfe->lfe_control_pipe.rd, sdr->input_buffer, DEFAULT_BUF_LENGTH);
+		tvhtrace(LS_RTLSDR, "read bytes %d", sdr->input_buffer_len);
 		ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
 		if (ok) {
 			dab_process_frame(dab);
