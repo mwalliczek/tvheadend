@@ -105,7 +105,7 @@ rtlsdr_frontend_enabled_updated(mpegts_input_t *mi)
 static int
 rtlsdr_frontend_get_grace(mpegts_input_t *mi, mpegts_mux_t *mm)
 {
-	return 5;
+	return 60;
 }
 
 static int
@@ -217,6 +217,7 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
 	struct sdr_state_t *sdr = &lfe->dab->device_state;
+	tvhtrace(LS_RTLSDR, "callback with %d bytes", len);
 	if (!ctx) {
 		return;
 	}
@@ -269,9 +270,11 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	ev[1].ptr = &lfe->lfe_dvr_pipe;
 	tvhpoll_add(efd, ev, 2);
 
+	tvhtrace(LS_RTLSDR, "start polling");
 	/* Read */
 	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0) {
 		nfds = tvhpoll_wait(efd, ev, 1, 150);
+		tvhtrace(LS_RTLSDR, "polling results %d", nfds);
 		if (nfds < 1) continue;
 		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
 			if (read(lfe->lfe_dvr_pipe.rd, &b, 1) > 0) {
