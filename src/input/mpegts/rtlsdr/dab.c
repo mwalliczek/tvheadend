@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "tvheadend.h"
 #include "dab.h"
 #include "viterbi.h"
 #include "fic.h"
@@ -33,7 +34,7 @@ void dab_process_frame(struct dab_state_t *dab)
 
   fic_decode(dab, &dab->tfs[dab->tfidx]);
   if (dab->tfs[dab->tfidx].fibs.ok_count > 0) {
-    //fprintf(stderr,"Decoded FIBs - ok_count=%d\n",dab->tfs[dab->tfidx].fibs.ok_count);
+	tvhtrace(LS_RTLSDR, "Decoded FIBs - ok_count=%d",dab->tfs[dab->tfidx].fibs.ok_count);
     fib_decode(&dab->tf_info,&dab->tfs[dab->tfidx].fibs,12);
     //dump_tf_info(&dab->tf_info);
   }
@@ -42,14 +43,14 @@ void dab_process_frame(struct dab_state_t *dab)
     dab->okcount++;
     if ((dab->okcount >= 10) && (!dab->locked)) { // 10 successive 100% perfect sets of FICs, we are locked.
       dab->locked = 1;
-      //fprintf(stderr,"Locked with center-frequency %dHz\n",sdr->frequency);
-      fprintf(stderr,"Locked\n");
+	  tvhtrace(LS_RTLSDR, "Locked with center-frequency %dHz",dab->device_state->frequency);
+	  tvhdebug(LS_RTLSDR, "Locked");
     }
   } else {
     dab->okcount = 0;
     if (dab->locked) {
       dab->locked = 0;
-      fprintf(stderr,"Lock lost, resetting ringbuffer\n");
+	  tvhdebug(LS_RTLSDR, "Lock lost, resetting ringbuffer");
       dab->ncifs = 0;
       dab->tfidx = 0;
 	  return;
