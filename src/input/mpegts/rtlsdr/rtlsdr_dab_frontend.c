@@ -228,7 +228,7 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	}
 	/* write input data into fifo */
 	for (i = 0; i<len; i++) {
-		cbWrite(&(sdr->fifo), buf[i]);
+		cbWrite(&(sdr->fifo), &buf[i]);
 	}
 	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
 }
