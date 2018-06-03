@@ -226,11 +226,7 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	if (lfe->lfe_dvr_pipe.wr <= 0) {
 		return;
 	}
-	/* write input data into fifo */
-	for (i = 0; i<len; i++) {
-		cbWrite(&(sdr->fifo), &buf[i]);
-	}
-	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
+	tvh_write(lfe->lfe_control_pipe.wr, buf, len);
 }
 
 static void rtlsdr_eti_callback(uint8_t* eti)
@@ -248,7 +244,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	tvhpoll_event_t ev[2];
 	tvhpoll_t *efd;
 
-	int nfds;
+	int nfds, ok;
 
 	/* Setup poll */
 	efd = tvhpoll_create(2);
@@ -274,7 +270,8 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			continue;
 		}
 		if (ev[0].ptr != lfe) break;
-		int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
+		sdr->input_buffer_len = read(lfe->lfe_control_pipe.rd, sdr->input_buffer, DEFAULT_BUF_LENGTH);
+		ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
 		if (ok) {
 			dab_process_frame(dab);
 		}
