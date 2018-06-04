@@ -268,13 +268,13 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		tvhtrace(LS_RTLSDR, "polling results %d", nfds);
 		if (nfds < 1) continue;
 		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
-			if (read(lfe->lfe_dvr_pipe.rd, b, 1) > 0) {
+			if (read(lfe->lfe_dvr_pipe.rd, &b, 1) > 0) {
 				break;
 			}
 			continue;
 		}
 		if (ev[0].ptr != lfe) break;
-		if (read(lfe->lfe_dvr_pipe.rd, b, 1) > 0) {
+		if (read(lfe->lfe_control_pipe.rd, &b, 1) > 0) {
 			int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
 			if (ok) {
 				dab_process_frame(dab);
