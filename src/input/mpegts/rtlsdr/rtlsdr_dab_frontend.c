@@ -220,7 +220,6 @@ rtlsdr_frontend_network_list(mpegts_input_t *mi)
 static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
-	struct sdr_state_t *sdr = &lfe->dab->device_state;
 	uint8_t *bufCopy;
 	struct stat s;
 	tvhtrace(LS_RTLSDR, "callback with %d bytes", len);
@@ -233,12 +232,12 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	bufCopy = malloc(len);
 	memcpy(bufCopy, buf, len);
 	tvh_write(lfe->lfe_control_pipe.wr, &bufCopy, sizeof(bufCopy));
-	tvh_write(lfe->lfe_control_pipe.wr, len, sizeof(len));
-	if (fstat(lfe->lfe_control_pipe.wr, &s) == -1) {
+	tvh_write(lfe->lfe_control_pipe.wr, &len, sizeof(len));
+	if (fstat(lfe->lfe_control_pipe.rd, &s) == -1) {
 		int saveErrno = errno;
-		tvhtrace(LS_RTLSDR, "fstat(%d) returned errno=%d.", lfe->lfe_control_pipe.wr, saveErrno);
+		tvhtrace(LS_RTLSDR, "fstat(%d) returned errno=%d.", lfe->lfe_control_pipe.rd, saveErrno);
 	}
-	tvhtrace(LS_RTLSDR, "fstat(%d) returned %d", lfe->lfe_control_pipe.wr, s.st_size);
+	tvhtrace(LS_RTLSDR, "fstat(%d) returned %lld", lfe->lfe_control_pipe.rd, s.st_size);
 }
 
 static void rtlsdr_eti_callback(uint8_t* eti)
