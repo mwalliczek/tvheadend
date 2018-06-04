@@ -217,6 +217,8 @@ rtlsdr_frontend_network_list(mpegts_input_t *mi)
 static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
+	struct sdr_state_t *sdr = &lfe->dab->device_state;
+	int i;
 	tvhtrace(LS_RTLSDR, "callback with %d bytes", len);
 	if (!ctx) {
 		return;
@@ -224,7 +226,11 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	if (lfe->lfe_dvr_pipe.wr <= 0) {
 		return;
 	}
-	tvh_write(lfe->lfe_control_pipe.wr, buf, len);
+	/* write input data into fifo */
+	for (i = 0; i<len; i++) {
+		cbWrite(&(sdr->fifo), &buf[i]);
+	}
+	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
 }
 
 static void rtlsdr_eti_callback(uint8_t* eti)
@@ -242,7 +248,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	tvhpoll_event_t ev[2];
 	tvhpoll_t *efd;
 
-	int nfds, ok;
+	int nfds;
 
 	/* Setup poll */
 	efd = tvhpoll_create(2);
@@ -262,54 +268,54 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		tvhtrace(LS_RTLSDR, "polling results %d", nfds);
 		if (nfds < 1) continue;
 		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
-			if (read(lfe->lfe_dvr_pipe.rd, &b, 1) > 0) {
+			if (read(lfe->lfe_dvr_pipe.rd, b, 1) > 0) {
 				break;
 			}
 			continue;
 		}
 		if (ev[0].ptr != lfe) break;
-		sdr->input_buffer_len = read(lfe->lfe_control_pipe.rd, sdr->input_buffer, DEFAULT_BUF_LENGTH);
-		tvhtrace(LS_RTLSDR, "read bytes %d", sdr->input_buffer_len);
-		ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
-		if (ok) {
-			dab_process_frame(dab);
+		if (read(lfe->lfe_dvr_pipe.rd, b, 1) > 0) {
+			int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
+			if (ok) {
+				dab_process_frame(dab);
+			}
+			//dab_fic_parser(dab->fib,&sinfo,&ana);
+			// calculate error rates
+			//dab_analyzer_calculate_error_rates(&ana,dab);
+
+			int prev_freq = sdr->frequency;
+			if (abs(sdr->coarse_freq_shift) > 1) {
+				if (sdr->coarse_freq_shift < 0)
+					sdr->frequency = sdr->frequency - 1000;
+				else
+					sdr->frequency = sdr->frequency + 1000;
+
+				rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+
+			}
+
+			if (abs(sdr->coarse_freq_shift) == 1) {
+
+				if (sdr->coarse_freq_shift < 0)
+					sdr->frequency = sdr->frequency - rand() % 1000;
+				else
+					sdr->frequency = sdr->frequency + rand() % 1000;
+
+				rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+				//fprintf(stderr,"new center freq : %i\n",rtlsdr_get_center_freq(dev));
+
+			}
+			if (abs(sdr->coarse_freq_shift) < 1 && (abs(sdr->fine_freq_shift) > 50)) {
+				sdr->frequency = sdr->frequency + (sdr->fine_freq_shift / 3);
+				rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+				//fprintf(stderr,"ffs : %f\n",sdr->fine_freq_shift);
+
+			}
+
+			if (sdr->frequency != prev_freq) {
+				tvhtrace(LS_RTLSDR, "Adjusting centre-frequency to %dHz", sdr->frequency);
+			}
 		}
-		//dab_fic_parser(dab->fib,&sinfo,&ana);
-		// calculate error rates
-		//dab_analyzer_calculate_error_rates(&ana,dab);
-
-		int prev_freq = sdr->frequency;
-		if (abs(sdr->coarse_freq_shift)>1) {
-			if (sdr->coarse_freq_shift<0)
-				sdr->frequency = sdr->frequency - 1000;
-			else
-				sdr->frequency = sdr->frequency + 1000;
-
-			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
-
-		}
-
-		if (abs(sdr->coarse_freq_shift) == 1) {
-
-			if (sdr->coarse_freq_shift<0)
-				sdr->frequency = sdr->frequency - rand() % 1000;
-			else
-				sdr->frequency = sdr->frequency + rand() % 1000;
-
-			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
-			//fprintf(stderr,"new center freq : %i\n",rtlsdr_get_center_freq(dev));
-
-		}
-		if (abs(sdr->coarse_freq_shift)<1 && (abs(sdr->fine_freq_shift) > 50)) {
-			sdr->frequency = sdr->frequency + (sdr->fine_freq_shift / 3);
-			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
-			//fprintf(stderr,"ffs : %f\n",sdr->fine_freq_shift);
-
-		}
-
-		if (sdr->frequency != prev_freq) {
-		  tvhtrace(LS_RTLSDR, "Adjusting centre-frequency to %dHz",sdr->frequency);
-		}    
 	}
 	return 0;
 }
