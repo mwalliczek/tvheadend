@@ -1,4 +1,7 @@
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "tvheadend.h"
 #include "tvhpoll.h"
@@ -218,7 +221,8 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
 	struct sdr_state_t *sdr = &lfe->dab->device_state;
-	int i;
+	uint8_t *bufCopy;
+	struct stat s;
 	tvhtrace(LS_RTLSDR, "callback with %d bytes", len);
 	if (!ctx) {
 		return;
@@ -226,11 +230,15 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	if (lfe->lfe_dvr_pipe.wr <= 0) {
 		return;
 	}
-	/* write input data into fifo */
-	for (i = 0; i<len; i++) {
-		cbWrite(&(sdr->fifo), &buf[i]);
+	bufCopy = malloc(len);
+	memcpy(bufCopy, buf, len);
+	tvh_write(lfe->lfe_control_pipe.wr, &bufCopy, sizeof(bufCopy));
+	tvh_write(lfe->lfe_control_pipe.wr, len, sizeof(len));
+	if (fstat(lfe->lfe_control_pipe.wr, &s) == -1) {
+		int saveErrno = errno;
+		tvhtrace(LS_RTLSDR, "fstat(%d) returned errno=%d.", lfe->lfe_control_pipe.wr, saveErrno);
 	}
-	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
+	tvhtrace(LS_RTLSDR, "fstat(%d) returned %d", lfe->lfe_control_pipe.wr, s.st_size);
 }
 
 static void rtlsdr_eti_callback(uint8_t* eti)
@@ -265,7 +273,6 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	/* Read */
 	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0) {
 		nfds = tvhpoll_wait(efd, ev, 1, 150);
-		tvhtrace(LS_RTLSDR, "polling results %d", nfds);
 		if (nfds < 1) continue;
 		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
 			if (read(lfe->lfe_dvr_pipe.rd, &b, 1) > 0) {
@@ -274,8 +281,11 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			continue;
 		}
 		if (ev[0].ptr != lfe) break;
-		if (read(lfe->lfe_control_pipe.rd, &b, 1) > 0) {
+		if (read(lfe->lfe_control_pipe.rd, &sdr->input_buffer, sizeof(sdr->input_buffer)) > 0 && 
+			read(lfe->lfe_control_pipe.rd, &sdr->input_buffer_len, sizeof(sdr->input_buffer_len)) > 0) {
+			tvhtrace(LS_RTLSDR, "polling results %d", sdr->input_buffer_len);
 			int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
+			free(sdr->input_buffer);
 			if (ok) {
 				dab_process_frame(dab);
 			}
