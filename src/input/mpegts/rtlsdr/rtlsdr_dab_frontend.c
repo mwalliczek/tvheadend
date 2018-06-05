@@ -1,10 +1,4 @@
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 #include "tvheadend.h"
-#include "tvhpoll.h"
 #include "input.h"
 #include "rtlsdr_private.h"
 
@@ -141,13 +135,13 @@ rtlsdr_frontend_stop_mux
 	tvhdebug(LS_RTLSDR, "%s - stopping %s", buf1, mmi->mmi_mux->mm_nicename);
 
 	/* Stop thread */
-	if (lfe->lfe_dvr_pipe.wr > 0) {
-		tvh_write(lfe->lfe_dvr_pipe.wr, "", 1);
+	if (lfe->lfe_reading != 0) {
+		lfe->lfe_reading = 0;
 		tvhtrace(LS_RTLSDR, "%s - waiting for dvr thread", buf1);
 		pthread_join(lfe->demod_thread, NULL);
-		tvh_pipe_close(&lfe->lfe_dvr_pipe);
 		tvhdebug(LS_RTLSDR, "%s - stopped dvr thread", buf1);
 		rtlsdr_cancel_async(lfe->dev);
+		pthread_join(lfe->read_thread, NULL);
 	}
 
 	/* Not locked */
@@ -220,24 +214,21 @@ rtlsdr_frontend_network_list(mpegts_input_t *mi)
 static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
-	uint8_t *bufCopy;
-	struct stat s;
+	struct sdr_state_t *sdr = &lfe->dab->device_state;
+	int dr_val;
 	tvhtrace(LS_RTLSDR, "callback with %d bytes", len);
 	if (!ctx) {
 		return;
 	}
-	if (lfe->lfe_dvr_pipe.wr <= 0) {
+	if (!lfe->lfe_reading) {
 		return;
 	}
-	bufCopy = malloc(len);
-	memcpy(bufCopy, buf, len);
-	tvh_write(lfe->lfe_control_pipe.wr, &bufCopy, sizeof(bufCopy));
-	tvh_write(lfe->lfe_control_pipe.wr, &len, sizeof(len));
-	if (fstat(lfe->lfe_control_pipe.rd, &s) == -1) {
-		int saveErrno = errno;
-		tvhtrace(LS_RTLSDR, "fstat(%d) returned errno=%d.", lfe->lfe_control_pipe.rd, saveErrno);
+	memcpy(sdr->input_buffer, buf, len);
+	sdr->input_buffer_len = len;
+	sem_getvalue(&lfe->data_ready, &dr_val);
+	if (!dr_val) {
+		sem_post(&lfe->data_ready);
 	}
-	tvhtrace(LS_RTLSDR, "fstat(%d) returned %lld", lfe->lfe_control_pipe.rd, s.st_size);
 }
 
 static void rtlsdr_eti_callback(uint8_t* eti)
@@ -247,83 +238,54 @@ static void rtlsdr_eti_callback(uint8_t* eti)
 static void *rtlsdr_demod_thread_fn(void *arg)
 {
 	rtlsdr_frontend_t *lfe = arg;
-	char b;
 
 	struct dab_state_t *dab = lfe->dab;
 	struct sdr_state_t *sdr = &dab->device_state;
 
-	tvhpoll_event_t ev[2];
-	tvhpoll_t *efd;
-
-	int nfds;
-
-	/* Setup poll */
-	efd = tvhpoll_create(2);
-	memset(ev, 0, sizeof(ev));
-	ev[0].events = TVHPOLL_IN;
-	ev[0].fd = lfe->lfe_control_pipe.rd;
-	ev[0].ptr = lfe;
-	ev[1].events = TVHPOLL_IN;
-	ev[1].fd = lfe->lfe_dvr_pipe.rd;
-	ev[1].ptr = &lfe->lfe_dvr_pipe;
-	tvhpoll_add(efd, ev, 2);
-
 	tvhtrace(LS_RTLSDR, "start polling");
-	/* Read */
-	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0) {
-		nfds = tvhpoll_wait(efd, ev, 1, 150);
-		if (nfds < 1) continue;
-		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
-			if (read(lfe->lfe_dvr_pipe.rd, &b, 1) > 0) {
-				break;
-			}
-			continue;
+	while (lfe->lfe_reading) {
+		sem_wait(&lfe->data_ready);
+		tvhtrace(LS_RTLSDR, "polling results %d", sdr->input_buffer_len);
+		int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
+		free(sdr->input_buffer);
+		if (ok) {
+			dab_process_frame(dab);
 		}
-		if (ev[0].ptr != lfe) break;
-		if (read(lfe->lfe_control_pipe.rd, &sdr->input_buffer, sizeof(sdr->input_buffer)) > 0 && 
-			read(lfe->lfe_control_pipe.rd, &sdr->input_buffer_len, sizeof(sdr->input_buffer_len)) > 0) {
-			tvhtrace(LS_RTLSDR, "polling results %d", sdr->input_buffer_len);
-			int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
-			free(sdr->input_buffer);
-			if (ok) {
-				dab_process_frame(dab);
-			}
-			//dab_fic_parser(dab->fib,&sinfo,&ana);
-			// calculate error rates
-			//dab_analyzer_calculate_error_rates(&ana,dab);
+		//dab_fic_parser(dab->fib,&sinfo,&ana);
+		// calculate error rates
+		//dab_analyzer_calculate_error_rates(&ana,dab);
 
-			int prev_freq = sdr->frequency;
-			if (abs(sdr->coarse_freq_shift) > 1) {
-				if (sdr->coarse_freq_shift < 0)
-					sdr->frequency = sdr->frequency - 1000;
-				else
-					sdr->frequency = sdr->frequency + 1000;
+		int prev_freq = sdr->frequency;
+		if (abs(sdr->coarse_freq_shift) > 1) {
+			if (sdr->coarse_freq_shift < 0)
+				sdr->frequency = sdr->frequency - 1000;
+			else
+				sdr->frequency = sdr->frequency + 1000;
 
-				rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
 
-			}
+		}
 
-			if (abs(sdr->coarse_freq_shift) == 1) {
+		if (abs(sdr->coarse_freq_shift) == 1) {
 
-				if (sdr->coarse_freq_shift < 0)
-					sdr->frequency = sdr->frequency - rand() % 1000;
-				else
-					sdr->frequency = sdr->frequency + rand() % 1000;
+			if (sdr->coarse_freq_shift < 0)
+				sdr->frequency = sdr->frequency - rand() % 1000;
+			else
+				sdr->frequency = sdr->frequency + rand() % 1000;
 
-				rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
-				//fprintf(stderr,"new center freq : %i\n",rtlsdr_get_center_freq(dev));
+			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+			//fprintf(stderr,"new center freq : %i\n",rtlsdr_get_center_freq(dev));
 
-			}
-			if (abs(sdr->coarse_freq_shift) < 1 && (abs(sdr->fine_freq_shift) > 50)) {
-				sdr->frequency = sdr->frequency + (sdr->fine_freq_shift / 3);
-				rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
-				//fprintf(stderr,"ffs : %f\n",sdr->fine_freq_shift);
+		}
+		if (abs(sdr->coarse_freq_shift) < 1 && (abs(sdr->fine_freq_shift) > 50)) {
+			sdr->frequency = sdr->frequency + (sdr->fine_freq_shift / 3);
+			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+			//fprintf(stderr,"ffs : %f\n",sdr->fine_freq_shift);
 
-			}
+		}
 
-			if (sdr->frequency != prev_freq) {
-				tvhtrace(LS_RTLSDR, "Adjusting centre-frequency to %dHz", sdr->frequency);
-			}
+		if (sdr->frequency != prev_freq) {
+			tvhtrace(LS_RTLSDR, "Adjusting centre-frequency to %dHz", sdr->frequency);
 		}
 	}
 	return 0;
@@ -371,12 +333,10 @@ rtlsdr_frontend_monitor(void *aux)
 //	mm = mmi->mmi_mux;
 
 	/* Waiting for lock */
-	if (lfe->lfe_dvr_pipe.wr <= 0) {
-		/* Start input */
-		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
+	if (!lfe->lfe_reading) {
+		lfe->lfe_reading = 1;
 		init_dab_state(&lfe->dab, rtlsdr_eti_callback);
 		sdr = &lfe->dab->device_state;
-		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
 		memset(sdr, 0, sizeof(struct sdr_state_t));
 		sdr->frequency = lfe->lfe_freq;
