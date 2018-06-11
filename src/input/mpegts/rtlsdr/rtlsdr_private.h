@@ -2,7 +2,6 @@
 #define __TVH_RTLSDR_PRIVATE_H__
 
 #include <rtl-sdr.h>
-#include <semaphore.h>
 
 #include "input.h"
 #include "dab.h"
@@ -52,13 +51,14 @@ struct rtlsdr_frontend
 	struct dab_state_t *dab;
 	pthread_t demod_thread;
 	pthread_t read_thread;
-	sem_t data_ready;
+	th_pipe_t                 lfe_dvr_pipe;
+	th_pipe_t                 lfe_control_pipe;
+
 	/*
 	* Tuning
 	*/
 	int                       lfe_refcount;
 	int                       lfe_ready;
-	int						  lfe_reading;
 	int                       lfe_in_setup;
 	int                       lfe_locked;
 	int                       lfe_status;
@@ -91,6 +91,8 @@ void rtlsdr_frontend_destroy(rtlsdr_frontend_t *lfe);
 
 int rtlsdr_frontend_tune
 (rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq);
+
+uint32_t getSamples(rtlsdr_frontend_t *lfe, struct complex_t *v, uint32_t size);
 
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */
 

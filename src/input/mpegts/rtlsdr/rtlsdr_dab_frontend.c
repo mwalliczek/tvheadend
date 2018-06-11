@@ -1,3 +1,5 @@
+#include <fcntl.h>
+
 #include "tvheadend.h"
 #include "input.h"
 #include "rtlsdr_private.h"
@@ -135,13 +137,13 @@ rtlsdr_frontend_stop_mux
 	tvhdebug(LS_RTLSDR, "%s - stopping %s", buf1, mmi->mmi_mux->mm_nicename);
 
 	/* Stop thread */
-	if (lfe->lfe_reading != 0) {
-		lfe->lfe_reading = 0;
+	if (lfe->lfe_dvr_pipe.wr > 0) {
+		tvh_write(lfe->lfe_dvr_pipe.wr, "", 1);
 		tvhtrace(LS_RTLSDR, "%s - waiting for dvr thread", buf1);
 		pthread_join(lfe->demod_thread, NULL);
+		tvh_pipe_close(&lfe->lfe_dvr_pipe);
 		tvhdebug(LS_RTLSDR, "%s - stopped dvr thread", buf1);
 		rtlsdr_cancel_async(lfe->dev);
-		pthread_join(lfe->read_thread, NULL);
 	}
 
 	/* Not locked */
@@ -215,77 +217,201 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
 	struct sdr_state_t *sdr = &lfe->dab->device_state;
-	int dr_val;
+	int i;
 	tvhtrace(LS_RTLSDR, "callback with %d bytes", len);
 	if (!ctx) {
 		return;
 	}
-	if (!lfe->lfe_reading) {
+	if (lfe->lfe_dvr_pipe.wr <= 0) {
 		return;
 	}
-	memcpy(sdr->input_buffer, buf, len);
-	sdr->input_buffer_len = len;
-	sem_getvalue(&lfe->data_ready, &dr_val);
-	if (!dr_val) {
-		sem_post(&lfe->data_ready);
+	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
+	/* write input data into fifo */
+	for (i = 0; i<len; i++) {
+		cbWrite(&(sdr->fifo), &buf[i]);
 	}
+
 }
 
 static void rtlsdr_eti_callback(uint8_t* eti)
 {
 }
 
+static const uint32_t T_F = 196608;
+static const uint32_t T_null = 2656;
+
 static void *rtlsdr_demod_thread_fn(void *arg)
 {
 	rtlsdr_frontend_t *lfe = arg;
-
 	struct dab_state_t *dab = lfe->dab;
 	struct sdr_state_t *sdr = &dab->device_state;
+//	float		fineCorrector = 0;
+//	float		coarseCorrector = 0;
+	struct complex_t v[T_F / 2];
+	int i;
+	uint32_t result;
+	int32_t		syncBufferIndex = 0;
+	uint16_t		cLevel = 0;
+	struct complex_t sample;
+	int32_t		counter;
+	int32_t		syncBufferSize = 32768;
+	int32_t		syncBufferMask = syncBufferSize - 1;
+	uint8_t		envBuffer[syncBufferSize];
+	int		dip_attempts = 0;
+//	int		index_attempts = 0;
 
 	tvhtrace(LS_RTLSDR, "start polling");
-	while (lfe->lfe_reading) {
-		sem_wait(&lfe->data_ready);
-		tvhtrace(LS_RTLSDR, "polling results %d", sdr->input_buffer_len);
-		int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
-		if (ok) {
-			dab_process_frame(dab);
+	/* Read */
+	result = getSamples(lfe, v, T_F / 2);
+	if (result < T_F / 2) {
+		tvherror(LS_RTLSDR, "getSamples failed");
+		return 0;
+	}
+	tvhtrace(LS_RTLSDR, "started, sLevel: %.6f", sdr->sLevel);
+	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0) {
+		//      As long as we are not (time) synced, we try to handle that
+		if (!sdr->isSynced) {
+			syncBufferIndex = 0;
+			cLevel = 0;
+			for (i = 0; i < 50; i++) {
+				getSamples(lfe, &sample, 1);
+				envBuffer[syncBufferIndex] = jan_abs(sample);
+				cLevel += envBuffer[syncBufferIndex];
+				syncBufferIndex++;
+			}
+			tvhtrace(LS_RTLSDR, "trying to find a sync, sLevel: %.6f, cLevel: %d", sdr->sLevel, cLevel);
+
+			//	We now have initial values for cLevel (i.e. the sum
+			//	over the last 50 samples) and sLevel, the long term average.
+			//	here we start looking for the null level, i.e. a dip
+			counter = 0;
+			while (cLevel / 50  > 0.40 * sdr->sLevel) {
+				getSamples(lfe, &sample, 1);
+				envBuffer[syncBufferIndex] = jan_abs(sample);
+				cLevel += envBuffer[syncBufferIndex] -
+					envBuffer[(syncBufferIndex - 50) & syncBufferMask];
+				syncBufferIndex = (syncBufferIndex + 1) & syncBufferMask;
+				counter++;
+
+				if (counter > 2 * T_F) { // hopeless	
+					break;
+				}
+			}
+			//	if we have 5 successive attempts are failing, signal our bosses
+			if (counter > 2 * T_F) {
+				tvhtrace(LS_RTLSDR, "trying to find a dip failed");
+				if (++dip_attempts > 10) {
+					dip_attempts = 0;
+					//	               syncsignalHandler (false, userData);
+				}
+				continue;
+			}
+			tvhtrace(LS_RTLSDR, "found begin of null period");
 		}
-		//dab_fic_parser(dab->fib,&sinfo,&ana);
-		// calculate error rates
-		//dab_analyzer_calculate_error_rates(&ana,dab);
+		//	It seemed we found a dip that started app 65/100 * 50 samples earlier.
+		//	We now start looking for the end of the null period.
 
-		int prev_freq = sdr->frequency;
-		if (abs(sdr->coarse_freq_shift) > 1) {
-			if (sdr->coarse_freq_shift < 0)
-				sdr->frequency = sdr->frequency - 1000;
-			else
-				sdr->frequency = sdr->frequency + 1000;
+		counter = 0;
+		while (cLevel / 50 < 0.75 * sdr->sLevel) {
+			getSamples(lfe, &sample, 1);
+			envBuffer[syncBufferIndex] = jan_abs(sample);
+			cLevel += envBuffer[syncBufferIndex] -
+				envBuffer[(syncBufferIndex - 50) & syncBufferMask];
+			syncBufferIndex = (syncBufferIndex + 1) & syncBufferMask;
+			counter++;
+			if (counter > T_null + 50)  // hopeless
+				break;
+		}
+		if (counter > T_null + 50) {
+			tvhtrace(LS_RTLSDR, "found end of null period failed");
+			continue;
+		}
+		tvhtrace(LS_RTLSDR, "found end of null period");
+		dip_attempts = 0;
+/*		//      We arrive here when time synchronized, either from above
+		//      or after having processed a frame
+		//      We now have to find the exact first sample of the non-null period.
+		//      We use a correlation that will find the first sample after the
+		//      cyclic prefix.
+		//      Now read in Tu samples. The precise number is not really important
+		//      as long as we can be sure that the first sample to be identified
+		//      is part of the samples read.
+		getSamples(ofdmBuffer,
+			T_u, coarseCorrector + fineCorrector);
+		startIndex = phaseSynchronizer.findIndex(ofdmBuffer);
+		if (startIndex < 0) { // no sync, try again
+			isSynced = false;
+			if (++index_attempts > 10) {
+				syncsignalHandler(false, userData);
+			}
+			continue;
+		}
+		index_attempts = 0;
+		syncsignalHandler(true, userData);
+		isSynced = true;
+		//	Once here, we are synchronized, we need to copy the data we
+		//	used for synchronization for block 0
 
-			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
+		memmove(ofdmBuffer, &ofdmBuffer[startIndex],
+			(T_u - startIndex) * sizeof(std::complex<float>));
+		int ofdmBufferIndex = T_u - startIndex;
 
+		//	Block 0 is special in that it is used for coarse time synchronization
+		//	and its content is used as a reference for decoding the
+		//	first datablock.
+		//	We read the missing samples in the ofdm buffer
+		getSamples(&ofdmBuffer[ofdmBufferIndex],
+			T_u - ofdmBufferIndex,
+			coarseCorrector + fineCorrector);
+		my_ofdmDecoder.processBlock_0(ofdmBuffer);
+		//
+		//	Here we look only at the block_0 when we need a coarse
+		//	frequency synchronization.
+		//	The width is limited to 2 * 35 Khz (i.e. positive and negative)
+		correctionNeeded = !my_ficHandler->syncReached();
+		if (correctionNeeded) {
+			int correction = phaseSynchronizer.
+				estimateOffset(ofdmBuffer);
+			if (correction != 100) {
+				coarseCorrector += correction * carrierDiff;
+				if (abs(coarseCorrector) > Khz(35))
+					coarseCorrector = 0;
+			}
+		}
+		//
+		//	after block 0, we will just read in the other (params -> L - 1) blocks
+		//	The first ones are the FIC blocks. We immediately
+		//	start with building up an average of the phase difference
+		//	between the samples in the cyclic prefix and the
+		//	corresponding samples in the datapart.
+		///	and similar for the (params. L - 4) MSC blocks
+		FreqCorr = std::complex<float>(0, 0);
+		for (ofdmSymbolCount = 1;
+			ofdmSymbolCount < (uint16_t)nrBlocks; ofdmSymbolCount++) {
+			getSamples(ofdmBuffer, T_s, coarseCorrector + fineCorrector);
+			for (i = (int)T_u; i < (int)T_s; i++)
+				FreqCorr += ofdmBuffer[i] * conj(ofdmBuffer[i - T_u]);
+
+			my_ofdmDecoder.decodeBlock(ofdmBuffer, ofdmSymbolCount);
 		}
 
-		if (abs(sdr->coarse_freq_shift) == 1) {
+		//	we integrate the newly found frequency error with the
+		//	existing frequency error.
+		fineCorrector += 0.1 * arg(FreqCorr) / M_PI * (carrierDiff);
 
-			if (sdr->coarse_freq_shift < 0)
-				sdr->frequency = sdr->frequency - rand() % 1000;
-			else
-				sdr->frequency = sdr->frequency + rand() % 1000;
-
-			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
-			//fprintf(stderr,"new center freq : %i\n",rtlsdr_get_center_freq(dev));
-
+		//	at the end of the frame, just skip Tnull samples
+		getSamples(ofdmBuffer, T_null, coarseCorrector + fineCorrector);
+		counter = 0;
+		if (fineCorrector > carrierDiff / 2) {
+			coarseCorrector += carrierDiff;
+			fineCorrector -= carrierDiff;
 		}
-		if (abs(sdr->coarse_freq_shift) < 1 && (abs(sdr->fine_freq_shift) > 50)) {
-			sdr->frequency = sdr->frequency + (sdr->fine_freq_shift / 3);
-			rtlsdr_set_center_freq(lfe->dev, sdr->frequency);
-			//fprintf(stderr,"ffs : %f\n",sdr->fine_freq_shift);
-
-		}
-
-		if (sdr->frequency != prev_freq) {
-			tvhtrace(LS_RTLSDR, "Adjusting centre-frequency to %dHz", sdr->frequency);
-		}
+		else
+			if (fineCorrector < -carrierDiff / 2) {
+				coarseCorrector -= carrierDiff;
+				fineCorrector += carrierDiff;
+			}
+*/
 	}
 	return 0;
 }
@@ -332,10 +458,12 @@ rtlsdr_frontend_monitor(void *aux)
 //	mm = mmi->mmi_mux;
 
 	/* Waiting for lock */
-	if (!lfe->lfe_reading) {
-		lfe->lfe_reading = 1;
+	if (lfe->lfe_dvr_pipe.wr <= 0) {
+		/* Start input */
+		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
 		init_dab_state(&lfe->dab, rtlsdr_eti_callback);
 		sdr = &lfe->dab->device_state;
+		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
 		memset(sdr, 0, sizeof(struct sdr_state_t));
 		sdr->frequency = lfe->lfe_freq;
