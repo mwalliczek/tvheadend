@@ -247,7 +247,6 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		sem_wait(&lfe->data_ready);
 		tvhtrace(LS_RTLSDR, "polling results %d", sdr->input_buffer_len);
 		int ok = sdr_demod(&dab->tfs[dab->tfidx], sdr);
-		free(sdr->input_buffer);
 		if (ok) {
 			dab_process_frame(dab);
 		}
