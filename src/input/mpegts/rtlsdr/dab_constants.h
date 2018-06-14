@@ -6,10 +6,10 @@ struct complex_t {
 	float imag;
 };
 
-static const uint32_t T_F = 196608;
-static const uint32_t T_null = 2656;
-static const uint32_t T_u = 2048;
-static const uint32_t T_s = 2552;
-static const uint32_t K = 1536;
+#define T_F 196608
+#define T_null 2656
+#define T_u 2048
+#define T_s 2552
+#define K 1536
 
 #endif

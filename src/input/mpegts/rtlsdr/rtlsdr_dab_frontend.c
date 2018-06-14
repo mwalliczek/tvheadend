@@ -3,6 +3,7 @@
 #include "tvheadend.h"
 #include "input.h"
 #include "rtlsdr_private.h"
+#include "phasereference.h"
 
 #define DEFAULT_ASYNC_BUF_NUMBER 32
 
@@ -335,9 +336,8 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//      Now read in Tu samples. The precise number is not really important
 		//      as long as we can be sure that the first sample to be identified
 		//      is part of the samples read.
-		getSamples(ofdmBuffer,
-			T_u, 0);
-		startIndex = phaseSynchronizerFindIndex(ofdmBuffer);
+		getSamples(lfe, ofdmBuffer, T_u);
+		startIndex = phaseReferenceFindIndex(ofdmBuffer);
 		if (startIndex < 0) { // no sync, try again
 			sdr->isSynced = 0;
 			if (++index_attempts > 10) {

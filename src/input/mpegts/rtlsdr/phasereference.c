@@ -78,6 +78,14 @@ static
 const int8_t h3[] = { 0, 1, 2, 1, 0, 3, 3, 2, 2, 3, 2, 1, 2, 1, 3, 2,
 0, 1, 2, 1, 0, 3, 3, 2, 2, 3, 2, 1, 2, 1, 3, 2 };
 
+struct complex_t refTable[T_u];
+fftwf_complex *fftBuffer;
+fftwf_plan plan;
+
+int32_t		geth_table(int32_t i, int32_t j);
+
+float	get_Phi(int32_t k);
+
 int32_t		geth_table(int32_t i, int32_t j) {
 	switch (i) {
 	case 0:
@@ -100,18 +108,14 @@ float	get_Phi(int32_t k) {
 			k_prime = modeI_table[j].kmin;
 			i = modeI_table[j].i;
 			n = modeI_table[j].n;
-			return M_PI / 2 * (h_table(i, k - k_prime) + n);
+			return M_PI / 2 * (geth_table(i, k - k_prime) + n);
 		}
 	}
 	fprintf(stderr, "Help with %d\n", k);
 	return 0;
 }
 
-static struct complex_t refTable[T_u];
-static fftwf_complex *fftBuffer;
-static fftwf_plan plan;
-
-void initPhaseReference() {
+void initPhaseReference(void) {
 	int32_t	i;
 	float	Phi_k;
 	for (i = 1; i <= K / 2; i++) {
@@ -127,8 +131,8 @@ void initPhaseReference() {
 	plan = fftwf_plan_dft_1d(T_u, fftBuffer, fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
 }
 
-void destoryPhaseReference() {
-	fftw_destroy_plan(plan);
+void destoryPhaseReference(void) {
+	fftwf_destroy_plan(plan);
 	fftwf_free(fftBuffer);
 }
 
@@ -139,12 +143,12 @@ int32_t	phaseReferenceFindIndex(struct complex_t* v) {
 	float	Max = -10000;
 
 	memcpy(fftBuffer, v, T_u * sizeof(fftwf_complex));
-	fftw_execute(plan);
+	fftwf_execute(plan);
 	for (i = 0; i < T_u; i++) {
 		fftBuffer[i][0] = fftBuffer[i][0] * refTable[i].real + fftBuffer[i][1] * refTable[i].imag;
 		fftBuffer[i][1] = fftBuffer[i][0] * refTable[i].imag - fftBuffer[i][1] * refTable[i].real;
 	}
-	fftw_execute(plan);
+	fftwf_execute(plan);
 	/**
 	*	We compute the average signal value ...
 	*/
