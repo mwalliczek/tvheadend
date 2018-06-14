@@ -250,12 +250,12 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	int i;
 	uint32_t result;
 	int32_t		syncBufferIndex = 0;
-	uint16_t		cLevel = 0;
+	float		cLevel = 0;
 	struct complex_t sample;
 	int32_t		counter;
 	int32_t		syncBufferSize = 32768;
 	int32_t		syncBufferMask = syncBufferSize - 1;
-	uint8_t		envBuffer[syncBufferSize];
+	float		envBuffer[syncBufferSize];
 	int		dip_attempts = 0;
 	int		index_attempts = 0;
 	struct complex_t ofdmBuffer[T_s];
