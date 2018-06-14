@@ -14,6 +14,7 @@
 #include "queue.h"
 #include "fsmonitor.h"
 #include "settings.h"
+#include "phasereference.h"
 
 static htsmsg_t *
 rtlsdr_adapter_class_save(idnode_t *in, char *filename, size_t fsize)
@@ -204,6 +205,9 @@ void rtlsdr_init() {
 	int i, device_count;
 	idclass_register(&rtlsdr_adapter_class);
 	idclass_register(&rtlsdr_frontend_dab_class);
+
+	initPhaseReference();
+
 	/*---------------------------------------------------
 	Looking for device and open connection
 	----------------------------------------------------*/
@@ -266,4 +270,5 @@ rtlsdr_done(void)
 			rtlsdr_adapter_del(la->dev_index);
 		}
 	}
+	destoryPhaseReference();
 }

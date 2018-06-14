@@ -237,9 +237,6 @@ static void rtlsdr_eti_callback(uint8_t* eti)
 {
 }
 
-static const uint32_t T_F = 196608;
-static const uint32_t T_null = 2656;
-
 static void *rtlsdr_demod_thread_fn(void *arg)
 {
 	rtlsdr_frontend_t *lfe = arg;
@@ -248,6 +245,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 //	float		fineCorrector = 0;
 //	float		coarseCorrector = 0;
 	struct complex_t v[T_F / 2];
+	int32_t		startIndex;
 	int i;
 	uint32_t result;
 	int32_t		syncBufferIndex = 0;
@@ -258,7 +256,8 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	int32_t		syncBufferMask = syncBufferSize - 1;
 	uint8_t		envBuffer[syncBufferSize];
 	int		dip_attempts = 0;
-//	int		index_attempts = 0;
+	int		index_attempts = 0;
+	struct complex_t ofdmBuffer[T_s];
 
 	tvhtrace(LS_RTLSDR, "start polling");
 	/* Read */
@@ -328,7 +327,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		}
 		tvhtrace(LS_RTLSDR, "found end of null period");
 		dip_attempts = 0;
-/*		//      We arrive here when time synchronized, either from above
+		//      We arrive here when time synchronized, either from above
 		//      or after having processed a frame
 		//      We now have to find the exact first sample of the non-null period.
 		//      We use a correlation that will find the first sample after the
@@ -337,19 +336,19 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//      as long as we can be sure that the first sample to be identified
 		//      is part of the samples read.
 		getSamples(ofdmBuffer,
-			T_u, coarseCorrector + fineCorrector);
-		startIndex = phaseSynchronizer.findIndex(ofdmBuffer);
+			T_u, 0);
+		startIndex = phaseSynchronizerFindIndex(ofdmBuffer);
 		if (startIndex < 0) { // no sync, try again
-			isSynced = false;
+			sdr->isSynced = 0;
 			if (++index_attempts > 10) {
-				syncsignalHandler(false, userData);
+				tvhtrace(LS_RTLSDR, "sync failed");
 			}
 			continue;
 		}
 		index_attempts = 0;
-		syncsignalHandler(true, userData);
-		isSynced = true;
-		//	Once here, we are synchronized, we need to copy the data we
+		tvhtrace(LS_RTLSDR, "sync found!");
+		sdr->isSynced = 1;
+/*		//	Once here, we are synchronized, we need to copy the data we
 		//	used for synchronization for block 0
 
 		memmove(ofdmBuffer, &ofdmBuffer[startIndex],

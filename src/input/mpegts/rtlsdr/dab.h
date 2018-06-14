@@ -5,6 +5,7 @@
 #include <fftw3.h>
 
 #include "sdr_fifo.h"
+#include "dab_constants.h"
 
 /* A demapped transmission frame represents a transmission frame in
    the final state before the FIC-specific and MSC-specific decoding
@@ -68,11 +69,6 @@ struct ens_info_t {
 #define DEFAULT_BUF_LENGTH (16 * 16384)
 #define GAIN_SETTLE_TIME 0
 
-struct complex_t {
-	int8_t real;
-	int8_t imag;
-};
-
 struct sdr_state_t {
 	uint32_t frequency;
 	CircularBuffer fifo;
@@ -102,7 +98,7 @@ struct dab_state_t
   void (* eti_callback)(uint8_t *eti);
 };
 
-uint8_t jan_abs(struct complex_t z);
+float jan_abs(struct complex_t z);
 
 int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr);
 void sdr_init(struct sdr_state_t *sdr);
