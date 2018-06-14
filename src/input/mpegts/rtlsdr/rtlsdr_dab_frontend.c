@@ -279,7 +279,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 				cLevel += envBuffer[syncBufferIndex];
 				syncBufferIndex++;
 			}
-			tvhtrace(LS_RTLSDR, "trying to find a sync, sLevel: %.6f, cLevel: %d", sdr->sLevel, cLevel);
+			tvhtrace(LS_RTLSDR, "trying to find a sync, sLevel: %.6f, cLevel: %.6f", sdr->sLevel, cLevel);
 
 			//	We now have initial values for cLevel (i.e. the sum
 			//	over the last 50 samples) and sLevel, the long term average.
