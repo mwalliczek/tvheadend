@@ -54,7 +54,7 @@ CFLAGS  += -fms-extensions -funsigned-char -fno-strict-aliasing
 CFLAGS  += -D_FILE_OFFSET_BITS=64
 CFLAGS  += -I${BUILDDIR} -I${ROOTDIR}/src -I${ROOTDIR}
 ifeq ($(CONFIG_RTLSDR),yes)
-LDFLAGS += -lfftw3
+LDFLAGS += -lfftw3f
 endif
 ifeq ($(CONFIG_ANDROID),yes)
 LDFLAGS += -ldl -lm
@@ -437,7 +437,6 @@ SRCS-RTLSDR = \
     src/input/mpegts/rtlsdr/phasereference.c \
     src/input/mpegts/rtlsdr/input_sdr.c \
     src/input/mpegts/rtlsdr/sdr_fifo.c \
-    src/input/mpegts/rtlsdr/sdr_sync.c \
     src/input/mpegts/rtlsdr/viterbi.c \
     src/input/mpegts/rtlsdr/rtlsdr_dab_frontend.c \
 	src/input/mpegts/rtlsdr/rtlsdr.c
