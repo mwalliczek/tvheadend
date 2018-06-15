@@ -105,7 +105,7 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, struct complex_t *v, uint32_t size) 
 		}
 		sdr_read_fifo(&(sdr->fifo), 2, 0, buffer);
 		v[i].real = convTable[buffer[0]];
-		v[i].imag = convTable[buffer[1] - 127];
+		v[i].imag = convTable[buffer[1]];
 		sdr->sLevel = 0.00001 * jan_abs(v[i]) + (1 - 0.00001) * sdr->sLevel;
 	}
 	return size;

@@ -261,6 +261,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	struct complex_t ofdmBuffer[T_s];
 
 	tvhtrace(LS_RTLSDR, "start polling");
+	sdr->sLevel = 0;
 	/* Read */
 	result = getSamples(lfe, v, T_F / 2);
 	if (result < T_F / 2) {
