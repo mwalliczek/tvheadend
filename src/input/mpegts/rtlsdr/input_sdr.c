@@ -25,6 +25,7 @@ david.may.muc@googlemail.com
 #include "dab.h"
 #include "dab_tables.h"
 #include "sdr_sync.h"
+#include "phasereference.h"
 #include "ofdmDecoder.h"
 
 int readFromDevice(rtlsdr_frontend_t *lfe);

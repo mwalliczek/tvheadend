@@ -1,6 +1,10 @@
-#include "dab.h"
+#include <string.h>
+#include <math.h>
 
-int16_t	get_snr(struct complex_t* v);
+#include "dab.h"
+#include "ofdmDecoder.h"
+
+int16_t	get_snr(fftwf_complex* v);
 
 
 void initOfdmDecoder(struct sdr_state_t *sdr) {
@@ -24,7 +28,7 @@ void processBlock_0(struct sdr_state_t *sdr, struct complex_t* v) {
 		sdr->fftBuffer, T_u * sizeof(struct complex_t));
 }
 
-int16_t	get_snr(struct complex_t* v) {
+int16_t	get_snr(fftwf_complex* v) {
 	int16_t	i;
 	float	noise = 0;
 	float	signal = 0;
@@ -32,13 +36,13 @@ int16_t	get_snr(struct complex_t* v) {
 	int16_t	high = low + K;
 
 	for (i = 10; i < low - 20; i++)
-		noise += abs(v[(T_u / 2 + i) % T_u]);
+		noise += fabs(v[(T_u / 2 + i) % T_u]);
 
 	for (i = high + 20; i < T_u - 10; i++)
-		noise += abs(v[(T_u / 2 + i) % T_u]);
+		noise += fabs(v[(T_u / 2 + i) % T_u]);
 
 	noise /= (low - 30 + T_u - high - 30);
 	for (i = T_u / 2 - K / 4; i < T_u / 2 + K / 4; i++)
-		signal += abs(v[(T_u / 2 + i) % T_u]);
+		signal += fabs(v[(T_u / 2 + i) % T_u]);
 	return get_db(signal / (K / 2)) - get_db(noise);
 }

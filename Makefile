@@ -437,6 +437,7 @@ SRCS-RTLSDR = \
     src/input/mpegts/rtlsdr/phasereference.c \
     src/input/mpegts/rtlsdr/input_sdr.c \
     src/input/mpegts/rtlsdr/sdr_fifo.c \
+    src/input/mpegts/rtlsdr/ofdmDecoder.c \
     src/input/mpegts/rtlsdr/viterbi.c \
     src/input/mpegts/rtlsdr/rtlsdr_dab_frontend.c \
 	src/input/mpegts/rtlsdr/rtlsdr.c
