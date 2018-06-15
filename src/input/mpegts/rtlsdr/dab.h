@@ -105,6 +105,7 @@ struct dab_state_t
 };
 
 float get_db(float x);
+float abs(float v[2]);
 
 int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr);
 void sdr_init(struct sdr_state_t *sdr);

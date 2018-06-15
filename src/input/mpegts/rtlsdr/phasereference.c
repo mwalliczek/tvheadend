@@ -152,7 +152,7 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v) {
 	*	We compute the average signal value ...
 	*/
 	for (i = 0; i < T_u; i++) {
-		float absValue = sqrtf(sdr->fftBuffer[i][0]* sdr->fftBuffer[i][0] + sdr->fftBuffer[i][1]* sdr->fftBuffer[i][1]);
+		float absValue = abs(sdr->fftBuffer[i]);
 		sum += absValue;
 		if (absValue > Max) {
 			maxIndex = i;
