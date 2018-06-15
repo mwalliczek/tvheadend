@@ -4,6 +4,7 @@
 #include "input.h"
 #include "rtlsdr_private.h"
 #include "phasereference.h"
+#include "ofdmDecoder.h"
 
 #define DEFAULT_ASYNC_BUF_NUMBER 32
 
@@ -147,6 +148,8 @@ rtlsdr_frontend_stop_mux
 		rtlsdr_cancel_async(lfe->dev);
 	}
 
+	destoryPhaseReference(&lfe->dab->device_state);
+
 	/* Not locked */
 	lfe->lfe_ready = 0;
 	lfe->lfe_locked = 0;
@@ -248,7 +251,6 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	struct complex_t v[T_F / 2];
 	int32_t		startIndex;
 	int i;
-	uint32_t result;
 	int32_t		syncBufferIndex = 0;
 	float		cLevel = 0;
 	struct complex_t sample;
@@ -261,10 +263,8 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	struct complex_t ofdmBuffer[T_s];
 
 	tvhtrace(LS_RTLSDR, "start polling");
-	sdr->sLevel = 0;
 	/* Read */
-	result = getSamples(lfe, v, T_F / 2);
-	if (result < T_F / 2) {
+	if (getSamples(lfe, v, T_F / 2) < T_F / 2) {
 		tvherror(LS_RTLSDR, "getSamples failed");
 		return 0;
 	}
@@ -275,8 +275,10 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			syncBufferIndex = 0;
 			cLevel = 0;
 			for (i = 0; i < 50; i++) {
-				getSamples(lfe, &sample, 1);
-				envBuffer[syncBufferIndex] = jan_abs(sample);
+				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex]) == 0) {
+					tvherror(LS_RTLSDR, "getSamples failed");
+					return 0;
+				}
 				cLevel += envBuffer[syncBufferIndex];
 				syncBufferIndex++;
 			}
@@ -287,8 +289,10 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			//	here we start looking for the null level, i.e. a dip
 			counter = 0;
 			while (cLevel / 50  > 0.40 * sdr->sLevel) {
-				getSamples(lfe, &sample, 1);
-				envBuffer[syncBufferIndex] = jan_abs(sample);
+				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex]) == 0) {
+					tvherror(LS_RTLSDR, "getSamples failed");
+					return 0;
+				}
 				cLevel += envBuffer[syncBufferIndex] -
 					envBuffer[(syncBufferIndex - 50) & syncBufferMask];
 				syncBufferIndex = (syncBufferIndex + 1) & syncBufferMask;
@@ -314,8 +318,10 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 		counter = 0;
 		while (cLevel / 50 < 0.75 * sdr->sLevel) {
-			getSamples(lfe, &sample, 1);
-			envBuffer[syncBufferIndex] = jan_abs(sample);
+			if (getSample(lfe, &sample, &envBuffer[syncBufferIndex]) == 0) {
+				tvherror(LS_RTLSDR, "getSamples failed");
+				return 0;
+			}
 			cLevel += envBuffer[syncBufferIndex] -
 				envBuffer[(syncBufferIndex - 50) & syncBufferMask];
 			syncBufferIndex = (syncBufferIndex + 1) & syncBufferMask;
@@ -337,8 +343,11 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//      Now read in Tu samples. The precise number is not really important
 		//      as long as we can be sure that the first sample to be identified
 		//      is part of the samples read.
-		getSamples(lfe, ofdmBuffer, T_u);
-		startIndex = phaseReferenceFindIndex(ofdmBuffer);
+		if (getSamples(lfe, ofdmBuffer, T_u) < T_u) {
+			tvherror(LS_RTLSDR, "getSamples failed");
+			return 0;
+		}
+		startIndex = phaseReferenceFindIndex(sdr, ofdmBuffer);
 		if (startIndex < 0) { // no sync, try again
 			sdr->isSynced = 0;
 			if (++index_attempts > 10) {
@@ -349,22 +358,23 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		index_attempts = 0;
 		tvhtrace(LS_RTLSDR, "sync found!");
 		sdr->isSynced = 1;
-/*		//	Once here, we are synchronized, we need to copy the data we
+		//	Once here, we are synchronized, we need to copy the data we
 		//	used for synchronization for block 0
 
 		memmove(ofdmBuffer, &ofdmBuffer[startIndex],
-			(T_u - startIndex) * sizeof(std::complex<float>));
+			(T_u - startIndex) * sizeof(struct complex_t));
 		int ofdmBufferIndex = T_u - startIndex;
 
 		//	Block 0 is special in that it is used for coarse time synchronization
 		//	and its content is used as a reference for decoding the
 		//	first datablock.
 		//	We read the missing samples in the ofdm buffer
-		getSamples(&ofdmBuffer[ofdmBufferIndex],
-			T_u - ofdmBufferIndex,
-			coarseCorrector + fineCorrector);
-		my_ofdmDecoder.processBlock_0(ofdmBuffer);
-		//
+		getSamples(lfe, &ofdmBuffer[ofdmBufferIndex],
+			T_u - ofdmBufferIndex);
+		processBlock_0(sdr, ofdmBuffer);
+		tvhtrace(LS_RTLSDR, "snr: %d", sdr->current_snr);
+
+/*		//
 		//	Here we look only at the block_0 when we need a coarse
 		//	frequency synchronization.
 		//	The width is limited to 2 * 35 Khz (i.e. positive and negative)

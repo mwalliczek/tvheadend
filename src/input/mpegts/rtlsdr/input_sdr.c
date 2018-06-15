@@ -25,8 +25,11 @@ david.may.muc@googlemail.com
 #include "dab.h"
 #include "dab_tables.h"
 #include "sdr_sync.h"
+#include "ofdmDecoder.h"
 
 int readFromDevice(rtlsdr_frontend_t *lfe);
+
+float jan_abs(struct complex_t z);
 
 int readFromDevice(rtlsdr_frontend_t *lfe) {
 	struct dab_state_t *dab = lfe->dab;
@@ -73,6 +76,11 @@ float jan_abs(struct complex_t z) {
 	return re + im;
 }
 
+float get_db(float x) {
+	return 20 * log10((x + 1) / (float)(256));
+}
+
+
 static
 float convTable[] = {
 	-128 / 128.0 , -127 / 128.0 , -126 / 128.0 , -125 / 128.0 , -124 / 128.0 , -123 / 128.0 , -122 / 128.0 , -121 / 128.0 , -120 / 128.0 , -119 / 128.0 , -118 / 128.0 , -117 / 128.0 , -116 / 128.0 , -115 / 128.0 , -114 / 128.0 , -113 / 128.0
@@ -109,6 +117,23 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, struct complex_t *v, uint32_t size) 
 		sdr->sLevel = 0.00001 * jan_abs(v[i]) + (1 - 0.00001) * sdr->sLevel;
 	}
 	return size;
+}
+
+uint32_t getSample(rtlsdr_frontend_t *lfe, struct complex_t *v, float *abs) {
+	struct dab_state_t *dab = lfe->dab;
+	struct sdr_state_t *sdr = &dab->device_state;
+	uint8_t buffer[2];
+	if (sdr->fifo.count < 2) {
+		if (!readFromDevice(lfe)) {
+			return 0;
+		}
+	}
+	sdr_read_fifo(&(sdr->fifo), 2, 0, buffer);
+	v->real = convTable[buffer[0]];
+	v->imag = convTable[buffer[1]];
+	*abs = jan_abs(*v);
+	sdr->sLevel = 0.00001 * *abs + (1 - 0.00001) * sdr->sLevel;
+	return 1;
 }
 
 //int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr){
@@ -250,6 +275,9 @@ void sdr_init(struct sdr_state_t *sdr)
 {
   // circular buffer init
   cbInit(&(sdr->fifo),(196608*2*4)); // 4 frames
+
+  initPhaseReference(sdr);
+  initOfdmDecoder(sdr);
 
   sdr->sLevel = 0;
 }

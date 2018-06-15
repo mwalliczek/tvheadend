@@ -4,6 +4,7 @@
 #include "tvheadend.h"
 #include "dab_constants.h"
 #include "phasereference.h"
+#include "dab.h"
 
 struct phasetableElement {
 	int32_t	kmin, kmax;
@@ -79,8 +80,6 @@ const int8_t h3[] = { 0, 1, 2, 1, 0, 3, 3, 2, 2, 3, 2, 1, 2, 1, 3, 2,
 0, 1, 2, 1, 0, 3, 3, 2, 2, 3, 2, 1, 2, 1, 3, 2 };
 
 struct complex_t refTable[T_u];
-fftwf_complex *fftBuffer;
-fftwf_plan plan;
 
 int32_t		geth_table(int32_t i, int32_t j);
 
@@ -115,7 +114,7 @@ float	get_Phi(int32_t k) {
 	return 0;
 }
 
-void initPhaseReference(void) {
+void initPhaseReference(struct sdr_state_t *sdr) {
 	int32_t	i;
 	float	Phi_k;
 	for (i = 1; i <= K / 2; i++) {
@@ -126,34 +125,34 @@ void initPhaseReference(void) {
 		refTable[T_u - i].real = cos(Phi_k);
 		refTable[T_u - i].imag = sin(Phi_k);
 	}
-	fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
-	memset(fftBuffer, 0, sizeof(fftwf_complex) * T_u);
-	plan = fftwf_plan_dft_1d(T_u, fftBuffer, fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
+	sdr->fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
+	memset(sdr->fftBuffer, 0, sizeof(fftwf_complex) * T_u);
+	sdr->plan = fftwf_plan_dft_1d(T_u, sdr->fftBuffer, sdr->fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
 }
 
-void destoryPhaseReference(void) {
-	fftwf_destroy_plan(plan);
-	fftwf_free(fftBuffer);
+void destoryPhaseReference(struct sdr_state_t *sdr) {
+	fftwf_destroy_plan(sdr->plan);
+	fftwf_free(sdr->fftBuffer);
 }
 
-int32_t	phaseReferenceFindIndex(struct complex_t* v) {
+int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v) {
 	int32_t	i;
 	int32_t	maxIndex = -1;
 	float	sum = 0;
 	float	Max = -10000;
 
-	memcpy(fftBuffer, v, T_u * sizeof(fftwf_complex));
-	fftwf_execute(plan);
+	memcpy(sdr->fftBuffer, v, T_u * sizeof(fftwf_complex));
+	fftwf_execute(sdr->plan);
 	for (i = 0; i < T_u; i++) {
-		fftBuffer[i][0] = fftBuffer[i][0] * refTable[i].real + fftBuffer[i][1] * refTable[i].imag;
-		fftBuffer[i][1] = fftBuffer[i][0] * refTable[i].imag - fftBuffer[i][1] * refTable[i].real;
+		sdr->fftBuffer[i][0] = sdr->fftBuffer[i][0] * refTable[i].real + sdr->fftBuffer[i][1] * refTable[i].imag;
+		sdr->fftBuffer[i][1] = sdr->fftBuffer[i][0] * refTable[i].imag - sdr->fftBuffer[i][1] * refTable[i].real;
 	}
-	fftwf_execute(plan);
+	fftwf_execute(sdr->plan);
 	/**
 	*	We compute the average signal value ...
 	*/
 	for (i = 0; i < T_u; i++) {
-		float absValue = sqrtf(fftBuffer[i][0]* fftBuffer[i][0] + fftBuffer[i][1]* fftBuffer[i][1]);
+		float absValue = sqrtf(sdr->fftBuffer[i][0]* sdr->fftBuffer[i][0] + sdr->fftBuffer[i][1]* sdr->fftBuffer[i][1]);
 		sum += absValue;
 		if (absValue > Max) {
 			maxIndex = i;

@@ -93,6 +93,7 @@ int rtlsdr_frontend_tune
 (rtlsdr_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq);
 
 uint32_t getSamples(rtlsdr_frontend_t *lfe, struct complex_t *v, uint32_t size);
+uint32_t getSample(rtlsdr_frontend_t *lfe, struct complex_t *v, float *abs);
 
 #endif /* __TVH_RTLSDR_PRIVATE_H__ */
 

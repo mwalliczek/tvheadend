@@ -4,9 +4,9 @@
 #include "tvheadend.h"
 #include "dab_constants.h"
 
-void initPhaseReference(void);
-void destoryPhaseReference(void);
+void initPhaseReference(struct sdr_state_t *sdr);
+void destoryPhaseReference(struct sdr_state_t *sdr);
 
-int32_t	phaseReferenceFindIndex(struct complex_t* v);
+int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v);
 
 #endif
