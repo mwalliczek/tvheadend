@@ -36,13 +36,13 @@ int16_t	get_snr(fftwf_complex* v) {
 	int16_t	high = low + K;
 
 	for (i = 10; i < low - 20; i++)
-		noise += abs(v[(T_u / 2 + i) % T_u]);
+		noise += sdr_abs(v[(T_u / 2 + i) % T_u]);
 
 	for (i = high + 20; i < T_u - 10; i++)
-		noise += abs(v[(T_u / 2 + i) % T_u]);
+		noise += sdr_abs(v[(T_u / 2 + i) % T_u]);
 
 	noise /= (low - 30 + T_u - high - 30);
 	for (i = T_u / 2 - K / 4; i < T_u / 2 + K / 4; i++)
-		signal += abs(v[(T_u / 2 + i) % T_u]);
+		signal += sdr_abs(v[(T_u / 2 + i) % T_u]);
 	return get_db(signal / (K / 2)) - get_db(noise);
 }

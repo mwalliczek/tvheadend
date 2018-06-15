@@ -69,8 +69,8 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 	return 0;
 }
 
-float abs(float v[2]) {
-	sqrtf(v[0] * v[0] + v[1] * v[1]);
+float sdr_abs(float v[2]) {
+	return sqrtf(v[0] * v[0] + v[1] * v[1]);
 }
 
 float jan_abs(struct complex_t z) {

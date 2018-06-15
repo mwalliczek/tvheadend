@@ -372,7 +372,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		getSamples(lfe, &ofdmBuffer[ofdmBufferIndex],
 			T_u - ofdmBufferIndex);
 		processBlock_0(sdr, ofdmBuffer);
-		tvhtrace(LS_RTLSDR, "snr: %d", sdr->current_snr);
+		tvhtrace(LS_RTLSDR, "snr: %.6f", sdr->current_snr);
 
 /*		//
 		//	Here we look only at the block_0 when we need a coarse
