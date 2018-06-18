@@ -267,7 +267,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 	tvhtrace(LS_RTLSDR, "start polling");
 	/* Read */
-	if (getSamples(lfe, v, T_F / 2) < T_F / 2) {
+	if (getSamples(lfe, v, T_F / 2, 0) < T_F / 2) {
 		tvherror(LS_RTLSDR, "getSamples failed");
 		return 0;
 	}
