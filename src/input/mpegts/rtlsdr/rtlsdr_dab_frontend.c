@@ -387,6 +387,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 				coarseCorrector += correction * carrierDiff;
 				if (abs(coarseCorrector) > Khz(35))
 					coarseCorrector = 0;
+				tvhtrace(LS_RTLSDR, "coarseCorrector set to %.6f", coarseCorrector);
 			}
 		}
 		//
@@ -412,6 +413,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//	we integrate the newly found frequency error with the
 		//	existing frequency error.
 		fineCorrector += 0.1 * sdr_arg(FreqCorr) / M_PI * (carrierDiff);
+		tvhtrace(LS_RTLSDR, "fineCorrector set to %.6f", fineCorrector);
 
 		//	at the end of the frame, just skip Tnull samples
 		getSamples(lfe, ofdmBuffer, T_null, coarseCorrector + fineCorrector);
