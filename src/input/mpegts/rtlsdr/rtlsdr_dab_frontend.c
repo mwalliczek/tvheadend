@@ -291,7 +291,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			//	over the last 50 samples) and sLevel, the long term average.
 			//	here we start looking for the null level, i.e. a dip
 			counter = 0;
-			while (cLevel / 50  > 0.40 * sdr->sLevel) {
+			while (cLevel / 50 > 0.50 * sdr->sLevel) {
 				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], coarseCorrector + fineCorrector) == 0) {
 					tvherror(LS_RTLSDR, "getSamples failed");
 					return 0;
@@ -315,29 +315,29 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 				continue;
 			}
 			tvhtrace(LS_RTLSDR, "found begin of null period");
-		}
-		//	It seemed we found a dip that started app 65/100 * 50 samples earlier.
-		//	We now start looking for the end of the null period.
+			//	It seemed we found a dip that started app 65/100 * 50 samples earlier.
+			//	We now start looking for the end of the null period.
 
-		counter = 0;
-		while (cLevel / 50 < 0.75 * sdr->sLevel) {
-			if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], coarseCorrector + fineCorrector) == 0) {
-				tvherror(LS_RTLSDR, "getSamples failed");
-				return 0;
+			counter = 0;
+			while (cLevel / 50 < 0.75 * sdr->sLevel) {
+				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], coarseCorrector + fineCorrector) == 0) {
+					tvherror(LS_RTLSDR, "getSamples failed");
+					return 0;
+				}
+				cLevel += envBuffer[syncBufferIndex] -
+					envBuffer[(syncBufferIndex - 50) & syncBufferMask];
+				syncBufferIndex = (syncBufferIndex + 1) & syncBufferMask;
+				counter++;
+				if (counter > T_null + 50)  // hopeless
+					break;
 			}
-			cLevel += envBuffer[syncBufferIndex] -
-				envBuffer[(syncBufferIndex - 50) & syncBufferMask];
-			syncBufferIndex = (syncBufferIndex + 1) & syncBufferMask;
-			counter++;
-			if (counter > T_null + 50)  // hopeless
-				break;
+			if (counter > T_null + 50) {
+				tvhtrace(LS_RTLSDR, "found end of null period failed");
+				continue;
+			}
+			tvhtrace(LS_RTLSDR, "found end of null period");
+			dip_attempts = 0;
 		}
-		if (counter > T_null + 50) {
-			tvhtrace(LS_RTLSDR, "found end of null period failed");
-			continue;
-		}
-		tvhtrace(LS_RTLSDR, "found end of null period");
-		dip_attempts = 0;
 		//      We arrive here when time synchronized, either from above
 		//      or after having processed a frame
 		//      We now have to find the exact first sample of the non-null period.
@@ -412,9 +412,12 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 		//	we integrate the newly found frequency error with the
 		//	existing frequency error.
-		fineCorrector += 0.1 * sdr_arg(FreqCorr) / M_PI * (carrierDiff);
+		fineCorrector += 0.1 * sdr_arg(FreqCorr) / M_PI * (carrierDiff / 2);
 		tvhtrace(LS_RTLSDR, "fineCorrector set to %.6f", fineCorrector);
 
+		
+		cLevel = 0;
+		syncBufferIndex = 0;
 		//	at the end of the frame, just skip Tnull samples
 		getSamples(lfe, ofdmBuffer, T_null, coarseCorrector + fineCorrector);
 		counter = 0;
