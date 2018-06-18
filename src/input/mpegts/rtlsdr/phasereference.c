@@ -1,3 +1,24 @@
+/*
+*    Copyright (C) 2016, 2017
+*    Jan van Katwijk (J.vanKatwijk@gmail.com)
+*    Lazy Chair Programming
+*
+*    This file is part of the DAB-library
+*    DAB-library is free software; you can redistribute it and/or modify
+*    it under the terms of the GNU General Public License as published by
+*    the Free Software Foundation; either version 2 of the License, or
+*    (at your option) any later version.
+*
+*    DAB-library is distributed in the hope that it will be useful,
+*    but WITHOUT ANY WARRANTY; without even the implied warranty of
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*    GNU General Public License for more details.
+*
+*    You should have received a copy of the GNU General Public License
+*    along with DAB-library; if not, write to the Free Software
+*    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
 #include <fftw3.h>
 #include <math.h>
 
@@ -81,6 +102,8 @@ const int8_t h3[] = { 0, 1, 2, 1, 0, 3, 3, 2, 2, 3, 2, 1, 2, 1, 3, 2,
 
 struct complex_t refTable[T_u];
 
+float phaseDifferences[DIFF_LENGTH];
+
 int32_t		geth_table(int32_t i, int32_t j);
 
 float	get_Phi(int32_t k);
@@ -128,6 +151,16 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 	sdr->fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
 	memset(sdr->fftBuffer, 0, sizeof(fftwf_complex) * T_u);
 	sdr->plan = fftwf_plan_dft_1d(T_u, sdr->fftBuffer, sdr->fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
+	//
+	//      prepare a table for the coarse frequency synchronization
+	for (i = 1; i <= DIFF_LENGTH; i++) {
+		struct complex_t x1 = refTable[(T_u + i) % T_u];
+		struct complex_t x2 = refTable[(T_u + i + 1) % T_u];
+		struct complex_t x3;
+		x3.real = x1.real * x2.real + x1.imag * x2.imag;
+		x3.imag = x1.real * x2.imag - x1.imag * x2.real;
+		phaseDifferences[i - 1] = fabs(sdr_arg(x3));
+	}
 }
 
 void destoryPhaseReference(struct sdr_state_t *sdr) {
@@ -167,5 +200,35 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v) {
 	}
 	else
 		return maxIndex;
+}
 
+#define SEARCH_RANGE    (2 * 35)
+int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, struct complex_t* v) {
+	int16_t i, j, index = 100;
+	float   computedDiffs[SEARCH_RANGE + DIFF_LENGTH + 1];
+
+	memcpy(sdr->fftBuffer, v, T_u * sizeof(fftwf_complex));
+	fftwf_execute(sdr->plan);
+
+	for (i = T_u - SEARCH_RANGE / 2;
+		i < T_u + SEARCH_RANGE / 2 + DIFF_LENGTH; i++) {
+		fftwf_complex* x1 = sdr->fftBuffer[i % T_u];
+		fftwf_complex* x2 = sdr->fftBuffer[(i + 1) % T_u];
+		struct complex_t x3;
+		x3.real = *x1[0] * *x2[0] + *x1[1] * *x2[1];
+		x3.imag = *x1[0] * *x2[1] - *x1[1] * *x2[0];
+		computedDiffs[i - (T_u - SEARCH_RANGE / 2)] = fabs(sdr_arg(x3));
+	}
+	float   Mmin = 1000;
+	for (i = T_u - SEARCH_RANGE / 2; i < T_u + SEARCH_RANGE / 2; i++) {
+		float sum = 0;
+		for (j = 1; j < DIFF_LENGTH; j++)
+			if (phaseDifferences[j - 1] < 0.1)
+				sum += computedDiffs[i - (T_u - SEARCH_RANGE / 2) + j];
+		if (sum < Mmin) {
+			Mmin = sum;
+			index = i;
+		}
+	}
+	return index - T_u;
 }

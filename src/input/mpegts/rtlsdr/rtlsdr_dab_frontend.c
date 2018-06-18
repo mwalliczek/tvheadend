@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <math.h>
 
 #include "tvheadend.h"
 #include "input.h"
@@ -246,11 +247,12 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	rtlsdr_frontend_t *lfe = arg;
 	struct dab_state_t *dab = lfe->dab;
 	struct sdr_state_t *sdr = &dab->device_state;
-//	float		fineCorrector = 0;
-//	float		coarseCorrector = 0;
+	float		fineCorrector = 0;
+	float		coarseCorrector = 0;
 	struct complex_t v[T_F / 2];
 	int32_t		startIndex;
 	int i;
+	struct complex_t	FreqCorr;
 	int32_t		syncBufferIndex = 0;
 	float		cLevel = 0;
 	struct complex_t sample;
@@ -258,9 +260,10 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	int32_t		syncBufferSize = 32768;
 	int32_t		syncBufferMask = syncBufferSize - 1;
 	float		envBuffer[syncBufferSize];
+	struct complex_t ofdmBuffer[T_s];
+	int		ofdmSymbolCount = 0;
 	int		dip_attempts = 0;
 	int		index_attempts = 0;
-	struct complex_t ofdmBuffer[T_s];
 
 	tvhtrace(LS_RTLSDR, "start polling");
 	/* Read */
@@ -275,7 +278,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			syncBufferIndex = 0;
 			cLevel = 0;
 			for (i = 0; i < 50; i++) {
-				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex]) == 0) {
+				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], 0) == 0) {
 					tvherror(LS_RTLSDR, "getSamples failed");
 					return 0;
 				}
@@ -289,7 +292,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			//	here we start looking for the null level, i.e. a dip
 			counter = 0;
 			while (cLevel / 50  > 0.40 * sdr->sLevel) {
-				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex]) == 0) {
+				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], coarseCorrector + fineCorrector) == 0) {
 					tvherror(LS_RTLSDR, "getSamples failed");
 					return 0;
 				}
@@ -318,7 +321,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 		counter = 0;
 		while (cLevel / 50 < 0.75 * sdr->sLevel) {
-			if (getSample(lfe, &sample, &envBuffer[syncBufferIndex]) == 0) {
+			if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], coarseCorrector + fineCorrector) == 0) {
 				tvherror(LS_RTLSDR, "getSamples failed");
 				return 0;
 			}
@@ -343,7 +346,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//      Now read in Tu samples. The precise number is not really important
 		//      as long as we can be sure that the first sample to be identified
 		//      is part of the samples read.
-		if (getSamples(lfe, ofdmBuffer, T_u) < T_u) {
+		if (getSamples(lfe, ofdmBuffer, T_u, coarseCorrector + fineCorrector) < T_u) {
 			tvherror(LS_RTLSDR, "getSamples failed");
 			return 0;
 		}
@@ -370,18 +373,16 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//	first datablock.
 		//	We read the missing samples in the ofdm buffer
 		getSamples(lfe, &ofdmBuffer[ofdmBufferIndex],
-			T_u - ofdmBufferIndex);
+			T_u - ofdmBufferIndex, coarseCorrector + fineCorrector);
 		processBlock_0(sdr, ofdmBuffer);
 		tvhtrace(LS_RTLSDR, "snr: %.6f", sdr->current_snr);
 
-/*		//
+		//
 		//	Here we look only at the block_0 when we need a coarse
 		//	frequency synchronization.
 		//	The width is limited to 2 * 35 Khz (i.e. positive and negative)
-		correctionNeeded = !my_ficHandler->syncReached();
-		if (correctionNeeded) {
-			int correction = phaseSynchronizer.
-				estimateOffset(ofdmBuffer);
+		if (!sdr->fibProcessorIsSynced) {
+			int correction = phaseReferenceEstimateOffset(sdr, ofdmBuffer);
 			if (correction != 100) {
 				coarseCorrector += correction * carrierDiff;
 				if (abs(coarseCorrector) > Khz(35))
@@ -395,22 +396,25 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//	between the samples in the cyclic prefix and the
 		//	corresponding samples in the datapart.
 		///	and similar for the (params. L - 4) MSC blocks
-		FreqCorr = std::complex<float>(0, 0);
+		FreqCorr.imag = 0.0;
+		FreqCorr.real = 0.0;
 		for (ofdmSymbolCount = 1;
-			ofdmSymbolCount < (uint16_t)nrBlocks; ofdmSymbolCount++) {
-			getSamples(ofdmBuffer, T_s, coarseCorrector + fineCorrector);
-			for (i = (int)T_u; i < (int)T_s; i++)
-				FreqCorr += ofdmBuffer[i] * conj(ofdmBuffer[i - T_u]);
+			ofdmSymbolCount < (uint16_t)L; ofdmSymbolCount++) {
+			getSamples(lfe, ofdmBuffer, T_s, coarseCorrector + fineCorrector);
+			for (i = (int)T_u; i < (int)T_s; i++) {
+				FreqCorr.real += ofdmBuffer[i].real * ofdmBuffer[i - T_u].real + ofdmBuffer[i].imag * ofdmBuffer[i - T_u].imag;
+				FreqCorr.imag += ofdmBuffer[i].real * ofdmBuffer[i - T_u].imag - ofdmBuffer[i].imag * ofdmBuffer[i - T_u].real;
+			}
 
-			my_ofdmDecoder.decodeBlock(ofdmBuffer, ofdmSymbolCount);
+//			my_ofdmDecoder.decodeBlock(ofdmBuffer, ofdmSymbolCount);
 		}
 
 		//	we integrate the newly found frequency error with the
 		//	existing frequency error.
-		fineCorrector += 0.1 * arg(FreqCorr) / M_PI * (carrierDiff);
+		fineCorrector += 0.1 * sdr_arg(FreqCorr) / M_PI * (carrierDiff);
 
 		//	at the end of the frame, just skip Tnull samples
-		getSamples(ofdmBuffer, T_null, coarseCorrector + fineCorrector);
+		getSamples(lfe, ofdmBuffer, T_null, coarseCorrector + fineCorrector);
 		counter = 0;
 		if (fineCorrector > carrierDiff / 2) {
 			coarseCorrector += carrierDiff;
@@ -421,7 +425,6 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 				coarseCorrector -= carrierDiff;
 				fineCorrector += carrierDiff;
 			}
-*/
 	}
 	return 0;
 }

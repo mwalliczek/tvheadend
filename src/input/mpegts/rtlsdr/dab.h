@@ -75,6 +75,7 @@ struct sdr_state_t {
 
 	int		isSynced;
 
+	int32_t		localPhase;
 	float		sLevel;
 
 	fftwf_complex *fftBuffer;
@@ -82,6 +83,8 @@ struct sdr_state_t {
 
 	float		current_snr;
 	struct complex_t ofdmPhaseReference[T_u];
+
+	int			fibProcessorIsSynced;
 };
 
 struct dab_state_t
@@ -106,6 +109,7 @@ struct dab_state_t
 
 float get_db(float x);
 float sdr_abs(float v[2]);
+float sdr_arg(struct complex_t x);
 
 int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr);
 void sdr_init(struct sdr_state_t *sdr);
