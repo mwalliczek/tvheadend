@@ -27,10 +27,9 @@ david.may.muc@googlemail.com
 #include "sdr_sync.h"
 #include "phasereference.h"
 #include "ofdmDecoder.h"
+#include "ficHandler.h"
 
 int readFromDevice(rtlsdr_frontend_t *lfe);
-
-float jan_abs(struct complex_t z);
 
 struct complex_t oscillatorTable[INPUT_RATE];
 
@@ -299,6 +298,7 @@ void sdr_init(struct sdr_state_t *sdr)
 
   initPhaseReference(sdr);
   initOfdmDecoder(sdr);
+  initFicHandler(sdr);
 
   sdr->sLevel = 0;
   sdr->localPhase = 0;

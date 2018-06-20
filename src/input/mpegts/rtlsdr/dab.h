@@ -84,6 +84,16 @@ struct sdr_state_t {
 	float		current_snr;
 	struct complex_t ofdmPhaseReference[T_u];
 
+	uint8_t		bitBuffer_out[768];
+	int16_t		ofdm_input[2304];
+	int16_t		index;
+	int16_t		BitsperBlock;
+	int16_t		ficno;
+	int16_t		ficBlocks;
+	int16_t		ficMissed;
+	int16_t		ficRatio;
+	uint16_t	convState;
+
 	int			fibProcessorIsSynced;
 };
 
@@ -107,6 +117,7 @@ struct dab_state_t
   void (* eti_callback)(uint8_t *eti);
 };
 
+float jan_abs(struct complex_t z);
 float get_db(float x);
 float sdr_abs(float v[2]);
 float sdr_arg(struct complex_t x);

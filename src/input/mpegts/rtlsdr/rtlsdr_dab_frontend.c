@@ -407,7 +407,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 				FreqCorr.imag += ofdmBuffer[i].real * ofdmBuffer[i - T_u].imag - ofdmBuffer[i].imag * ofdmBuffer[i - T_u].real;
 			}
 
-//			my_ofdmDecoder.decodeBlock(ofdmBuffer, ofdmSymbolCount);
+			decodeBlock(sdr, ofdmBuffer, ofdmSymbolCount);
 		}
 
 		//	we integrate the newly found frequency error with the

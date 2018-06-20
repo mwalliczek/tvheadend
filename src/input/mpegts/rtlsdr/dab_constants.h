@@ -20,6 +20,7 @@ struct complex_t {
 #define T_null 2656
 #define T_u 2048
 #define T_s 2552
+#define T_g 504
 #define K 1536
 #define L 76
 #define carrierDiff 1000

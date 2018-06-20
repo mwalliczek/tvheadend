@@ -207,13 +207,10 @@ int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, struct complex_t* 
 	int16_t i, j, index = 100;
 	float   computedDiffs[SEARCH_RANGE + DIFF_LENGTH + 1];
 
-	memcpy(sdr->fftBuffer, v, T_u * sizeof(fftwf_complex));
-	fftwf_execute(sdr->plan);
-
 	for (i = T_u - SEARCH_RANGE / 2;
 		i < T_u + SEARCH_RANGE / 2 + DIFF_LENGTH; i++) {
-		fftwf_complex* x1 = &sdr->fftBuffer[i % T_u];
-		fftwf_complex* x2 = &sdr->fftBuffer[(i + 1) % T_u];
+		fftwf_complex* x1 = sdr->fftBuffer[i % T_u];
+		fftwf_complex* x2 = sdr->fftBuffer[(i + 1) % T_u];
 		struct complex_t x3;
 		x3.real = *x1[0] * *x2[0] + *x1[1] * *x2[1];
 		x3.imag = *x1[0] * *x2[1] - *x1[1] * *x2[0];
