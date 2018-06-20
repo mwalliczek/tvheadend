@@ -81,7 +81,7 @@ void decodeBlock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno) {
 void decodeFICblock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno) {
 	int i;
 	struct complex_t r1;
-	struct complex_t conjVector[T_u];
+//	struct complex_t conjVector[T_u];
 	int16_t ibits[2 * K];
 
 	memcpy(sdr->fftBuffer, &v[T_g], T_u * sizeof(fftwf_complex));
@@ -102,7 +102,7 @@ void decodeFICblock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno)
 		*/
 		r1.real = sdr->fftBuffer[index][0] * sdr->ofdmPhaseReference[index].real + sdr->fftBuffer[index][1] * sdr->ofdmPhaseReference[index].imag;
 		r1.imag = sdr->fftBuffer[index][0] * sdr->ofdmPhaseReference[index].imag - sdr->fftBuffer[index][1] * sdr->ofdmPhaseReference[index].real;
-		conjVector[index] = r1;
+//		conjVector[index] = r1;
 		float ab1 = jan_abs(r1);
 		ibits[i] = -r1.real / ab1 * 127.0;
 		ibits[K + i] = -r1.imag / ab1 * 127.0;

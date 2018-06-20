@@ -4,6 +4,6 @@
 #include "dab.h"
 
 void initFicHandler(struct sdr_state_t *sdr);
-void process_ficBlock(struct sdr_state_t *sdr, struct complex_t* v, int16_t blkno);
+void process_ficBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno);
 
 #endif

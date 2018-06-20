@@ -83,8 +83,8 @@ void process_ficBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
 	if ((1 <= blkno) && (blkno <= 3)) {
 		for (i = 0; i < sdr->BitsperBlock; i++) {
 			sdr->ofdm_input[sdr->index++] = data[i];
-			if (index >= 2304) {
-				process_ficInput(sdr->ficno);
+			if (sdr->index >= 2304) {
+				process_ficInput(sdr, sdr->ficno);
 				sdr->index = 0;
 				sdr->ficno++;
 			}
