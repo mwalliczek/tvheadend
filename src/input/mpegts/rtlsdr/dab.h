@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <fftw3.h>
+#include <string.h>
 
 #include "sdr_fifo.h"
 #include "dab_constants.h"
