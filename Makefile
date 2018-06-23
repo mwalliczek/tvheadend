@@ -440,6 +440,7 @@ SRCS-RTLSDR = \
     src/input/mpegts/rtlsdr/ofdmDecoder.c \
     src/input/mpegts/rtlsdr/protTables.c \
     src/input/mpegts/rtlsdr/ficHandler.c \
+    src/input/mpegts/rtlsdr/viterbi_768/viterbi-768.c \
     src/input/mpegts/rtlsdr/viterbi.c \
     src/input/mpegts/rtlsdr/rtlsdr_dab_frontend.c \
 	src/input/mpegts/rtlsdr/rtlsdr.c

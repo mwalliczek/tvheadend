@@ -1,9 +1,30 @@
+/*
+*    Copyright (C) 2013 .. 2017
+*    Jan van Katwijk (J.vanKatwijk@gmail.com)
+*    Lazy Chair Computing
+*
+*    This file is part of the DAB-library
+*    DAB-library is free software; you can redistribute it and/or modify
+*    it under the terms of the GNU General Public License as published by
+*    the Free Software Foundation; either version 2 of the License, or
+*    (at your option) any later version.
+*
+*    DAB-library is distributed in the hope that it will be useful,
+*    but WITHOUT ANY WARRANTY; without even the implied warranty of
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*    GNU General Public License for more details.
+*
+*    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
 #include <string.h>
 #include <math.h>
 
 #include "dab.h"
+#include "tvheadend.h"
 #include "ficHandler.h"
 #include "protTables.h"
+#include "viterbi_768/viterbi-768.h"
 
 uint8_t		PRBS[768];
 uint8_t		shiftRegister[9];
@@ -129,6 +150,7 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 	for (i = ficno * 3; i < ficno * 3 + 3; i++) {
 		uint8_t *p = &sdr->bitBuffer_out[(i % 3) * 256];
 		if (!check_CRC_bits(p, 256)) {
+			tvhtrace(LS_RTLSDR, "ficHandler checkCRC failed!");
 			continue;
 		}
 		process_FIB(p, ficno);
