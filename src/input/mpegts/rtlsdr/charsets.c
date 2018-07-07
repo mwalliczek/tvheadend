@@ -25,6 +25,7 @@
 #include	"charsets.h"
 #include	<stdint.h>
 #include	<string.h>
+#include	<stdlib.h>
 
 static const char* utf8_encoded_EBU_Latin[] = {
 "\0", "Ę", "Į", "Ų", "Ă", "Ė", "Ď", "Ș", "Ț", "Ċ", "\n","\v","Ġ", "Ĺ", "Ż", "Ń",

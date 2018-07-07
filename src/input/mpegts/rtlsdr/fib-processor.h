@@ -26,7 +26,6 @@
 //
 #include	<stdint.h>
 #include	<stdio.h>
-#include "../dvb_charset.h"
 #include	"dab_constants.h"
 
 	struct dablabel {
