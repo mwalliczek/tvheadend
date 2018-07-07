@@ -25,11 +25,11 @@
  */
 #include "../dab.h"
 #include "tvheadend.h"
-#include	<mm_malloc.h>
+#include	<malloc.h>
 #include	"viterbi-768.h"
 #ifdef  __MINGW32__
 #include <intrin.h>
-#include <malloc.h>
+// #include <malloc.h>
 #include <windows.h>
 #endif
 
@@ -37,7 +37,7 @@
 //	It took a while to discover that the polynomes we used
 //	in our own "straightforward" implementation was bitreversed!!
 //	The official one is on top.
-#define K 7
+#define VITERBI_K 7
 #define POLYS { 0155, 0117, 0123, 0155}
 //#define	POLYS	{109, 79, 83, 109}
 // In the reversed form the polys look:
@@ -50,12 +50,12 @@
 
 //
 /* ADDSHIFT and SUBSHIFT make sure that the thing returned is a byte. */
-#if (K-1<8)
-#define ADDSHIFT (8-(K-1))
+#if (VITERBI_K-1<8)
+#define ADDSHIFT (8-(VITERBI_K-1))
 #define SUBSHIFT 0
-#elif (K-1>8)
+#elif (VITERBI_K-1>8)
 #define ADDSHIFT 0
-#define SUBSHIFT ((K-1)-8)
+#define SUBSHIFT ((VITERBI_K-1)-8)
 #else
 #define ADDSHIFT 0
 #define SUBSHIFT 0
@@ -155,30 +155,30 @@ uint32_t	size;
 	frameBits		= wordlength;
 //	partab_init	();
 
-// B I G N O T E	The spiral code uses (wordLength + (K - 1) * sizeof ...
+// B I G N O T E	The spiral code uses (wordLength + (VITERBI_K - 1) * sizeof ...
 // However, the application then crashes, so something is not OK
 // By doubling the size, the problem disappears. It is not solved though
 // and not further investigation.
 #ifdef __MINGW32__
-	size = 2 * ((wordlength + (K - 1)) / 8 + 1 + 16) & ~0xF;
+	size = 2 * ((wordlength + (VITERBI_K - 1)) / 8 + 1 + 16) & ~0xF;
 	data	= (uint8_t *)_aligned_malloc (size, 16);
-	size = 2 * (RATE * (wordlength + (K - 1)) * sizeof(COMPUTETYPE) + 16) & ~0xF;
+	size = 2 * (RATE * (wordlength + (VITERBI_K - 1)) * sizeof(COMPUTETYPE) + 16) & ~0xF;
 	symbols	= (COMPUTETYPE *)_aligned_malloc (size, 16);
-	size	= 2 * (wordlength + (K - 1)) * sizeof (decision_t);	
+	size	= 2 * (wordlength + (VITERBI_K - 1)) * sizeof (decision_t);	
 	size	= (size + 16) & ~0xF;
 	vp. decisions = (decision_t  *)_aligned_malloc (size, 16);
 #else
 	if (posix_memalign ((void**)&data, 16,
-	                        (wordlength + (K - 1))/ 8 + 1)){
+	                        (wordlength + (VITERBI_K - 1))/ 8 + 1)){
 	   printf("Allocation of data array failed\n");
 	}
 	if (posix_memalign ((void**)&symbols, 16,
-	                     RATE * (wordlength + (K - 1)) * sizeof(COMPUTETYPE))){
+	                     RATE * (wordlength + (VITERBI_K - 1)) * sizeof(COMPUTETYPE))){
 	   printf("Allocation of symbols array failed\n");
 	}
 	if (posix_memalign ((void**)&(vp. decisions),
 	                    16,
-	                    2 * (wordlength + (K - 1)) * sizeof (decision_t))){
+	                    2 * (wordlength + (VITERBI_K - 1)) * sizeof (decision_t))){
 	   printf ("Allocation of vp decisions failed\n");
 	}
 #endif
@@ -227,7 +227,7 @@ uint8_t getbit (uint8_t v, int32_t o) {
 //
 //// FIXME: this is slowish
 //// -- remember about the padding!
-//	for (i = 0; i < nbits + (K - 1); i++) {
+//	for (i = 0; i < nbits + (VITERBI_K - 1); i++) {
 //	   int b = bytes[i/8];
 //	   int j = i % 8;
 //	   int bit = (b >> (7-j)) & 1;
@@ -245,13 +245,13 @@ void	deconvolve	(int16_t *input, uint8_t *output) {
 uint32_t	i;
 
 	init_viterbi (&vp, 0);
-	for (i = 0; i < (uint16_t)(frameBits + (K - 1)) * RATE; i ++) {
+	for (i = 0; i < (uint16_t)(frameBits + (VITERBI_K - 1)) * RATE; i ++) {
 	   int16_t temp = input [i] + 127;
 	   if (temp < 0) temp = 0;
 	   if (temp > 255) temp = 255;
 	   symbols [i] = temp;
 	}
-	update_viterbi_blk_SPIRAL (&vp, symbols, frameBits + (K - 1));
+	update_viterbi_blk_SPIRAL (&vp, symbols, frameBits + (VITERBI_K - 1));
 
 	chainback_viterbi (&vp, data, frameBits, 0);
 
@@ -365,14 +365,14 @@ decision_t *d = vp -> decisions;
  * But this avoids a conditional branch, and the writes will
  * combine in the cache anyway
  */
-	d += (K - 1); /* Look past tail */
+	d += (VITERBI_K - 1); /* Look past tail */
 	while (nbits-- != 0){
 	   int k;
 //	   int l	= (endstate >> ADDSHIFT) / 32;
 //	   int m	= (endstate >> ADDSHIFT) % 32;
 	   k = (d [nbits].w [(endstate >> ADDSHIFT) / 32] >>
 	                       ((endstate>>ADDSHIFT) % 32)) & 1;
-	   endstate = (endstate >> 1) | (k << (K - 2 + ADDSHIFT));
+	   endstate = (endstate >> 1) | (k << (VITERBI_K - 2 + ADDSHIFT));
 	   data [nbits >> 3] = endstate >> SUBSHIFT;
 	}
 }
