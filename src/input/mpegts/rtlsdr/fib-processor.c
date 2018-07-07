@@ -147,6 +147,10 @@
    int16_t		HandleFIG0Extension13(uint8_t *,
 	   int16_t, uint8_t);
    int16_t		HandleFIG0Extension22(uint8_t *, int16_t);
+
+   void	addtoEnsemble(char *s, int32_t SId);
+   void	nameofEnsemble(struct sdr_state_t *sdr, int id, char *s);
+
    int32_t		dateTime[8];
    channelMap	subChannels[64];
    serviceComponent	ServiceComps[64];
@@ -1104,7 +1108,6 @@ char		label [17];
 //
 static
 int	compareNames (char* in, char* ref) {
-int16_t	i;
 
 	if (ref == in)
 	   return 1;
@@ -1272,7 +1275,10 @@ int16_t i;
 	for (i = 0; i < 64; i ++) {
 	   listofServices [i]. inUse = 0;
 	   listofServices [i]. serviceId = -1;
-	   listofServices [i]. serviceLabel. label = "";
+	   if (listofServices[i].serviceLabel.label != 0) {
+		   free(listofServices[i].serviceLabel.label);
+		   listofServices[i].serviceLabel.label = 0;
+	   }
 	   ServiceComps [i]. inUse	= 0;
 	   subChannels [i]. inUse	= 0;
 	}
