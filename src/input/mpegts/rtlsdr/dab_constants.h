@@ -14,6 +14,10 @@ struct complex_t {
 #define	MHz(x)		(KHz (x) * 1000)
 #define	mHz(x)		(kHz (x) * 1000)
 
+#define		AUDIO_SERVICE	0101
+#define		PACKET_SERVICE	0102
+#define		UNKNOWN_SERVICE	0100
+
 #define		INPUT_RATE	2048000
 
 #define T_F 196608

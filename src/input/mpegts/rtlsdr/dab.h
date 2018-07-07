@@ -90,10 +90,6 @@ struct sdr_state_t {
 	int16_t		index;
 	int16_t		BitsperBlock;
 	int16_t		ficno;
-	int16_t		ficBlocks;
-	int16_t		ficMissed;
-	int16_t		ficRatio;
-	uint16_t	convState;
 
 	int			fibProcessorIsSynced;
 };

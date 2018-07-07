@@ -24,6 +24,7 @@
 #include "tvheadend.h"
 #include "ficHandler.h"
 #include "protTables.h"
+#include "fib-processor.h"
 #include "viterbi_768/viterbi-768.h"
 
 uint8_t		PRBS[768];
@@ -39,9 +40,6 @@ void initFicHandler(struct sdr_state_t *sdr) {
 	sdr->index = 0;
 	sdr->BitsperBlock = 2 * 1536;
 	sdr->ficno = 0;
-	sdr->ficBlocks = 0;
-	sdr->ficMissed = 0;
-	sdr->ficRatio = 0;
 	
 	memset(shiftRegister, 1, 9);
 
@@ -153,6 +151,6 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 			tvhtrace(LS_RTLSDR, "ficHandler checkCRC failed!");
 			continue;
 		}
-		process_FIB(p, ficno);
+		process_FIB(sdr, p, ficno);
 	}
 }
