@@ -88,7 +88,7 @@ void initFicHandler(struct sdr_state_t *sdr) {
 			punctureTable[local] = 1;
 		local++;
 	}
-
+	initViterbi768(768);
 }
 
 void process_ficBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
