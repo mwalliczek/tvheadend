@@ -441,7 +441,9 @@ SRCS-RTLSDR = \
     src/input/mpegts/rtlsdr/protTables.c \
     src/input/mpegts/rtlsdr/ficHandler.c \
     src/input/mpegts/rtlsdr/viterbi_768/viterbi-768.c \
+    src/input/mpegts/rtlsdr/viterbi_768/spiral-sse.c \
     src/input/mpegts/rtlsdr/viterbi_768/spiral-neon.c \
+    src/input/mpegts/rtlsdr/viterbi_768/spiral-no-sse.c \
     src/input/mpegts/rtlsdr/viterbi.c \
     src/input/mpegts/rtlsdr/charsets.c \
     src/input/mpegts/rtlsdr/fib-processor.c \
