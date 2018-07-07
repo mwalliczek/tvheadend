@@ -68,9 +68,9 @@ uint16_t i;
 	       break;
 
 	   case EbuLatin:
-		   s = strndup(buffer, length);
+		   s = malloc(length * 2);
 		   for (i = 0; i < length; i++)
-		     s[i] = utf8_encoded_EBU_Latin [s[i] & 0xff];
+			   strcat(s, utf8_encoded_EBU_Latin [s[i] & 0xff]);
 	      break;
 	}
 
