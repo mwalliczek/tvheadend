@@ -536,7 +536,15 @@ rtlsdr_frontend_tune
 	/*------------------------------------------------
 	Setting gain
 	-------------------------------------------------*/
-	r = rtlsdr_set_tuner_gain_mode(lfe->dev, 0);
+	r = rtlsdr_set_tuner_gain_mode(lfe->dev, 1);
+	if (r != 0)
+		tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain.\n");
+
+	r = rtlsdr_set_agc_mode(lfe->dev, 1);
+	if (r != 0)
+		tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain.\n");
+
+	r = rtlsdr_set_tuner_gain(lfe->dev, 166);
 	if (r != 0)
 		tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain.\n");
 
