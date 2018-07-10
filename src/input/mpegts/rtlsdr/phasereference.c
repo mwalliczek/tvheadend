@@ -154,11 +154,11 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 	//
 	//      prepare a table for the coarse frequency synchronization
 	for (i = 1; i <= DIFF_LENGTH; i++) {
-		struct complex_t x1 = refTable[(T_u + i) % T_u];
-		struct complex_t x2 = refTable[(T_u + i + 1) % T_u];
+		struct complex_t *x1 = &refTable[(T_u + i) % T_u];
+		struct complex_t *x2 = &refTable[(T_u + i + 1) % T_u];
 		struct complex_t x3;
-		x3.real = x1.real * x2.real + x1.imag * x2.imag;
-		x3.imag = x1.real * x2.imag - x1.imag * x2.real;
+		x3.real = x1->real * x2->real + x1->imag * x2->imag;
+		x3.imag = x1->real * x2->imag - x1->imag * x2->real;
 		phaseDifferences[i - 1] = fabs(sdr_arg(x3));
 	}
 }
@@ -177,8 +177,10 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v) {
 	memcpy(sdr->fftBuffer, v, T_u * sizeof(fftwf_complex));
 	fftwf_execute(sdr->plan);
 	for (i = 0; i < T_u; i++) {
-		sdr->fftBuffer[i][0] = sdr->fftBuffer[i][0] * refTable[i].real + sdr->fftBuffer[i][1] * refTable[i].imag;
-		sdr->fftBuffer[i][1] = sdr->fftBuffer[i][0] * refTable[i].imag - sdr->fftBuffer[i][1] * refTable[i].real;
+		fftwf_complex result;
+		result[0] = sdr->fftBuffer[i][0] * refTable[i].real + sdr->fftBuffer[i][1] * refTable[i].imag;
+		result[1] = sdr->fftBuffer[i][0] * refTable[i].imag - sdr->fftBuffer[i][1] * refTable[i].real;
+		memcpy(&sdr->fftBuffer[i], &result, sizeof(fftwf_complex));
 	}
 	fftwf_execute(sdr->plan);
 	/**
