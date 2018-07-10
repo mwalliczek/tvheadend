@@ -21,6 +21,7 @@
 
 #include <fftw3.h>
 #include <math.h>
+#include <complex.h>
 
 #include "tvheadend.h"
 #include "dab_constants.h"
@@ -100,7 +101,7 @@ static
 const int8_t h3[] = { 0, 1, 2, 1, 0, 3, 3, 2, 2, 3, 2, 1, 2, 1, 3, 2,
 0, 1, 2, 1, 0, 3, 3, 2, 2, 3, 2, 1, 2, 1, 3, 2 };
 
-struct complex_t refTable[T_u];
+float _Complex refTable[T_u];
 
 float phaseDifferences[DIFF_LENGTH];
 
@@ -142,11 +143,9 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 	float	Phi_k;
 	for (i = 1; i <= K / 2; i++) {
 		Phi_k = get_Phi(i);
-		refTable[i].real = cos(Phi_k);
-		refTable[i].imag = sin(Phi_k);
+		refTable[i] = cos(Phi_k) + sin(Phi_k) * I;
 		Phi_k = get_Phi(-i);
-		refTable[T_u - i].real = cos(Phi_k);
-		refTable[T_u - i].imag = sin(Phi_k);
+		refTable[T_u - i] = cos(Phi_k) + sin(Phi_k) * I;
 	}
 	sdr->fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
 	memset(sdr->fftBuffer, 0, sizeof(fftwf_complex) * T_u);
@@ -154,12 +153,9 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 	//
 	//      prepare a table for the coarse frequency synchronization
 	for (i = 1; i <= DIFF_LENGTH; i++) {
-		struct complex_t *x1 = &refTable[(T_u + i) % T_u];
-		struct complex_t *x2 = &refTable[(T_u + i + 1) % T_u];
-		struct complex_t x3;
-		x3.real = x1->real * x2->real + x1->imag * x2->imag;
-		x3.imag = -x1->real * x2->imag + x1->imag * x2->real;
-		phaseDifferences[i - 1] = fabs(sdr_arg(x3));
+		phaseDifferences [i - 1] = abs (carg (refTable [(T_u + i) % T_u] *
+                                                    conj (refTable [(T_u + i + 1) % T_u])));
+                                                    		
 	}
 }
 
@@ -178,8 +174,8 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v) {
 	fftwf_execute(sdr->plan);
 	for (i = 0; i < T_u; i++) {
 		fftwf_complex result;
-		result[0] = sdr->fftBuffer[i][0] * refTable[i].real + sdr->fftBuffer[i][1] * refTable[i].imag;
-		result[1] = sdr->fftBuffer[i][0] * refTable[i].imag - sdr->fftBuffer[i][1] * refTable[i].real;
+		result[0] = sdr->fftBuffer[i][0] * creal(refTable[i]) + sdr->fftBuffer[i][1] * cimag(refTable[i]);
+		result[1] = sdr->fftBuffer[i][0] * cimag(refTable[i]) - sdr->fftBuffer[i][1] * creal(refTable[i]);
 		memcpy(&sdr->fftBuffer[i], &result, sizeof(fftwf_complex));
 	}
 	fftwf_execute(sdr->plan);
