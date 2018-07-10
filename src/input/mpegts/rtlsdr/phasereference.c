@@ -158,7 +158,7 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 		struct complex_t *x2 = &refTable[(T_u + i + 1) % T_u];
 		struct complex_t x3;
 		x3.real = x1->real * x2->real + x1->imag * x2->imag;
-		x3.imag = x1->real * x2->imag - x1->imag * x2->real;
+		x3.imag = -x1->real * x2->imag + x1->imag * x2->real;
 		phaseDifferences[i - 1] = fabs(sdr_arg(x3));
 	}
 }
@@ -215,7 +215,7 @@ int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, struct complex_t* 
 		fftwf_complex* x2 = &sdr->fftBuffer[(i + 1) % T_u];
 		struct complex_t x3;
 		x3.real = *x1[0] * *x2[0] + *x1[1] * *x2[1];
-		x3.imag = *x1[0] * *x2[1] - *x1[1] * *x2[0];
+		x3.imag = - *x1[0] * *x2[1] + *x1[1] * *x2[0];
 		computedDiffs[i - (T_u - SEARCH_RANGE / 2)] = fabs(sdr_arg(x3));
 	}
 	float   Mmin = 1000;
