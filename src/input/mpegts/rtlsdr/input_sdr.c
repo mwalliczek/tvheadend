@@ -19,12 +19,13 @@ david.may.muc@googlemail.com
 
 */
 
+#include <math.h>
+
 #include "tvheadend.h"
 #include "tvhpoll.h"
 #include "rtlsdr_private.h"
 #include "dab.h"
 #include "dab_tables.h"
-#include "sdr_sync.h"
 #include "phasereference.h"
 #include "ofdmDecoder.h"
 #include "ficHandler.h"
