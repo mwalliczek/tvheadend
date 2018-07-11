@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <fftw3.h>
 #include <string.h>
+#include <complex.h>
 
 #include "sdr_fifo.h"
 #include "dab_constants.h"
@@ -79,11 +80,11 @@ struct sdr_state_t {
 	int32_t		localPhase;
 	float		sLevel;
 
-	fftwf_complex *fftBuffer;
+	float _Complex *fftBuffer;
 	fftwf_plan plan;
 
 	float		current_snr;
-	struct complex_t ofdmPhaseReference[T_u];
+	float _Complex ofdmPhaseReference[T_u];
 
 	uint8_t		bitBuffer_out[768];
 	int16_t		ofdm_input[2304];
@@ -114,10 +115,8 @@ struct dab_state_t
   void (* eti_callback)(uint8_t *eti);
 };
 
-float jan_abs(struct complex_t z);
+float jan_abs(float _Complex z);
 float get_db(float x);
-float sdr_abs(float v[2]);
-float sdr_arg(struct complex_t x);
 
 //	generic, up to 16 bits
 static inline

@@ -164,7 +164,7 @@ void destoryPhaseReference(struct sdr_state_t *sdr) {
 	fftwf_free(sdr->fftBuffer);
 }
 
-int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v) {
+int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, float _Complex* v) {
 	int32_t	i;
 	int32_t	maxIndex = -1;
 	float	sum = 0;
@@ -173,17 +173,15 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v) {
 	memcpy(sdr->fftBuffer, v, T_u * sizeof(fftwf_complex));
 	fftwf_execute(sdr->plan);
 	for (i = 0; i < T_u; i++) {
-		fftwf_complex result;
-		result[0] = sdr->fftBuffer[i][0] * creal(refTable[i]) + sdr->fftBuffer[i][1] * cimag(refTable[i]);
-		result[1] = sdr->fftBuffer[i][0] * cimag(refTable[i]) - sdr->fftBuffer[i][1] * creal(refTable[i]);
-		memcpy(&sdr->fftBuffer[i], &result, sizeof(fftwf_complex));
+		sdr->fftBuffer[i] *= conj(refTable[i]);
+		sdr->fftBuffer[i] = conj(sdr->fftBuffer[i]);
 	}
 	fftwf_execute(sdr->plan);
 	/**
 	*	We compute the average signal value ...
 	*/
 	for (i = 0; i < T_u; i++) {
-		float absValue = sdr_abs(sdr->fftBuffer[i]);
+		float absValue = cabs(sdr->fftBuffer[i]);
 		sum += absValue;
 		if (absValue > Max) {
 			maxIndex = i;
@@ -201,18 +199,14 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, struct complex_t* v) {
 }
 
 #define SEARCH_RANGE    (2 * 35)
-int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, struct complex_t* v) {
+int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, float _Complex* v) {
 	int16_t i, j, index = 100;
 	float   computedDiffs[SEARCH_RANGE + DIFF_LENGTH + 1];
 
 	for (i = T_u - SEARCH_RANGE / 2;
 		i < T_u + SEARCH_RANGE / 2 + DIFF_LENGTH; i++) {
-		fftwf_complex* x1 = &sdr->fftBuffer[i % T_u];
-		fftwf_complex* x2 = &sdr->fftBuffer[(i + 1) % T_u];
-		struct complex_t x3;
-		x3.real = *x1[0] * *x2[0] + *x1[1] * *x2[1];
-		x3.imag = - *x1[0] * *x2[1] + *x1[1] * *x2[0];
-		computedDiffs[i - (T_u - SEARCH_RANGE / 2)] = fabs(sdr_arg(x3));
+		computedDiffs[i - (T_u - SEARCH_RANGE / 2)] =
+			fabs(carg(sdr->fftBuffer[i % T_u] * conj(sdr->fftBuffer[(i + 1) % T_u])));
 	}
 	float   Mmin = 1000;
 	for (i = T_u - SEARCH_RANGE / 2; i < T_u + SEARCH_RANGE / 2; i++) {

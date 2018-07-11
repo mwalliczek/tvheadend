@@ -31,7 +31,7 @@ david.may.muc@googlemail.com
 
 int readFromDevice(rtlsdr_frontend_t *lfe);
 
-struct complex_t oscillatorTable[INPUT_RATE];
+float _Complex oscillatorTable[INPUT_RATE];
 
 int readFromDevice(rtlsdr_frontend_t *lfe) {
 	struct dab_state_t *dab = lfe->dab;
@@ -70,13 +70,9 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 	return 0;
 }
 
-float sdr_abs(float v[2]) {
-	return sqrtf(v[0] * v[0] + v[1] * v[1]);
-}
-
-float jan_abs(struct complex_t z) {
-	float re = z.real;
-	float im = z.imag;
+float jan_abs(float _Complex z) {
+	float re = creal(z);
+	float im = cimag(z);
 	if (re < 0) re = -re;
 	if (im < 0) im = -im;
 	return re + im;
@@ -84,10 +80,6 @@ float jan_abs(struct complex_t z) {
 
 float get_db(float x) {
 	return 20 * log10((x + 1) / (float)(256));
-}
-
-float sdr_arg(struct complex_t x) {
-	return atan2f(x.imag, x.real);
 }
 
 static
@@ -109,7 +101,7 @@ float convTable[] = {
 	, 96 / 128.0 , 97 / 128.0 , 98 / 128.0 , 99 / 128.0 , 100 / 128.0 , 101 / 128.0 , 102 / 128.0 , 103 / 128.0 , 104 / 128.0 , 105 / 128.0 , 106 / 128.0 , 107 / 128.0 , 108 / 128.0 , 109 / 128.0 , 110 / 128.0 , 111 / 128.0
 	, 112 / 128.0 , 113 / 128.0 , 114 / 128.0 , 115 / 128.0 , 116 / 128.0 , 117 / 128.0 , 118 / 128.0 , 119 / 128.0 , 120 / 128.0 , 121 / 128.0 , 122 / 128.0 , 123 / 128.0 , 124 / 128.0 , 125 / 128.0 , 126 / 128.0 , 127 / 128.0 };
 
-uint32_t getSamples(rtlsdr_frontend_t *lfe, struct complex_t *v, uint32_t size, int32_t freqOffset) {
+uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, int32_t freqOffset) {
 	struct dab_state_t *dab = lfe->dab;
 	struct sdr_state_t *sdr = &dab->device_state;
 	uint32_t i;
@@ -124,15 +116,15 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, struct complex_t *v, uint32_t size, 
 		sdr->localPhase -= freqOffset;
 		sdr->localPhase = (sdr->localPhase + INPUT_RATE) % INPUT_RATE;
 
-		v[i].real = convTable[buffer[0]] * oscillatorTable[sdr->localPhase].real - convTable[buffer[1]] * oscillatorTable[sdr->localPhase].imag;
-		v[i].imag = convTable[buffer[0]] * oscillatorTable[sdr->localPhase].imag + convTable[buffer[1]] * oscillatorTable[sdr->localPhase].real;
+		v[i] = convTable[buffer[0]] + convTable[buffer[0]] * I;
+		v[i] *= oscillatorTable[sdr->localPhase];
 		
 		sdr->sLevel = 0.00001 * jan_abs(v[i]) + (1 - 0.00001) * sdr->sLevel;
 	}
 	return size;
 }
 
-uint32_t getSample(rtlsdr_frontend_t *lfe, struct complex_t *v, float *abs, int32_t freqOffset) {
+uint32_t getSample(rtlsdr_frontend_t *lfe, float _Complex *v, float *abs, int32_t freqOffset) {
 	struct dab_state_t *dab = lfe->dab;
 	struct sdr_state_t *sdr = &dab->device_state;
 	uint8_t buffer[2];
@@ -146,8 +138,8 @@ uint32_t getSample(rtlsdr_frontend_t *lfe, struct complex_t *v, float *abs, int3
 	sdr->localPhase -= freqOffset;
 	sdr->localPhase = (sdr->localPhase + INPUT_RATE) % INPUT_RATE;
 
-	v->real = convTable[buffer[0]] * oscillatorTable[sdr->localPhase].real - convTable[buffer[1]] * oscillatorTable[sdr->localPhase].imag;
-	v->imag = convTable[buffer[0]] * oscillatorTable[sdr->localPhase].imag + convTable[buffer[1]] * oscillatorTable[sdr->localPhase].real;
+	*v = convTable[buffer[0]] + convTable[buffer[0]] * I;
+	*v *= oscillatorTable[sdr->localPhase];
 
 	*abs = jan_abs(*v);
 	sdr->sLevel = 0.00001 * *abs + (1 - 0.00001) * sdr->sLevel;
@@ -304,7 +296,6 @@ void sdr_init(struct sdr_state_t *sdr)
   sdr->localPhase = 0;
 
   for (i = 0; i < INPUT_RATE; i++) {
-	  oscillatorTable[i].real = cos(2.0 * M_PI * i / INPUT_RATE);
-	  oscillatorTable[i].imag = sin(2.0 * M_PI * i / INPUT_RATE);
+	  oscillatorTable[i] = cos(2.0 * M_PI * i / INPUT_RATE) + sin(2.0 * M_PI * i / INPUT_RATE) * I;
   }
 }

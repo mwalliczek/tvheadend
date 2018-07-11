@@ -249,18 +249,18 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 	struct sdr_state_t *sdr = &dab->device_state;
 	float		fineCorrector = 0;
 	float		coarseCorrector = 0;
-	struct complex_t v[T_F / 2];
+	float _Complex v[T_F / 2];
 	int32_t		startIndex;
 	int i;
-	struct complex_t	FreqCorr;
+	float _Complex	FreqCorr;
 	int32_t		syncBufferIndex = 0;
 	float		cLevel = 0;
-	struct complex_t sample;
+	float _Complex sample;
 	int32_t		counter;
 	int32_t		syncBufferSize = 32768;
 	int32_t		syncBufferMask = syncBufferSize - 1;
 	float		envBuffer[syncBufferSize];
-	struct complex_t ofdmBuffer[T_s];
+	float _Complex ofdmBuffer[T_s];
 	int		ofdmSymbolCount = 0;
 	int		dip_attempts = 0;
 	int		index_attempts = 0;
@@ -365,7 +365,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//	used for synchronization for block 0
 
 		memmove(ofdmBuffer, &ofdmBuffer[startIndex],
-			(T_u - startIndex) * sizeof(struct complex_t));
+			(T_u - startIndex) * sizeof(float _Complex));
 		int ofdmBufferIndex = T_u - startIndex;
 
 		//	Block 0 is special in that it is used for coarse time synchronization
@@ -397,14 +397,12 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//	between the samples in the cyclic prefix and the
 		//	corresponding samples in the datapart.
 		///	and similar for the (params. L - 4) MSC blocks
-		FreqCorr.imag = 0.0;
-		FreqCorr.real = 0.0;
+		FreqCorr = 0.0 + 0.0 * I;
 		for (ofdmSymbolCount = 1;
 			ofdmSymbolCount < (uint16_t)L; ofdmSymbolCount++) {
 			getSamples(lfe, ofdmBuffer, T_s, coarseCorrector + fineCorrector);
 			for (i = (int)T_u; i < (int)T_s; i++) {
-				FreqCorr.real += ofdmBuffer[i].real * ofdmBuffer[i - T_u].real + ofdmBuffer[i].imag * ofdmBuffer[i - T_u].imag;
-				FreqCorr.imag += -ofdmBuffer[i].real * ofdmBuffer[i - T_u].imag + ofdmBuffer[i].imag * ofdmBuffer[i - T_u].real;
+				FreqCorr += ofdmBuffer[i] * conj(ofdmBuffer[i - T_u]);
 			}
 
 			decodeBlock(sdr, ofdmBuffer, ofdmSymbolCount);
@@ -412,7 +410,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 		//	we integrate the newly found frequency error with the
 		//	existing frequency error.
-		tvhtrace(LS_RTLSDR, "FreqCorr: %.6f, %.6f", FreqCorr.real, FreqCorr.imag);
+		tvhtrace(LS_RTLSDR, "FreqCorr: %.6f, %.6f", creal(FreqCorr), cimag(FreqCorr));
 		fineCorrector += 0.1 * sdr_arg(FreqCorr) / M_PI * carrierDiff;
 		tvhtrace(LS_RTLSDR, "fineCorrector set to %.6f", fineCorrector);
 

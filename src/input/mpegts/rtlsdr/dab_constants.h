@@ -1,11 +1,6 @@
 #ifndef _DAB_CONSTANTS_H
 #define _DAB_CONSTANTS_H
 
-struct complex_t {
-	float real;
-	float imag;
-};
-
 #define	Hz(x)		(x)
 #define	Khz(x)		(x * 1000)
 #define	KHz(x)		(x * 1000)

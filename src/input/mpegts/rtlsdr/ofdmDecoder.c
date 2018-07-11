@@ -5,9 +5,9 @@
 #include "ofdmDecoder.h"
 #include "ficHandler.h"
 
-int16_t	get_snr(fftwf_complex* v);
-void decodeFICblock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno);
-void decodeMscblock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno);
+int16_t	get_snr(float _Complex* v);
+void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno);
+void decodeMscblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno);
 
 int16_t myMapper[T_u];
 
@@ -35,8 +35,8 @@ void initOfdmDecoder(struct sdr_state_t *sdr) {
 	}
 }
 
-void processBlock_0(struct sdr_state_t *sdr, struct complex_t* v) {
-	memcpy(sdr->fftBuffer, v, T_u * sizeof(fftwf_complex));
+void processBlock_0(struct sdr_state_t *sdr, float _Complex* v) {
+	memcpy(sdr->fftBuffer, v, T_u * sizeof(float _Complex));
 	fftwf_execute(sdr->plan);
 	/**
 	*	The SNR is determined by looking at a segment of bins
@@ -49,10 +49,10 @@ void processBlock_0(struct sdr_state_t *sdr, struct complex_t* v) {
 	*	as coming from the FFT as phase reference.
 	*/
 	memcpy(sdr->ofdmPhaseReference,
-		sdr->fftBuffer, T_u * sizeof(struct complex_t));
+		sdr->fftBuffer, T_u * sizeof(float _Complex));
 }
 
-int16_t	get_snr(fftwf_complex* v) {
+int16_t	get_snr(float _Complex* v) {
 	int16_t	i;
 	float	noise = 0;
 	float	signal = 0;
@@ -60,31 +60,31 @@ int16_t	get_snr(fftwf_complex* v) {
 	int16_t	high = low + K;
 
 	for (i = 10; i < low - 20; i++)
-		noise += sdr_abs(v[(T_u / 2 + i) % T_u]);
+		noise += cabs(v[(T_u / 2 + i) % T_u]);
 
 	for (i = high + 20; i < T_u - 10; i++)
-		noise += sdr_abs(v[(T_u / 2 + i) % T_u]);
+		noise += cabs(v[(T_u / 2 + i) % T_u]);
 
 	noise /= (low - 30 + T_u - high - 30);
 	for (i = T_u / 2 - K / 4; i < T_u / 2 + K / 4; i++)
-		signal += sdr_abs(v[(T_u / 2 + i) % T_u]);
+		signal += cabs(v[(T_u / 2 + i) % T_u]);
 	return get_db(signal / (K / 2)) - get_db(noise);
 }
 
-void decodeBlock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno) {
+void decodeBlock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 	if (blkno < 4)
 		decodeFICblock(sdr, v, blkno);
 	else
 		decodeMscblock(sdr, v, blkno);
 }
 
-void decodeFICblock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno) {
+void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 	int i;
-	struct complex_t r1;
+	float _Complex r1;
 //	struct complex_t conjVector[T_u];
 	int16_t ibits[2 * K];
 
-	memcpy(sdr->fftBuffer, &v[T_g], T_u * sizeof(fftwf_complex));
+	memcpy(sdr->fftBuffer, &v[T_g], T_u * sizeof(float _Complex));
 	fftwf_execute(sdr->plan);
 	/**
 	*	Note that from here on, we are only interested in the
@@ -100,17 +100,16 @@ void decodeFICblock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno)
 		*	The carrier of a block is the reference for the carrier
 		*	on the same position in the next block
 		*/
-		r1.real = sdr->fftBuffer[index][0] * sdr->ofdmPhaseReference[index].real + sdr->fftBuffer[index][1] * sdr->ofdmPhaseReference[index].imag;
-		r1.imag = sdr->fftBuffer[index][0] * sdr->ofdmPhaseReference[index].imag - sdr->fftBuffer[index][1] * sdr->ofdmPhaseReference[index].real;
+		r1 = sdr->fftBuffer[index] * conj(sdr->ofdmPhaseReference[index]);
 //		conjVector[index] = r1;
 		float ab1 = jan_abs(r1);
-		ibits[i] = -r1.real / ab1 * 127.0;
-		ibits[K + i] = -r1.imag / ab1 * 127.0;
+		ibits[i] = -creal(r1) / ab1 * 127.0;
+		ibits[K + i] = -cimag(r1) / ab1 * 127.0;
 	}
 	memcpy(sdr->ofdmPhaseReference,
-		sdr->fftBuffer, T_u * sizeof(struct complex_t));
+		sdr->fftBuffer, T_u * sizeof(float _Complex));
 	process_ficBlock(sdr, ibits, blkno);
 }
 
-void decodeMscblock(struct sdr_state_t *sdr, struct complex_t* v, int32_t blkno) {
+void decodeMscblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 }
