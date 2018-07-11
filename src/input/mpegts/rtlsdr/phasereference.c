@@ -149,7 +149,7 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 	}
 	sdr->fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
 	memset(sdr->fftBuffer, 0, sizeof(fftwf_complex) * T_u);
-	sdr->plan = fftwf_plan_dft_1d(T_u, sdr->fftBuffer, sdr->fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
+	sdr->plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->fftBuffer, (float(*)[2])sdr->fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
 	//
 	//      prepare a table for the coarse frequency synchronization
 	for (i = 1; i <= DIFF_LENGTH; i++) {
