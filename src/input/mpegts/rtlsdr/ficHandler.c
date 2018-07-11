@@ -151,6 +151,7 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 			tvhtrace(LS_RTLSDR, "ficHandler checkCRC failed!");
 			continue;
 		}
+		tvhtrace(LS_RTLSDR, "ficHandler checkCRC success!");
 		process_FIB(sdr, p, ficno);
 	}
 }
