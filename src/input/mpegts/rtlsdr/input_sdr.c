@@ -116,7 +116,7 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, in
 		sdr->localPhase -= freqOffset;
 		sdr->localPhase = (sdr->localPhase + INPUT_RATE) % INPUT_RATE;
 
-		v[i] = convTable[buffer[0]] + convTable[buffer[0]] * I;
+		v[i] = convTable[buffer[0]] + convTable[buffer[1]] * I;
 		v[i] *= oscillatorTable[sdr->localPhase];
 		
 		sdr->sLevel = 0.00001 * jan_abs(v[i]) + (1 - 0.00001) * sdr->sLevel;
@@ -138,7 +138,7 @@ uint32_t getSample(rtlsdr_frontend_t *lfe, float _Complex *v, float *abs, int32_
 	sdr->localPhase -= freqOffset;
 	sdr->localPhase = (sdr->localPhase + INPUT_RATE) % INPUT_RATE;
 
-	*v = convTable[buffer[0]] + convTable[buffer[0]] * I;
+	*v = convTable[buffer[0]] + convTable[buffer[1]] * I;
 	*v *= oscillatorTable[sdr->localPhase];
 
 	*abs = jan_abs(*v);
