@@ -411,7 +411,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//	we integrate the newly found frequency error with the
 		//	existing frequency error.
 		tvhtrace(LS_RTLSDR, "FreqCorr: %.6f, %.6f", creal(FreqCorr), cimag(FreqCorr));
-		fineCorrector += 0.1 * sdr_arg(FreqCorr) / M_PI * carrierDiff;
+		fineCorrector += 0.1 * carg(FreqCorr) / M_PI * carrierDiff;
 		tvhtrace(LS_RTLSDR, "fineCorrector set to %.6f", fineCorrector);
 
 		
