@@ -120,6 +120,7 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 	int16_t	viterbiBlock[3072 + 24];
 	int16_t	inputCount = 0;
 
+	tvhtrace(LS_RTLSDR, "process_ficInput started: %d", ficno);
 	memset(viterbiBlock, 0, (3072 + 24) * sizeof(int16_t));
 
 	for (i = 0; i < 4 * 768 + 24; i++)
