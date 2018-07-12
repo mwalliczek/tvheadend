@@ -63,7 +63,7 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 			continue;
 		}
 		if (ev[0].ptr != lfe) break;
-		if (read(lfe->lfe_control_pipe.rd, &b, 1) > 0) {
+		if (read(lfe->lfe_control_pipe.rd, &b, 1) > 0 && sdr->fifo.count > 0) {
 			tvhtrace(LS_RTLSDR, "fifo count %u", sdr->fifo.count);
 			return 1;
 		}
@@ -72,15 +72,15 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 }
 
 float jan_abs(float _Complex z) {
-	float re = creal(z);
-	float im = cimag(z);
+	float re = crealf(z);
+	float im = cimagf(z);
 	if (re < 0) re = -re;
 	if (im < 0) im = -im;
 	return re + im;
 }
 
 float get_db(float x) {
-	return 20 * log10((x + 1) / (float)(256));
+	return 20 * log10f((x + 1) / (float)(256));
 }
 
 static
@@ -297,6 +297,6 @@ void sdr_init(struct sdr_state_t *sdr)
   sdr->localPhase = 0;
 
   for (i = 0; i < INPUT_RATE; i++) {
-	  oscillatorTable[i] = cos(2.0 * M_PI * i / INPUT_RATE) + sin(2.0 * M_PI * i / INPUT_RATE) * I;
+	  oscillatorTable[i] = cosf(2.0 * M_PI * i / INPUT_RATE) + sinf(2.0 * M_PI * i / INPUT_RATE) * I;
   }
 }

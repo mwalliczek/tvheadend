@@ -381,7 +381,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			int correction = phaseReferenceEstimateOffset(sdr, ofdmBuffer);
 			if (correction != 100) {
 				coarseCorrector += correction * carrierDiff;
-				if (abs(coarseCorrector) > Khz(35))
+				if (fabsf(coarseCorrector) > Khz(35))
 					coarseCorrector = 0;
 				tvhtrace(LS_RTLSDR, "coarseCorrector set to %.6f", coarseCorrector);
 			}
@@ -398,7 +398,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			ofdmSymbolCount < (uint16_t)L; ofdmSymbolCount++) {
 			getSamples(lfe, ofdmBuffer, T_s, coarseCorrector + fineCorrector);
 			for (i = (int)T_u; i < (int)T_s; i++) {
-				FreqCorr += ofdmBuffer[i] * conj(ofdmBuffer[i - T_u]);
+				FreqCorr += ofdmBuffer[i] * conjf(ofdmBuffer[i - T_u]);
 			}
 
 			decodeBlock(sdr, ofdmBuffer, ofdmSymbolCount);
@@ -406,8 +406,8 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 		//	we integrate the newly found frequency error with the
 		//	existing frequency error.
-		tvhtrace(LS_RTLSDR, "FreqCorr: %.6f, %.6f", creal(FreqCorr), cimag(FreqCorr));
-		fineCorrector += 0.1 * carg(FreqCorr) / M_PI * carrierDiff;
+		tvhtrace(LS_RTLSDR, "FreqCorr: %.6f, %.6f", crealf(FreqCorr), cimagf(FreqCorr));
+		fineCorrector += 0.1 * cargf(FreqCorr) / M_PI * carrierDiff;
 		tvhtrace(LS_RTLSDR, "fineCorrector set to %.6f", fineCorrector);
 
 		

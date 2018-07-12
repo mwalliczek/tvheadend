@@ -60,14 +60,14 @@ int16_t	get_snr(float _Complex* v) {
 	int16_t	high = low + K;
 
 	for (i = 10; i < low - 20; i++)
-		noise += cabs(v[(T_u / 2 + i) % T_u]);
+		noise += cabsf(v[(T_u / 2 + i) % T_u]);
 
 	for (i = high + 20; i < T_u - 10; i++)
-		noise += cabs(v[(T_u / 2 + i) % T_u]);
+		noise += cabsf(v[(T_u / 2 + i) % T_u]);
 
 	noise /= (low - 30 + T_u - high - 30);
 	for (i = T_u / 2 - K / 4; i < T_u / 2 + K / 4; i++)
-		signal += cabs(v[(T_u / 2 + i) % T_u]);
+		signal += cabsf(v[(T_u / 2 + i) % T_u]);
 	return get_db(signal / (K / 2)) - get_db(noise);
 }
 
@@ -100,11 +100,11 @@ void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 		*	The carrier of a block is the reference for the carrier
 		*	on the same position in the next block
 		*/
-		r1 = sdr->fftBuffer[index] * conj(sdr->ofdmPhaseReference[index]);
+		r1 = sdr->fftBuffer[index] * conjf(sdr->ofdmPhaseReference[index]);
 //		conjVector[index] = r1;
 		float ab1 = jan_abs(r1);
-		ibits[i] = -creal(r1) / ab1 * 127.0;
-		ibits[K + i] = -cimag(r1) / ab1 * 127.0;
+		ibits[i] = -crealf(r1) / ab1 * 127.0;
+		ibits[K + i] = -cimagf(r1) / ab1 * 127.0;
 	}
 	memcpy(sdr->ofdmPhaseReference,
 		sdr->fftBuffer, T_u * sizeof(float _Complex));
