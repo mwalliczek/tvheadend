@@ -95,26 +95,6 @@ struct sdr_state_t {
 	int			fibProcessorIsSynced;
 };
 
-struct dab_state_t
-{
-  struct sdr_state_t device_state;
-  struct demapped_transmission_frame_t tfs[5]; /* We need buffers for 5 tranmission frames - the four previous, plus the new */
-  struct tf_info_t tf_info;
-  struct ens_info_t ens_info;
-  void* v; /* Viterbi decoder instance */
-
-  unsigned char* cifs_msc[16];  /* Each CIF consists of 3072*18 bits */
-  unsigned char* cifs_fibs[16];  /* Each CIF consists of 3072*18 bits */
-  int ncifs;  /* Number of CIFs in buffer - we need 16 to start outputting them */
-  int tfidx;  /* Next tf buffer to read to. */
-  int locked;
-  int ens_info_shown;
-  int okcount;
-
-  /* Callback function to process a decoded ETI frame */
-  void (* eti_callback)(uint8_t *eti);
-};
-
 float jan_abs(float _Complex z);
 float get_db(float x);
 
@@ -280,9 +260,6 @@ int	check_CRC_bits(uint8_t *in, int32_t size) {
 	return Sum == 0;
 }
 
-int sdr_demod(struct demapped_transmission_frame_t *tf, struct sdr_state_t *sdr);
 void sdr_init(struct sdr_state_t *sdr);
-void init_dab_state(struct dab_state_t **dab, void (* eti_callback)(uint8_t *eti));
-void dab_process_frame(struct dab_state_t *dab);
 
 #endif

@@ -149,7 +149,7 @@ rtlsdr_frontend_stop_mux
 		rtlsdr_cancel_async(lfe->dev);
 	}
 
-	destoryPhaseReference(&lfe->dab->device_state);
+	destoryPhaseReference(&lfe->sdr);
 
 	/* Not locked */
 	lfe->lfe_ready = 0;
@@ -221,7 +221,7 @@ rtlsdr_frontend_network_list(mpegts_input_t *mi)
 static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
-	struct sdr_state_t *sdr = &lfe->dab->device_state;
+	struct sdr_state_t *sdr = &lfe->sdr;
 	tvhtrace(LS_RTLSDR, "callback with %u bytes, count %u", len, sdr->fifo.count);
 	if (!ctx) {
 		return;
@@ -234,15 +234,10 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
 }
 
-static void rtlsdr_eti_callback(uint8_t* eti)
-{
-}
-
 static void *rtlsdr_demod_thread_fn(void *arg)
 {
 	rtlsdr_frontend_t *lfe = arg;
-	struct dab_state_t *dab = lfe->dab;
-	struct sdr_state_t *sdr = &dab->device_state;
+	struct sdr_state_t *sdr = &lfe->sdr;
 	float		fineCorrector = 0;
 	float		coarseCorrector = 0;
 	float _Complex v[T_F / 2];
@@ -383,7 +378,6 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 				coarseCorrector += correction * carrierDiff;
 				if (fabsf(coarseCorrector) > Khz(35))
 					coarseCorrector = 0;
-				tvhtrace(LS_RTLSDR, "coarseCorrector set to %.6f", coarseCorrector);
 			}
 		}
 		//
@@ -406,16 +400,10 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 
 		//	we integrate the newly found frequency error with the
 		//	existing frequency error.
-		tvhtrace(LS_RTLSDR, "FreqCorr: %.6f, %.6f", crealf(FreqCorr), cimagf(FreqCorr));
 		fineCorrector += 0.1 * cargf(FreqCorr) / M_PI * carrierDiff;
-		tvhtrace(LS_RTLSDR, "fineCorrector set to %.6f", fineCorrector);
 
-		
-		cLevel = 0;
-		syncBufferIndex = 0;
 		//	at the end of the frame, just skip Tnull samples
 		getSamples(lfe, ofdmBuffer, T_null, coarseCorrector + fineCorrector);
-		counter = 0;
 		if (fineCorrector > carrierDiff / 2) {
 			coarseCorrector += carrierDiff;
 			fineCorrector -= carrierDiff;
@@ -474,8 +462,8 @@ rtlsdr_frontend_monitor(void *aux)
 	if (lfe->lfe_dvr_pipe.wr <= 0) {
 		/* Start input */
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
-		init_dab_state(&lfe->dab, rtlsdr_eti_callback);
-		sdr = &lfe->dab->device_state;
+		sdr_init(&lfe->sdr);
+		sdr = &lfe->sdr;
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
 		memset(sdr, 0, sizeof(struct sdr_state_t));
@@ -488,9 +476,9 @@ rtlsdr_frontend_monitor(void *aux)
 		tvhthread_create(&lfe->read_thread, NULL,
 			rtlsdr_read_thread_fn, lfe, "rtlsdr-front-read");
 
-	} else if (lfe->dab != NULL) {
-		lfe->lfe_locked = lfe->dab->locked;
-		lfe->lfe_status = lfe->dab->locked ? SIGNAL_GOOD : SIGNAL_NONE;
+	} else  {
+		lfe->lfe_locked = lfe->sdr.fibProcessorIsSynced;
+		lfe->lfe_status = lfe->sdr.isSynced ? SIGNAL_GOOD : SIGNAL_NONE;
 	}
 }
 
