@@ -37,7 +37,5 @@ void cbInit(CircularBuffer *cb, uint32_t size);
 void cbFree(CircularBuffer *cb);
 int cbIsFull(CircularBuffer *cb);
 int cbIsEmpty(CircularBuffer *cb);
-void cbWrite(CircularBuffer *cb, uint8_t *elem);
-void cbRead(CircularBuffer *cb, uint8_t *elem);
-
-int32_t sdr_read_fifo(CircularBuffer * fifo,uint32_t bytes,int32_t shift,uint8_t * buffer);
+void cbWrite(CircularBuffer *cb, uint8_t *elem, uint32_t size);
+uint8_t * cbReadDouble(CircularBuffer *cb);

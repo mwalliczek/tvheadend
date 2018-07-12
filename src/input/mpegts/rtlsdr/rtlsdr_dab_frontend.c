@@ -223,7 +223,7 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	rtlsdr_frontend_t *lfe = ctx;
 	struct sdr_state_t *sdr = &lfe->dab->device_state;
 	int i;
-	tvhtrace(LS_RTLSDR, "callback with %d bytes", len);
+	tvhtrace(LS_RTLSDR, "callback with %d bytes, count %d", len, sdr->fifo.count);
 	if (!ctx) {
 		return;
 	}
@@ -232,10 +232,7 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	}
 	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
 	/* write input data into fifo */
-	for (i = 0; i<len; i++) {
-		cbWrite(&(sdr->fifo), &buf[i]);
-	}
-
+	cbWrite(&(sdr->fifo), buf, len);
 }
 
 static void rtlsdr_eti_callback(uint8_t* eti)

@@ -106,14 +106,14 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, in
 	struct dab_state_t *dab = lfe->dab;
 	struct sdr_state_t *sdr = &dab->device_state;
 	uint32_t i;
-	uint8_t buffer[2];
+	uint8_t *buffer;
 	for (i = 0; i < size; i++) {
 		if (sdr->fifo.count < 2) {
 			if (!readFromDevice(lfe)) {
 				return i;
 			}
 		}
-		sdr_read_fifo(&(sdr->fifo), 2, 0, buffer);
+		buffer = cbReadDouble(&(sdr->fifo));
 		sdr->localPhase -= freqOffset;
 		sdr->localPhase = (sdr->localPhase + INPUT_RATE) % INPUT_RATE;
 
@@ -128,13 +128,13 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, in
 uint32_t getSample(rtlsdr_frontend_t *lfe, float _Complex *v, float *abs, int32_t freqOffset) {
 	struct dab_state_t *dab = lfe->dab;
 	struct sdr_state_t *sdr = &dab->device_state;
-	uint8_t buffer[2];
+	uint8_t *buffer;
 	if (sdr->fifo.count < 2) {
 		if (!readFromDevice(lfe)) {
 			return 0;
 		}
 	}
-	sdr_read_fifo(&(sdr->fifo), 2, 0, buffer);
+	buffer = cbReadDouble(&(sdr->fifo));
 
 	sdr->localPhase -= freqOffset;
 	sdr->localPhase = (sdr->localPhase + INPUT_RATE) % INPUT_RATE;
