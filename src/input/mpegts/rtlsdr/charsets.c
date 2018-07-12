@@ -59,7 +59,7 @@ uint16_t i;
 
 	switch (charset) {
 	   case UnicodeUcs2:
-		   s = "\0";
+		   s = strdup("\0");
  	       break;
 
 	   case UnicodeUtf8:
