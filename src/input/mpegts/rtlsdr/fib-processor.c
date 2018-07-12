@@ -988,7 +988,7 @@ char		label [17];
 	         for (i = 0; i < 16; i ++) {
 	            label [i] = getBits_8 (d, offset + 8 * i);
 	         }
-//	         fprintf (stderr, "Ensemblename: %16s\n", label);
+			 tvhtrace(LS_RTLSDR, "Ensemblename: %16s", label);
 	         {
 	            char *name = toStringUsingCharset (
 	                                      (const char *) label,
@@ -998,10 +998,11 @@ char		label [17];
 	               nameofEnsemble (sdr, SId, name);
 	            firstTime	= 0;
 	            sdr->fibProcessorIsSynced = 1;
-	         }
+				tvhinfo(LS_RTLSDR, "FIC in sync");
+			 }
 	      }
-//	      fprintf (stderr,
-//	               "charset %d is used for ensemblename\n", charSet);
+	      tvhtrace(LS_RTLSDR, 
+	               "charset %d is used for ensemblename", charSet);
 	      break;
 
 	   case 1:	// 16 bit Identifier field for service label 8.1.14.1
@@ -1018,7 +1019,7 @@ char		label [17];
 	                                (const char *) label,
 	                                (CharacterSet) charSet, 
 							        -1);
-//	         fprintf (stderr, "FIG1/1: SId = %4x\t%s\n", SId, label);
+			 tvhtrace(LS_RTLSDR, "FIG1/1: SId = %4x\t%s\n", SId, label);
 	         myIndex -> serviceLabel. hasName = 1;
 	      }
 	      break;
@@ -1261,6 +1262,7 @@ int16_t	firstFree	= -1;
 void	setupforNewFrame (struct sdr_state_t *sdr) {
 int16_t	i;
 	sdr->fibProcessorIsSynced = 0;
+	tvhinfo(LS_RTLSDR, "FIC out of sync");
 	for (i = 0; i < 64; i ++)
 	   ServiceComps [i]. inUse = 0;
 	
@@ -1296,4 +1298,5 @@ void	addtoEnsemble	(char *s, int32_t SId) {
 void	nameofEnsemble  (struct sdr_state_t *sdr, int id, char *s) {
 	tvhtrace(LS_RTLSDR, "name of ensemble (%d) %s", id, s);
 	sdr->fibProcessorIsSynced = 1;
+	tvhinfo(LS_RTLSDR, "FIC in sync");
 }

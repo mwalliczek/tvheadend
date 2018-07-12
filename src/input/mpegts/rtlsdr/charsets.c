@@ -59,7 +59,7 @@ uint16_t i;
 
 	switch (charset) {
 	   case UnicodeUcs2:
-		   s = 0;
+		   s = "\0";
  	       break;
 
 	   case UnicodeUtf8:
@@ -70,8 +70,9 @@ uint16_t i;
 
 	   case EbuLatin:
 		   s = malloc(length * 2);
+		   *s = '\0';
 		   for (i = 0; i < length; i++)
-			   strcat(s, utf8_encoded_EBU_Latin [s[i] & 0xff]);
+			   strcat(s, utf8_encoded_EBU_Latin [buffer[i] & 0xff]);
 	      break;
 	}
 
