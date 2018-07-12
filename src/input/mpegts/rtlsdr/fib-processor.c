@@ -1019,7 +1019,7 @@ char		label [17];
 	                                (const char *) label,
 	                                (CharacterSet) charSet, 
 							        -1);
-			 tvhtrace(LS_RTLSDR, "FIG1/1: SId = %4x\t%s\n", SId, label);
+			 tvhtrace(LS_RTLSDR, "FIG1/1: SId = %4x\t%s", SId, label);
 	         myIndex -> serviceLabel. hasName = 1;
 	      }
 	      break;

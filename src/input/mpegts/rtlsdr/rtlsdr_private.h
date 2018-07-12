@@ -48,7 +48,7 @@ struct rtlsdr_frontend
 	* Reception
 	*/
 	rtlsdr_dev_t *dev;
-	struct dab_state_t *dab;
+	struct sdr_state_t sdr;
 	pthread_t demod_thread;
 	pthread_t read_thread;
 	th_pipe_t                 lfe_dvr_pipe;
