@@ -1,3 +1,4 @@
+#include "tvheadend.h"
 #include "sdr_fifo.h"
 
 
@@ -28,8 +29,8 @@ void cbWrite(CircularBuffer *cb, uint8_t *elem) {
     cb->elems[end] = *elem;
     if (cb->count == cb->size) {
         cb->start = (cb->start + 1) % cb->size; 
-	fprintf(stderr,"fifo overflow!\n");
-    }
+	tvherror(LS_RTLSDR, "fifo overflow!");
+	}
     else
         ++ cb->count;
 }
