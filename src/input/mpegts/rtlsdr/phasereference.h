@@ -6,7 +6,7 @@
 #include "dab.h"
 
 void initPhaseReference(struct sdr_state_t *sdr);
-void destoryPhaseReference(struct sdr_state_t *sdr);
+void destroyPhaseReference(struct sdr_state_t *sdr);
 
 int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, float _Complex* v);
 int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, float _Complex* v);

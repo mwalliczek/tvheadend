@@ -251,8 +251,8 @@ uint32_t	i;
 	   if (temp > 255) temp = 255;
 	   symbols [i] = temp;
 	}
-	update_viterbi_blk_GENERIC(&vp, symbols, frameBits + (VITERBI_K - 1));
-//	update_viterbi_blk_SPIRAL (&vp, symbols, frameBits + (VITERBI_K - 1));
+//	update_viterbi_blk_GENERIC(&vp, symbols, frameBits + (VITERBI_K - 1));
+	update_viterbi_blk_SPIRAL (&vp, symbols, frameBits + (VITERBI_K - 1));
 
 	chainback_viterbi (&vp, data, frameBits, 0);
 

@@ -73,6 +73,19 @@ struct ens_info_t {
 #define DEFAULT_BUF_LENGTH (16 * 16384)
 #define GAIN_SETTLE_TIME 0
 
+struct phase_reference_t {
+	float _Complex *fftBuffer;
+	fftwf_plan plan;
+};
+
+struct ofdm_decoder_t {
+	float _Complex *fftBuffer;
+	fftwf_plan plan;
+	float _Complex phaseReference[T_u];
+	pthread_t thread;
+	th_pipe_t pipe;
+};
+
 struct sdr_state_t {
 	mpegts_mux_instance_t	*mmi;
 	uint32_t frequency;
@@ -83,11 +96,11 @@ struct sdr_state_t {
 	int32_t		localPhase;
 	float		sLevel;
 
-	float _Complex *fftBuffer;
-	fftwf_plan plan;
+	struct phase_reference_t phaseReference;
+
+	struct ofdm_decoder_t ofdmDecoder;
 
 	float		current_snr;
-	float _Complex ofdmPhaseReference[T_u];
 
 	uint8_t		bitBuffer_out[768];
 	int16_t		ofdm_input[2304];

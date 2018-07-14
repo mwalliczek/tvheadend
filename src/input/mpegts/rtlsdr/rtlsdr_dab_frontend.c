@@ -149,7 +149,9 @@ rtlsdr_frontend_stop_mux
 		rtlsdr_cancel_async(lfe->dev);
 	}
 
-	destoryPhaseReference(&lfe->sdr);
+	destroyPhaseReference(&lfe->sdr);
+	destroyOfdmDecoder(&lfe->sdr);
+	cbFree(&lfe->sdr.fifo);
 
 	/* Not locked */
 	lfe->lfe_ready = 0;

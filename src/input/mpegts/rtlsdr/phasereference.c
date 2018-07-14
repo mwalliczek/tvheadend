@@ -149,9 +149,9 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 		Phi_k = get_Phi(-i);
 		refTable[T_u - i] = cosf(Phi_k) + sinf(Phi_k) * I;
 	}
-	sdr->fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
-	memset(sdr->fftBuffer, 0, sizeof(fftwf_complex) * T_u);
-	sdr->plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->fftBuffer, (float(*)[2])sdr->fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
+	sdr->phaseReference.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
+	memset(sdr->phaseReference.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
+	sdr->phaseReference.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->phaseReference.fftBuffer, (float(*)[2])sdr->phaseReference.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
 	//
 	//      prepare a table for the coarse frequency synchronization
 	for (i = 1; i <= DIFF_LENGTH; i++) {
@@ -161,9 +161,9 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 	}
 }
 
-void destoryPhaseReference(struct sdr_state_t *sdr) {
-	fftwf_destroy_plan(sdr->plan);
-	fftwf_free(sdr->fftBuffer);
+void destroyPhaseReference(struct sdr_state_t *sdr) {
+	fftwf_destroy_plan(sdr->phaseReference.plan);
+	fftwf_free(sdr->phaseReference.fftBuffer);
 }
 
 int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, float _Complex* v) {
@@ -172,18 +172,18 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, float _Complex* v) {
 	float	sum = 0;
 	float	Max = -10000;
 
-	memcpy(sdr->fftBuffer, v, T_u * sizeof(fftwf_complex));
-	fftwf_execute(sdr->plan);
+	memcpy(sdr->phaseReference.fftBuffer, v, T_u * sizeof(fftwf_complex));
+	fftwf_execute(sdr->phaseReference.plan);
 	for (i = 0; i < T_u; i++) {
-		sdr->fftBuffer[i] *= conjf(refTable[i]);
-		sdr->fftBuffer[i] = conjf(sdr->fftBuffer[i]);
+		sdr->phaseReference.fftBuffer[i] *= conjf(refTable[i]);
+		sdr->phaseReference.fftBuffer[i] = conjf(sdr->phaseReference.fftBuffer[i]);
 	}
-	fftwf_execute(sdr->plan);
+	fftwf_execute(sdr->phaseReference.plan);
 	/**
 	*	We compute the average signal value ...
 	*/
 	for (i = 0; i < T_u; i++) {
-		float absValue = cabsf(sdr->fftBuffer[i]);
+		float absValue = cabsf(sdr->phaseReference.fftBuffer[i]);
 		sum += absValue;
 		if (absValue > Max) {
 			maxIndex = i;
@@ -205,10 +205,12 @@ int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, float _Complex* v)
 	int16_t i, j, index = 100;
 	float   computedDiffs[SEARCH_RANGE + DIFF_LENGTH + 1];
 
+	memcpy(sdr->phaseReference.fftBuffer, v, T_u * sizeof(fftwf_complex));
+	fftwf_execute(sdr->phaseReference.plan);
 	for (i = T_u - SEARCH_RANGE / 2;
 		i < T_u + SEARCH_RANGE / 2 + DIFF_LENGTH; i++) {
 		computedDiffs[i - (T_u - SEARCH_RANGE / 2)] =
-			fabsf(cargf(sdr->fftBuffer[i % T_u] * conjf(sdr->fftBuffer[(i + 1) % T_u])));
+			fabsf(cargf(sdr->phaseReference.fftBuffer[i % T_u] * conjf(sdr->phaseReference.fftBuffer[(i + 1) % T_u])));
 	}
 	float   Mmin = 1000;
 	for (i = T_u - SEARCH_RANGE / 2; i < T_u + SEARCH_RANGE / 2; i++) {
