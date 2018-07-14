@@ -15,6 +15,8 @@
 *    GNU General Public License for more details.
 *
 *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*
+*	Adapted to tvheadend by Matthias Walliczek (matthias@walliczek.de)
 */
 
 #include <string.h>

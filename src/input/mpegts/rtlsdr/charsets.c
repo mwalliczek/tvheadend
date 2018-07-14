@@ -21,6 +21,8 @@
  *
  *	This charset handling was kindly added by Przemyslaw Wegrzyn	
  *	all rights acknowledged
+ *
+ *	Adapted to tvheadend by Matthias Walliczek (matthias@walliczek.de)
  */
 #include	"charsets.h"
 #include	<stdint.h>
