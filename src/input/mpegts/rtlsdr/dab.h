@@ -72,6 +72,7 @@ struct ens_info_t {
 #define GAIN_SETTLE_TIME 0
 
 struct sdr_state_t {
+	mpegts_mux_instance_t	*mmi;
 	uint32_t frequency;
 	CircularBuffer fifo;
 
@@ -93,6 +94,8 @@ struct sdr_state_t {
 	int16_t		ficno;
 
 	int			fibProcessorIsSynced;
+	int			fibCRCtotal;
+	int			fibCRCsuccess;
 };
 
 float jan_abs(float _Complex z);

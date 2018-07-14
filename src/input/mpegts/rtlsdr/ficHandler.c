@@ -40,6 +40,8 @@ void initFicHandler(struct sdr_state_t *sdr) {
 	sdr->index = 0;
 	sdr->BitsperBlock = 2 * 1536;
 	sdr->ficno = 0;
+	sdr->fibCRCsuccess = 0;
+	sdr->fibCRCtotal = 0;
 	
 	memset(shiftRegister, 1, 9);
 
@@ -148,11 +150,18 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 	*/
 	for (i = ficno * 3; i < ficno * 3 + 3; i++) {
 		uint8_t *p = &sdr->bitBuffer_out[(i % 3) * 256];
+		if (sdr->fibCRCtotal < 100) {
+			sdr->fibCRCtotal++;
+		} else {
+			tvhdebug(LS_RTLSDR, "ficHandler crc rate %d", sdr->fibCRCsuccess);
+			sdr->fibCRCsuccess = 0;
+			sdr->fibCRCtotal = 0;
+		}
 		if (!check_CRC_bits(p, 256)) {
-			tvhtrace(LS_RTLSDR, "ficHandler checkCRC failed!");
 			continue;
 		}
-		tvhtrace(LS_RTLSDR, "ficHandler checkCRC success!");
+		tvhtrace(LS_RTLSDR, "ficHandler checkCRC success");
 		process_FIB(sdr, p, ficno);
+		sdr->fibCRCsuccess++;
 	}
 }

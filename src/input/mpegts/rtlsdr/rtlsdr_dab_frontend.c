@@ -464,13 +464,13 @@ rtlsdr_frontend_monitor(void *aux)
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
 		sdr_init(&lfe->sdr);
 		sdr = &lfe->sdr;
+		sdr->mmi = mmi;
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
 		memset(sdr, 0, sizeof(struct sdr_state_t));
 		sdr->frequency = lfe->lfe_freq;
 
 		rtlsdr_reset_buffer(lfe->dev);
-		sdr_init(sdr);
 		tvhthread_create(&lfe->demod_thread, NULL,
 			rtlsdr_demod_thread_fn, lfe, "rtlsdr-front");
 		tvhthread_create(&lfe->read_thread, NULL,
