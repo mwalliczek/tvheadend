@@ -123,7 +123,7 @@ int16_t	get_snr(float _Complex* v) {
 
 void decodeBlock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 	write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno));
-	write(sdr->ofdmDecoder.pipe.wr, v, sizeof(float _Complex) * T_u);
+	write(sdr->ofdmDecoder.pipe.wr, v, sizeof(float _Complex) * T_s);
 }
 
 void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
@@ -165,23 +165,29 @@ void decodeMscblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 static void *run_thread_fn(void *arg) {
 	struct sdr_state_t *sdr = arg;
 	int blkno;
-	float _Complex buffer[T_u];
+	float _Complex buffer[T_s];
 
 	do {
 		if (read(sdr->ofdmDecoder.pipe.rd, &blkno, sizeof(blkno)) <= 0) {
 			break;
 		}
-		if (read(sdr->ofdmDecoder.pipe.rd, buffer, sizeof(float _Complex) * T_u) <= 0) {
-			break;
-		}
 		tvhtrace(LS_RTLSDR, "run ofdm %d", blkno);
 		if (blkno == 0) {
+			if (read(sdr->ofdmDecoder.pipe.rd, buffer, sizeof(float _Complex) * T_u) <= 0) {
+				break;
+			}
 			processBlock_0_int(sdr, buffer);
 		}
 		else if (blkno < 4) {
+			if (read(sdr->ofdmDecoder.pipe.rd, buffer, sizeof(float _Complex) * T_s) <= 0) {
+				break;
+			}
 			decodeFICblock(sdr, buffer, blkno);
 		}
 		else {
+			if (read(sdr->ofdmDecoder.pipe.rd, buffer, sizeof(float _Complex) * T_s) <= 0) {
+				break;
+			}
 			decodeMscblock(sdr, buffer, blkno);
 		}
 	} while (1);
