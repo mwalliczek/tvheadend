@@ -6,6 +6,8 @@
 #include <string.h>
 #include <complex.h>
 
+#include "input.h"
+
 #include "sdr_fifo.h"
 #include "dab_constants.h"
 
