@@ -504,7 +504,7 @@ rtlsdr_frontend_monitor(void *aux)
 		sm.sm_data = &sigstat;
 
 		LIST_FOREACH(s, &mmi->mmi_mux->mm_transports, s_active_link) {
-			tvhtrace(LS_RTLSDR, "sending streaming statistics to %s", s->s_nicename)
+			tvhtrace(LS_RTLSDR, "sending streaming statistics to %s", s->s_nicename);
 			pthread_mutex_lock(&s->s_stream_mutex);
 			streaming_service_deliver(s, streaming_msg_clone(&sm));
 			pthread_mutex_unlock(&s->s_stream_mutex);
