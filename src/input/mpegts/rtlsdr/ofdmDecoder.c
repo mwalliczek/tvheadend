@@ -81,8 +81,8 @@ void destroyOfdmDecoder(struct sdr_state_t *sdr) {
 
 void processBlock_0(struct sdr_state_t *sdr, float _Complex* v) {
 	int blkno = 0;
+	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_u);
 	write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno));
-	write(sdr->ofdmDecoder.pipe.wr, v, sizeof(float _Complex) * T_u);
 }
 
 void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v) {
@@ -122,8 +122,8 @@ int16_t	get_snr(float _Complex* v) {
 }
 
 void decodeBlock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
+	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_s);
 	write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno));
-	write(sdr->ofdmDecoder.pipe.wr, v, sizeof(float _Complex) * T_s);
 }
 
 void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
@@ -165,29 +165,19 @@ void decodeMscblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 static void *run_thread_fn(void *arg) {
 	struct sdr_state_t *sdr = arg;
 	int blkno;
-	float _Complex buffer[T_s];
 
 	do {
 		if (read(sdr->ofdmDecoder.pipe.rd, &blkno, sizeof(blkno)) <= 0) {
 			break;
 		}
 		if (blkno == 0) {
-			if (read(sdr->ofdmDecoder.pipe.rd, buffer, sizeof(float _Complex) * T_u) <= 0) {
-				break;
-			}
-			processBlock_0_int(sdr, buffer);
+			processBlock_0_int(sdr, sdr->ofdmDecoder.buffer[0]);
 		}
 		else if (blkno < 4) {
-			if (read(sdr->ofdmDecoder.pipe.rd, buffer, sizeof(float _Complex) * T_s) <= 0) {
-				break;
-			}
-			decodeFICblock(sdr, buffer, blkno);
+			decodeFICblock(sdr, sdr->ofdmDecoder.buffer[blkno], blkno);
 		}
 		else {
-			if (read(sdr->ofdmDecoder.pipe.rd, buffer, sizeof(float _Complex) * T_s) <= 0) {
-				break;
-			}
-			decodeMscblock(sdr, buffer, blkno);
+			decodeMscblock(sdr, sdr->ofdmDecoder.buffer[blkno], blkno);
 		}
 	} while (1);
 

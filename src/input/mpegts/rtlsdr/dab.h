@@ -84,6 +84,7 @@ struct ofdm_decoder_t {
 	float _Complex phaseReference[T_u];
 	pthread_t thread;
 	th_pipe_t pipe;
+	float _Complex buffer[L][T_s];
 };
 
 struct sdr_state_t {
