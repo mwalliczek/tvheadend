@@ -53,6 +53,7 @@ struct rtlsdr_frontend
 	pthread_t read_thread;
 	th_pipe_t                 lfe_dvr_pipe;
 	th_pipe_t                 lfe_control_pipe;
+	int running;
 
 	/*
 	* Tuning

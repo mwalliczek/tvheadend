@@ -142,6 +142,7 @@ rtlsdr_frontend_stop_mux
 	/* Stop thread */
 	if (lfe->lfe_dvr_pipe.wr > 0) {
 		tvh_write(lfe->lfe_dvr_pipe.wr, "", 1);
+		lfe->running = 0;
 		tvhtrace(LS_RTLSDR, "%s - waiting for dvr thread", buf1);
 		pthread_join(lfe->demod_thread, NULL);
 		tvh_pipe_close(&lfe->lfe_dvr_pipe);
@@ -228,7 +229,7 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 	if (!ctx) {
 		return;
 	}
-	if (lfe->lfe_dvr_pipe.wr <= 0) {
+	if (lfe->lfe_dvr_pipe.wr <= 0 || !lfe->running) {
 		return;
 	}
 	/* write input data into fifo */
@@ -265,7 +266,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		return 0;
 	}
 	tvhtrace(LS_RTLSDR, "started, sLevel: %.6f", sdr->sLevel);
-	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0) {
+	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0 && lfe->running) {
 		//      As long as we are not (time) synced, we try to handle that
 		if (!sdr->isSynced) {
 			syncBufferIndex = 0;
@@ -466,6 +467,8 @@ rtlsdr_frontend_monitor(void *aux)
 
 	/* Waiting for lock */
 	if (lfe->lfe_dvr_pipe.wr <= 0) {
+
+		lfe->running = 1;
 		/* Start input */
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
 		sdr = &lfe->sdr;
