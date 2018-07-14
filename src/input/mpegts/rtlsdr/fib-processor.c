@@ -100,18 +100,18 @@
    serviceComponent *find_packetComponent(int16_t);
    serviceComponent *find_serviceComponent(int32_t SId, int16_t SCId);
    serviceId	*findServiceIdByName(char *);
-   void            bind_audioService(int8_t,
+   void            bind_audioService(mpegts_mux_t *mm, int8_t,
 	   uint32_t, int16_t,
 	   int16_t, int16_t, int16_t);
    void            bind_packetService(int8_t,
 	   uint32_t, int16_t,
 	   int16_t, int16_t, int16_t);
-   void		process_FIG0(uint8_t *);
+   void		process_FIG0(mpegts_mux_t *mm, uint8_t *);
    void		process_FIG1(struct sdr_state_t *sdr, uint8_t *);
    void		FIG0Extension0(uint8_t *);
    void		FIG0Extension1(uint8_t *);
-   void		FIG0Extension2(uint8_t *);
-   void		FIG0Extension3(uint8_t *);
+   void		FIG0Extension2(mpegts_mux_t *mm, uint8_t *);
+   void		FIG0Extension3(mpegts_mux_t *mm, uint8_t *);
    void		FIG0Extension4(uint8_t *);
    void		FIG0Extension5(uint8_t *);
    void		FIG0Extension6(uint8_t *);
@@ -138,9 +138,9 @@
 
    int16_t		HandleFIG0Extension1(uint8_t *,
 	   int16_t, uint8_t);
-   int16_t		HandleFIG0Extension2(uint8_t *,
+   int16_t		HandleFIG0Extension2(mpegts_mux_t *mm, uint8_t *,
 	   int16_t, uint8_t, uint8_t);
-   int16_t		HandleFIG0Extension3(uint8_t *, int16_t);
+   int16_t		HandleFIG0Extension3(mpegts_mux_t *mm, uint8_t *, int16_t);
    int16_t		HandleFIG0Extension5(uint8_t *, int16_t);
    int16_t		HandleFIG0Extension8(uint8_t *,
 	   int16_t, uint8_t);
@@ -148,7 +148,7 @@
 	   int16_t, uint8_t);
    int16_t		HandleFIG0Extension22(uint8_t *, int16_t);
 
-   void	addtoEnsemble(char *s, int32_t SId);
+   void	addtoEnsemble(mpegts_mux_t *mm, char *s, int32_t SId);
    void	nameofEnsemble(struct sdr_state_t *sdr, int id, char *s);
 
    int32_t		dateTime[8];
@@ -175,7 +175,7 @@ uint8_t	*d		= p;
 	   FIGtype 		= getBits_3 (d, 0);
 	   switch (FIGtype) {
 	      case 0:
-	         process_FIG0 (d);	
+	         process_FIG0 (sdr->mmi->mmi_mux, d);	
 	         break;
 
 	      case 1:
@@ -200,7 +200,7 @@ uint8_t	*d		= p;
 //
 //	Handle ensemble is all through FIG0
 //
-void	process_FIG0 (uint8_t *d) {
+void	process_FIG0 (mpegts_mux_t *mm, uint8_t *d) {
 uint8_t	extension	= getBits_5 (d, 8 + 3);
 //uint8_t	CN	= getBits_1 (d, 8 + 0);
 
@@ -214,11 +214,11 @@ uint8_t	extension	= getBits_5 (d, 8 + 3);
 	      break;
 
 	   case 2:
-	      FIG0Extension2 (d);
+	      FIG0Extension2 (mm, d);
 	      break;
 
 	   case 3:
-	      FIG0Extension3 (d);
+	      FIG0Extension3 (mm, d);
 	      break;
 
 	   case 4:
@@ -439,19 +439,19 @@ int16_t	option, protLevel, subChanSize;
 //
 //	Service organization, 6.3.1
 //	bind channels to serviceIds
-void	FIG0Extension2 (uint8_t *d) {
+void	FIG0Extension2 (mpegts_mux_t *mm, uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 uint8_t	CN	= getBits_1 (d, 8 + 0);
 
 	while (used < Length) {
-	   used = HandleFIG0Extension2 (d, used, CN, PD_bit);
+	   used = HandleFIG0Extension2 (mm, d, used, CN, PD_bit);
 	}
 }
 //
 //	Note Offset is in bytes
-int16_t	HandleFIG0Extension2 (uint8_t *d,
+int16_t	HandleFIG0Extension2 (mpegts_mux_t *mm, uint8_t *d,
 	                                     int16_t offset,
 	                                     uint8_t cn,
 	                                     uint8_t pd) {
@@ -484,7 +484,7 @@ int16_t		numberofComponents;
 	      uint8_t	ASCTy	= getBits_6 (d, lOffset + 2);
 	      uint8_t	SubChId	= getBits_6 (d, lOffset + 8);
 	      uint8_t	PS_flag	= getBits_1 (d, lOffset + 14);
-	      bind_audioService (TMid, SId, i, SubChId, PS_flag, ASCTy);
+	      bind_audioService (mm, TMid, SId, i, SubChId, PS_flag, ASCTy);
 	   }
 	   else
 	   if (TMid == 3) { // MSC packet data
@@ -505,17 +505,17 @@ int16_t		numberofComponents;
 //      additional information about the service component
 //      description in packet mode.
 //      manual: page 55
-void	FIG0Extension3 (uint8_t *d) {
+void	FIG0Extension3 (mpegts_mux_t *mm, uint8_t *d) {
 int16_t	used	= 2;
 int16_t	Length	= getBits_5 (d, 3);
 
 	while (used < Length)
-	   used = HandleFIG0Extension3 (d, used);
+	   used = HandleFIG0Extension3 (mm, d, used);
 }
 
 //
 //      DSCTy   DataService Component Type
-int16_t HandleFIG0Extension3 (uint8_t *d, int16_t used) {
+int16_t HandleFIG0Extension3 (mpegts_mux_t *mm, uint8_t *d, int16_t used) {
 int16_t	SCId            = getBits (d, used * 8, 12);
 int16_t CAOrgflag       = getBits_1 (d, used * 8 + 15);
 int16_t DGflag          = getBits_1 (d, used * 8 + 16);
@@ -557,7 +557,7 @@ serviceId	 *service;
 	service = packetComp -> service;
         char * serviceName = service -> serviceLabel. label;
         if (packetComp -> componentNr == 0)     // otherwise sub component
-           addtoEnsemble (serviceName, service -> serviceId);
+           addtoEnsemble (mm, serviceName, service -> serviceId);
 
         packetComp      -> is_madePublic = 1;
         packetComp      -> subchannelId = SubChId;
@@ -1067,12 +1067,8 @@ char		label [17];
                                toStringUsingCharset (
                                          (const char *) label,
                                          (CharacterSet) charSet, -1);
-	         myIndex -> serviceLabel. label =
-                               toStringUsingCharset (
-	                                 " (data)",
-                                         (CharacterSet) charSet, -1);
                  myIndex -> serviceLabel. hasName = 1;
-	         addtoEnsemble (myIndex -> serviceLabel. label, SId);
+		         addtoEnsemble (sdr->mmi->mmi_mux, myIndex -> serviceLabel. label, SId);
               }
 	      break;
 
@@ -1182,7 +1178,7 @@ int16_t i;
 
 //	bind_audioService is the main processor for - what the name suggests -
 //	connecting the description of audioservices to a SID
-void	bind_audioService (int8_t TMid,
+void	bind_audioService (mpegts_mux_t *mm, int8_t TMid,
 	                                  uint32_t SId,
 	                                  int16_t compnr,
 	                                  int16_t SubChId,
@@ -1210,7 +1206,7 @@ int16_t	firstFree	= -1;
 	}
 
 	char *dataName = s -> serviceLabel. label;
-        addtoEnsemble (dataName, s -> serviceId);
+        addtoEnsemble (mm, dataName, s -> serviceId);
 
 	ServiceComps [firstFree]. inUse		= 1;
 	ServiceComps [firstFree]. TMid		= TMid;
@@ -1291,8 +1287,16 @@ int16_t i;
 //	and now for the would-be signals
 //	Note that the main program may decide to execute calls
 //	in the fib structures, so release the lock
-void	addtoEnsemble	(char *s, int32_t SId) {
+void	addtoEnsemble	(mpegts_mux_t *mm, char *s, int32_t SId) {
+	mpegts_service_t *service;
+
 	tvhtrace(LS_RTLSDR, "add to ensemble (%d) %s", SId, s);
+	int save = 0;
+	service = mpegts_service_find(mm, SId, 0, 1, &save);
+	tvh_str_set(&service->s_dvb_svcname, s);
+	if (save)
+		idnode_changed(&service->s_id);
+	service_refresh_channel((service_t*)service);
 }
 
 void	nameofEnsemble  (struct sdr_state_t *sdr, int id, char *s) {
