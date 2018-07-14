@@ -155,7 +155,7 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 		if (sdr->fibCRCtotal < 100) {
 			sdr->fibCRCtotal++;
 		} else {
-			tvhdebug(LS_RTLSDR, "ficHandler crc rate %d", sdr->fibCRCsuccess);
+			tvhdebug(LS_RTLSDR, "ficHandler crc rate %d", sdr->fibCRCsuccess - 1);
 			sdr->fibCRCsuccess = 0;
 			sdr->fibCRCtotal = 0;
 		}

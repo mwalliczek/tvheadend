@@ -101,8 +101,6 @@ struct sdr_state_t {
 
 	struct ofdm_decoder_t ofdmDecoder;
 
-	float		current_snr;
-
 	uint8_t		bitBuffer_out[768];
 	int16_t		ofdm_input[2304];
 	int16_t		index;

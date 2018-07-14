@@ -368,7 +368,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		getSamples(lfe, &ofdmBuffer[ofdmBufferIndex],
 			T_u - ofdmBufferIndex, coarseCorrector + fineCorrector);
 		processBlock_0(sdr, ofdmBuffer);
-		tvhtrace(LS_RTLSDR, "snr: %.6f", sdr->current_snr);
+		tvhtrace(LS_RTLSDR, "snr: %d", sdr->mmi->tii_stats.snr);
 
 		//
 		//	Here we look only at the block_0 when we need a coarse
@@ -437,6 +437,9 @@ rtlsdr_frontend_monitor(void *aux)
 //	service_t *s;
 	uint32_t period = MINMAX(lfe->lfe_status_period, 250, 8000);
 	struct sdr_state_t *sdr;
+	signal_status_t sigstat;
+	streaming_message_t sm;
+	service_t *s;
 
 	lfe->mi_display_name((mpegts_input_t*)lfe, buf, sizeof(buf));
 	tvhtrace(LS_RTLSDR, "%s - checking FE status%s", buf, lfe->lfe_ready ? " (ready)" : "");
@@ -468,6 +471,7 @@ rtlsdr_frontend_monitor(void *aux)
 		memset(sdr, 0, sizeof(struct sdr_state_t));
 		sdr_init(sdr);
 		sdr->mmi = mmi;
+		sdr->mmi->tii_stats.snr_scale = SIGNAL_STATUS_SCALE_DECIBEL
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
 		sdr->frequency = lfe->lfe_freq;
@@ -481,6 +485,28 @@ rtlsdr_frontend_monitor(void *aux)
 	} else  {
 		lfe->lfe_locked = lfe->sdr.fibProcessorIsSynced;
 		lfe->lfe_status = lfe->sdr.isSynced ? SIGNAL_GOOD : SIGNAL_NONE;
+
+		/* Send message */
+		sigstat.status_text = signal2str(lfe->lfe_status);
+		sigstat.snr = mmi->tii_stats.snr;
+/*		sigstat.signal = mmi->tii_stats.signal;
+		sigstat.ber = mmi->tii_stats.ber;
+		sigstat.unc = atomic_get(&mmi->tii_stats.unc);
+		sigstat.signal_scale = mmi->tii_stats.signal_scale;*/
+		sigstat.snr_scale = mmi->tii_stats.snr_scale;
+/*		sigstat.ec_bit = mmi->tii_stats.ec_bit;
+		sigstat.tc_bit = mmi->tii_stats.tc_bit;
+		sigstat.ec_block = mmi->tii_stats.ec_block;
+		sigstat.tc_block = mmi->tii_stats.tc_block; */
+		memset(&sm, 0, sizeof(sm));
+		sm.sm_type = SMT_SIGNAL_STATUS;
+		sm.sm_data = &sigstat;
+
+		LIST_FOREACH(s, &mmi->mmi_mux->mm_transports, s_active_link) {
+			pthread_mutex_lock(&s->s_stream_mutex);
+			streaming_service_deliver(s, streaming_msg_clone(&sm));
+			pthread_mutex_unlock(&s->s_stream_mutex);
+		}
 	}
 }
 
