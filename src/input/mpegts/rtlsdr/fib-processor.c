@@ -1294,6 +1294,7 @@ void	addtoEnsemble	(mpegts_mux_t *mm, char *s, int32_t SId) {
 	int save = 0;
 	service = mpegts_service_find(mm, SId, 0, 1, &save);
 	tvh_str_set(&service->s_dvb_svcname, s);
+	service->s_servicetype = ST_RADIO;
 	if (save)
 		idnode_changed(&service->s_id);
 	service_refresh_channel((service_t*)service);
@@ -1301,6 +1302,10 @@ void	addtoEnsemble	(mpegts_mux_t *mm, char *s, int32_t SId) {
 
 void	nameofEnsemble  (struct sdr_state_t *sdr, int id, char *s) {
 	tvhtrace(LS_RTLSDR, "name of ensemble (%d) %s", id, s);
+
+	if (mpegts_mux_set_network_name(sdr->mmi->mmi_mux, s))
+		idnode_changed(&sdr->mmi->mmi_mux->mm_id);
+
 	sdr->fibProcessorIsSynced = 1;
 	tvhinfo(LS_RTLSDR, "FIC in sync");
 }
