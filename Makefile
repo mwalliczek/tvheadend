@@ -433,7 +433,6 @@ I18N-C += $(SRCS-LINUXDVB)
 # RTLSDR
 SRCS-RTLSDR = \
     src/input/mpegts/rtlsdr/dab_tables.c \
-    src/input/mpegts/rtlsdr/depuncture.c \
     src/input/mpegts/rtlsdr/phasereference.c \
     src/input/mpegts/rtlsdr/input_sdr.c \
     src/input/mpegts/rtlsdr/sdr_fifo.c \
