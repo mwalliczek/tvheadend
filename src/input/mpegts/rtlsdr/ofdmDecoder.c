@@ -44,7 +44,7 @@ static void *run_thread_fn(void *arg);
 void initOfdmDecoder(struct sdr_state_t *sdr) {
 	int16_t tmp[T_u];
 
-	sdr->current_snr = 0;
+	sdr->mmi->tii_stats.snr = 0;
 
 	sdr->ofdmDecoder.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
 	memset(sdr->ofdmDecoder.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
@@ -93,7 +93,7 @@ void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v) {
 	*	within the signal region and bits outside.
 	*	It is just an indication
 	*/
-	sdr->mmi->tii_stats.snr = 0.7 * sdr->current_snr + 0.3 * get_snr(sdr->ofdmDecoder.fftBuffer);
+	sdr->mmi->tii_stats.snr = 0.7 * sdr->mmi->tii_stats.snr + 0.3 * get_snr(sdr->ofdmDecoder.fftBuffer);
 	/**
 	*	we are now in the frequency domain, and we keep the carriers
 	*	as coming from the FFT as phase reference.

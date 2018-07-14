@@ -471,7 +471,7 @@ rtlsdr_frontend_monitor(void *aux)
 		memset(sdr, 0, sizeof(struct sdr_state_t));
 		sdr_init(sdr);
 		sdr->mmi = mmi;
-		sdr->mmi->tii_stats.snr_scale = SIGNAL_STATUS_SCALE_DECIBEL
+		sdr->mmi->tii_stats.snr_scale = SIGNAL_STATUS_SCALE_DECIBEL;
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
 		sdr->frequency = lfe->lfe_freq;
