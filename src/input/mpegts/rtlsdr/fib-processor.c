@@ -1310,6 +1310,7 @@ void	nameofEnsemble  (struct sdr_state_t *sdr, int id, char *s) {
 
 	pthread_mutex_lock(&global_lock);
 
+	sdr->mmi->mmi_mux->mm_tsid = id;
 	if (mpegts_mux_set_network_name(sdr->mmi->mmi_mux, s))
 		idnode_changed(&sdr->mmi->mmi_mux->mm_id);
 

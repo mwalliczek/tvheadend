@@ -437,6 +437,7 @@ rtlsdr_frontend_monitor(void *aux)
 //	service_t *s;
 	uint32_t period = MINMAX(lfe->lfe_status_period, 250, 8000);
 	struct sdr_state_t *sdr;
+	signal_state_t status;
 	signal_status_t sigstat;
 	streaming_message_t sm;
 	service_t *s;
@@ -484,10 +485,10 @@ rtlsdr_frontend_monitor(void *aux)
 
 	} else  {
 		lfe->lfe_locked = lfe->sdr.fibProcessorIsSynced;
-		lfe->lfe_status = lfe->sdr.isSynced ? SIGNAL_GOOD : SIGNAL_NONE;
+		status = lfe->sdr.isSynced ? SIGNAL_GOOD : SIGNAL_NONE;
 
 		/* Send message */
-		sigstat.status_text = signal2str(lfe->lfe_status);
+		sigstat.status_text = signal2str(status);
 		sigstat.snr = mmi->tii_stats.snr;
 /*		sigstat.signal = mmi->tii_stats.signal;
 		sigstat.ber = mmi->tii_stats.ber;
@@ -503,6 +504,7 @@ rtlsdr_frontend_monitor(void *aux)
 		sm.sm_data = &sigstat;
 
 		LIST_FOREACH(s, &mmi->mmi_mux->mm_transports, s_active_link) {
+			tvhtrace(LS_RTLSDR, "sending streaming statistics to %s", s->s_nicename)
 			pthread_mutex_lock(&s->s_stream_mutex);
 			streaming_service_deliver(s, streaming_msg_clone(&sm));
 			pthread_mutex_unlock(&s->s_stream_mutex);
