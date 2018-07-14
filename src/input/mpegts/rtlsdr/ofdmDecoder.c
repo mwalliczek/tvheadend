@@ -185,4 +185,5 @@ static void *run_thread_fn(void *arg) {
 		}
 	} while (1);
 
+	return 0;
 }
