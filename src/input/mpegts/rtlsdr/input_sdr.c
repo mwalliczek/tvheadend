@@ -155,6 +155,9 @@ void sdr_init(struct sdr_state_t *sdr)
   initOfdmDecoder(sdr);
   initFicHandler(sdr);
 
+  sdr->sLevel = 0;
+  sdr->localPhase = 0;
+
   for (i = 0; i < INPUT_RATE; i++) {
 	  oscillatorTable[i] = cosf(2.0 * M_PI * i / INPUT_RATE) + sinf(2.0 * M_PI * i / INPUT_RATE) * I;
   }
