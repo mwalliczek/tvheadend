@@ -462,12 +462,12 @@ rtlsdr_frontend_monitor(void *aux)
 	if (lfe->lfe_dvr_pipe.wr <= 0) {
 		/* Start input */
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
-		sdr_init(&lfe->sdr);
 		sdr = &lfe->sdr;
+		memset(sdr, 0, sizeof(struct sdr_state_t));
+		sdr_init(sdr);
 		sdr->mmi = mmi;
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
-		memset(sdr, 0, sizeof(struct sdr_state_t));
 		sdr->frequency = lfe->lfe_freq;
 
 		rtlsdr_reset_buffer(lfe->dev);
