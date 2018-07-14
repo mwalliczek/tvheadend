@@ -174,6 +174,7 @@ static void *run_thread_fn(void *arg) {
 		if (read(sdr->ofdmDecoder.pipe.rd, buffer, sizeof(float _Complex) * T_u) <= 0) {
 			break;
 		}
+		tvhtrace(LS_RTLSDR, "run ofdm %d", blkno);
 		if (blkno == 0) {
 			processBlock_0_int(sdr, buffer);
 		}
