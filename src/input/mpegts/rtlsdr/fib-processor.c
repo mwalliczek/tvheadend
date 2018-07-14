@@ -1291,6 +1291,9 @@ void	addtoEnsemble	(mpegts_mux_t *mm, char *s, int32_t SId) {
 	mpegts_service_t *service;
 
 	tvhtrace(LS_RTLSDR, "add to ensemble (%d) %s", SId, s);
+
+	pthread_mutex_lock(&global_lock);
+
 	int save = 0;
 	service = mpegts_service_find(mm, SId, 0, 1, &save);
 	tvh_str_set(&service->s_dvb_svcname, s);
@@ -1298,13 +1301,19 @@ void	addtoEnsemble	(mpegts_mux_t *mm, char *s, int32_t SId) {
 	if (save)
 		idnode_changed(&service->s_id);
 	service_refresh_channel((service_t*)service);
+
+	pthread_mutex_unlock(&global_lock);
 }
 
 void	nameofEnsemble  (struct sdr_state_t *sdr, int id, char *s) {
 	tvhtrace(LS_RTLSDR, "name of ensemble (%d) %s", id, s);
 
+	pthread_mutex_lock(&global_lock);
+
 	if (mpegts_mux_set_network_name(sdr->mmi->mmi_mux, s))
 		idnode_changed(&sdr->mmi->mmi_mux->mm_id);
+
+	pthread_mutex_unlock(&global_lock);
 
 	sdr->fibProcessorIsSynced = 1;
 	tvhinfo(LS_RTLSDR, "FIC in sync");
