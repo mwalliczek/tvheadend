@@ -1187,6 +1187,8 @@ void	bind_audioService (mpegts_mux_t *mm, int8_t TMid,
 serviceId *s	= findServiceId	(SId);
 int16_t	i;
 int16_t	firstFree	= -1;
+mpegts_service_t *m_service;
+int save = 0;
 
 	if (!s -> serviceLabel. hasName)
 	   return;
@@ -1205,8 +1207,22 @@ int16_t	firstFree	= -1;
 	      return;
 	}
 
-	char *dataName = s -> serviceLabel. label;
-	addtoEnsemble (mm, dataName, s);
+	tvhtrace(LS_RTLSDR, "add to ensemble (%d) %s", s->serviceId, s->serviceLabel.label);
+
+	pthread_mutex_lock(&global_lock);
+
+	m_service = mpegts_service_find(mm, s->serviceId, 0, 1, &save);
+	/*	mpegts_table_add(mm, DVB_PMT_BASE, DVB_PMT_MASK, dvb_pmt_callback,
+	NULL, "pmt", LS_TBL_BASE,
+	MT_CRC | MT_QUICKREQ | MT_ONESHOT | MT_SCANSUBS,
+	service->pNum, MPS_WEIGHT_PMT_SCAN); */
+	tvh_str_set(&m_service->s_dvb_svcname, s->serviceLabel.label);
+	m_service->s_servicetype = ST_RADIO;
+	mpegts_network_bouquet_trigger(mm->mm_network, 0);
+	idnode_changed(&m_service->s_id);
+	service_refresh_channel((service_t*)m_service);
+
+	pthread_mutex_unlock(&global_lock);
 
 	ServiceComps [firstFree]. inUse		= 1;
 	ServiceComps [firstFree]. TMid		= TMid;
@@ -1281,32 +1297,6 @@ int16_t i;
 	   subChannels [i]. inUse	= 0;
 	}
 	firstTime	= 1;
-}
-
-//
-//	and now for the would-be signals
-//	Note that the main program may decide to execute calls
-//	in the fib structures, so release the lock
-void	addtoEnsemble	(mpegts_mux_t *mm, char *s, serviceId *service) {
-	mpegts_service_t *m_service;
-
-	tvhtrace(LS_RTLSDR, "add to ensemble (%d) (%d) %s", service->serviceId, service->pNum, s);
-
-	pthread_mutex_lock(&global_lock);
-
-	int save = 0;
-	m_service = mpegts_service_find(mm, service->serviceId, service->pNum, 1, &save);
-/*	mpegts_table_add(mm, DVB_PMT_BASE, DVB_PMT_MASK, dvb_pmt_callback,
-		NULL, "pmt", LS_TBL_BASE,
-		MT_CRC | MT_QUICKREQ | MT_ONESHOT | MT_SCANSUBS,
-		service->pNum, MPS_WEIGHT_PMT_SCAN); */
-	tvh_str_set(&m_service->s_dvb_svcname, s);
-	m_service->s_servicetype = ST_RADIO;
-	mpegts_network_bouquet_trigger(mm->mm_network, 0);
-	idnode_changed(&m_service->s_id);
-	service_refresh_channel((service_t*)m_service);
-
-	pthread_mutex_unlock(&global_lock);
 }
 
 void	nameofEnsemble  (struct sdr_state_t *sdr, int id, char *s) {
