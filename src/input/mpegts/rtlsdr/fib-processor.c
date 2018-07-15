@@ -1298,8 +1298,8 @@ void	addtoEnsemble	(mpegts_mux_t *mm, char *s, int32_t SId) {
 	service = mpegts_service_find(mm, SId, 0, 1, &save);
 	tvh_str_set(&service->s_dvb_svcname, s);
 	service->s_servicetype = ST_RADIO;
-	if (save)
-		idnode_changed(&service->s_id);
+	mpegts_network_bouquet_trigger(mm->mm_network, 0);
+	idnode_changed(&service->s_id);
 	service_refresh_channel((service_t*)service);
 
 	pthread_mutex_unlock(&global_lock);
