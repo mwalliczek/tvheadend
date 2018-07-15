@@ -525,7 +525,7 @@ int16_t packetAddress   = getBits (d, used * 8 + 30, 10);
 uint16_t CAOrg;
 
 serviceComponent *packetComp = find_packetComponent (SCId);
-serviceId	 *service;
+//serviceId	 *service;
 
 	if (CAOrgflag == 1) {
 	   CAOrg = getBits (d, used * 8 + 40, 16);
@@ -1296,10 +1296,10 @@ void	addtoEnsemble	(mpegts_mux_t *mm, char *s, serviceId *service) {
 
 	int save = 0;
 	m_service = mpegts_service_find(mm, service->serviceId, service->pNum, 1, &save);
-	mpegts_table_add(mm, DVB_PMT_BASE, DVB_PMT_MASK, dvb_pmt_callback,
+/*	mpegts_table_add(mm, DVB_PMT_BASE, DVB_PMT_MASK, dvb_pmt_callback,
 		NULL, "pmt", LS_TBL_BASE,
 		MT_CRC | MT_QUICKREQ | MT_ONESHOT | MT_SCANSUBS,
-		service->pNum, MPS_WEIGHT_PMT_SCAN);
+		service->pNum, MPS_WEIGHT_PMT_SCAN); */
 	tvh_str_set(&m_service->s_dvb_svcname, s);
 	m_service->s_servicetype = ST_RADIO;
 	mpegts_network_bouquet_trigger(mm->mm_network, 0);
