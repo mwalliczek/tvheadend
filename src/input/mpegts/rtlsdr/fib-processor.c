@@ -1218,6 +1218,7 @@ int save = 0;
 	service->pNum, MPS_WEIGHT_PMT_SCAN); */
 	tvh_str_set(&m_service->s_dvb_svcname, s->serviceLabel.label);
 	m_service->s_servicetype = ST_RADIO;
+	m_service->s_verified = 1;
 	mpegts_network_bouquet_trigger(mm->mm_network, 0);
 	idnode_changed(&m_service->s_id);
 	service_refresh_channel((service_t*)m_service);
