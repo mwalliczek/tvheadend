@@ -93,7 +93,7 @@ void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v) {
 	*	within the signal region and bits outside.
 	*	It is just an indication
 	*/
-	sdr->mmi->tii_stats.snr = 0.7 * sdr->mmi->tii_stats.snr + 0.3 * get_snr(sdr->ofdmDecoder.fftBuffer);
+	sdr->mmi->tii_stats.snr = 10000.0 * (0.7 * sdr->mmi->tii_stats.snr + 0.3 * get_snr(sdr->ofdmDecoder.fftBuffer));
 	/**
 	*	we are now in the frequency domain, and we keep the carriers
 	*	as coming from the FFT as phase reference.

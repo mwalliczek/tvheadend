@@ -372,7 +372,7 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			return 0;
 		}
 		processBlock_0(sdr, ofdmBuffer);
-		tvhtrace(LS_RTLSDR, "snr: %d", sdr->mmi->tii_stats.snr);
+		tvhtrace(LS_RTLSDR, "snr: %.6f", sdr->mmi->tii_stats.snr / 10000.0);
 
 		//
 		//	Here we look only at the block_0 when we need a coarse
@@ -485,6 +485,7 @@ rtlsdr_frontend_monitor(void *aux)
 		sdr->mmi = mmi;
 		sdr_init(sdr);
 		sdr->mmi->tii_stats.snr_scale = SIGNAL_STATUS_SCALE_DECIBEL;
+		sdr->mmi->tii_stats.signal_scale = SIGNAL_STATUS_SCALE_RELATIVE;
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
 
 		sdr->frequency = lfe->lfe_freq;
@@ -499,13 +500,15 @@ rtlsdr_frontend_monitor(void *aux)
 		lfe->lfe_locked = lfe->sdr.fibProcessorIsSynced;
 		status = lfe->sdr.isSynced ? SIGNAL_GOOD : SIGNAL_NONE;
 
+		mmi->tii_stats.signal = lfe->sdr.sLevel * 32768.0;
+
 		/* Send message */
 		sigstat.status_text = signal2str(status);
 		sigstat.snr = mmi->tii_stats.snr;
-/*		sigstat.signal = mmi->tii_stats.signal;
-		sigstat.ber = mmi->tii_stats.ber;
-		sigstat.unc = atomic_get(&mmi->tii_stats.unc);
-		sigstat.signal_scale = mmi->tii_stats.signal_scale;*/
+		sigstat.signal = mmi->tii_stats.signal;
+/*		sigstat.ber = mmi->tii_stats.ber;
+		sigstat.unc = atomic_get(&mmi->tii_stats.unc);*/
+		sigstat.signal_scale = mmi->tii_stats.signal_scale;
 		sigstat.snr_scale = mmi->tii_stats.snr_scale;
 /*		sigstat.ec_bit = mmi->tii_stats.ec_bit;
 		sigstat.tc_bit = mmi->tii_stats.tc_bit;
