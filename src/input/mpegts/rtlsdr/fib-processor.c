@@ -1205,7 +1205,7 @@ int16_t	firstFree	= -1;
 	      return;
 	}
 
-	char *dataName = s -> serviceLabel. label;
+//	char *dataName = s -> serviceLabel. label;
 //        addtoEnsemble (mm, dataName, s -> serviceId);
 
 	ServiceComps [firstFree]. inUse		= 1;
