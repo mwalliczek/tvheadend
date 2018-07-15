@@ -554,10 +554,10 @@ serviceId	 *service;
         if (DSCTy == 0)
            return used;
 
-	service = packetComp -> service;
+/*	service = packetComp -> service;
         char * serviceName = service -> serviceLabel. label;
         if (packetComp -> componentNr == 0)     // otherwise sub component
-           addtoEnsemble (mm, serviceName, service);
+           addtoEnsemble (mm, serviceName, service);*/
 
         packetComp      -> is_madePublic = 1;
         packetComp      -> subchannelId = SubChId;
@@ -1068,7 +1068,7 @@ char		label [17];
                                          (const char *) label,
                                          (CharacterSet) charSet, -1);
                  myIndex -> serviceLabel. hasName = 1;
-		         addtoEnsemble (sdr->mmi->mmi_mux, myIndex -> serviceLabel. label, myIndex);
+//		         addtoEnsemble (sdr->mmi->mmi_mux, myIndex -> serviceLabel. label, myIndex);
               }
 	      break;
 
@@ -1205,8 +1205,8 @@ int16_t	firstFree	= -1;
 	      return;
 	}
 
-//	char *dataName = s -> serviceLabel. label;
-//        addtoEnsemble (mm, dataName, s -> serviceId);
+	char *dataName = s -> serviceLabel. label;
+	addtoEnsemble (mm, dataName, s);
 
 	ServiceComps [firstFree]. inUse		= 1;
 	ServiceComps [firstFree]. TMid		= TMid;

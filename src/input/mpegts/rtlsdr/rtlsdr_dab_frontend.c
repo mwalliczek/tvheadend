@@ -366,8 +366,11 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		//	and its content is used as a reference for decoding the
 		//	first datablock.
 		//	We read the missing samples in the ofdm buffer
-		getSamples(lfe, &ofdmBuffer[ofdmBufferIndex],
-			T_u - ofdmBufferIndex, coarseCorrector + fineCorrector);
+		if (getSamples(lfe, &ofdmBuffer[ofdmBufferIndex],
+			T_u - ofdmBufferIndex, coarseCorrector + fineCorrector) < T_u - ofdmBufferIndex) {
+			tvherror(LS_RTLSDR, "getSamples failed");
+			return 0;
+		}
 		processBlock_0(sdr, ofdmBuffer);
 		tvhtrace(LS_RTLSDR, "snr: %d", sdr->mmi->tii_stats.snr);
 
@@ -393,7 +396,10 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		FreqCorr = 0.0 + 0.0 * I;
 		for (ofdmSymbolCount = 1;
 			ofdmSymbolCount < (uint16_t)L; ofdmSymbolCount++) {
-			getSamples(lfe, ofdmBuffer, T_s, coarseCorrector + fineCorrector);
+			if (getSamples(lfe, ofdmBuffer, T_s, coarseCorrector + fineCorrector) < T_s) {
+				tvherror(LS_RTLSDR, "getSamples failed");
+				return 0;
+			}
 			for (i = (int)T_u; i < (int)T_s; i++) {
 				FreqCorr += ofdmBuffer[i] * conjf(ofdmBuffer[i - T_u]);
 			}
@@ -406,7 +412,10 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 		fineCorrector += 0.1 * cargf(FreqCorr) / M_PI * carrierDiff;
 
 		//	at the end of the frame, just skip Tnull samples
-		getSamples(lfe, ofdmBuffer, T_null, coarseCorrector + fineCorrector);
+		if (getSamples(lfe, ofdmBuffer, T_null, coarseCorrector + fineCorrector) < T_null) {
+			tvherror(LS_RTLSDR, "getSamples failed");
+			return 0;
+		}
 		if (fineCorrector > carrierDiff / 2) {
 			coarseCorrector += carrierDiff;
 			fineCorrector -= carrierDiff;
