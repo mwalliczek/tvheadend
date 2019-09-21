@@ -26,6 +26,7 @@ OPTIONS=(
   "constcw:yes"
   "linuxdvb:yes"
   "rtlsdr:yes"
+  "neon:auto"
   "satip_server:yes"
   "satip_client:yes"
   "hdhomerun_client:no"
@@ -412,6 +413,22 @@ if enabled_or_auto rtlsdr; then
     LDFLAGS="$LDFLAGS -lrtlsdr"
   elif enabled rtlsdr; then
     die "rtl-sdr.h not found (use --disable-rtlsdr)"
+  fi
+fi
+
+#Check whether -mfpu=neon is available
+if enabled_or_auto neon; then
+  cat > /tmp/neon.c << EOF
+int main() { return 0; }
+EOF
+  $CC $CFLAGS -mfpu=neon -c /tmp/neon.c
+  if [ $? -eq 0 ]; then
+    enable neon
+    CFLAGS="$CFLAGS -mfpu=neon"
+    echo "  checking whether -mfpu=neon is available ... Yes." | tee -a configure.log
+  else
+    disable neon
+    echo "  checking whether -mfpu=neon is available ... No." | tee -a configure.log
   fi
 fi
 

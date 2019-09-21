@@ -1,4 +1,5 @@
-#if !defined(SPIRAL_NO_SSE__) && !defined(NEON_AVAILABLE) && !defined(SSE_AVAILABLE)
+#include "build.h"
+#if !defined(SPIRAL_NO_SSE__) && !defined(CONFIG_NEON) && !defined(SSE_AVAILABLE)
 #define SPIRAL_NO_SSE__
 
 /***************************************************************

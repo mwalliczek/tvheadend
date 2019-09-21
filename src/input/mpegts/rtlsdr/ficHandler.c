@@ -92,7 +92,7 @@ void initFicHandler(struct sdr_state_t *sdr) {
 			punctureTable[local] = 1;
 		local++;
 	}
-	initViterbi768(768);
+	initViterbi768(&sdr->vp, 768, 1);
 }
 
 void process_ficBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
@@ -134,7 +134,7 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 	*	Now we have the full word ready for deconvolution
 	*	deconvolution is according to DAB standard section 11.2
 	*/
-	deconvolve(viterbiBlock, sdr->bitBuffer_out);
+	deconvolve(&sdr->vp, viterbiBlock, sdr->bitBuffer_out);
 	/**
 	*	if everything worked as planned, we now have a
 	*	768 bit vector containing three FIB's
@@ -165,5 +165,15 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 		tvhtrace(LS_RTLSDR, "ficHandler checkCRC success");
 		process_FIB(sdr, p, ficno);
 		sdr->fibCRCsuccess++;
+#ifdef TRACE_FIC_HANDLER
+	        printf("i: %d\n", i);
+	        FILE *pFile = fopen ("/tmp/ficInput", "wb");
+	        fwrite (sdr->ofdm_input, 2, 2304, pFile);
+	        fclose (pFile);
+	        pFile = fopen ("/tmp/ficOutput", "wb");
+	        fwrite (p, 1, 256, pFile);
+	        fclose (pFile);
+	        exit(0);
+#endif
 	}
 }

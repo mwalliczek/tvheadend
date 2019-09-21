@@ -36,11 +36,16 @@ struct v {
 /* Pointers to path metrics, swapped on every bit */
 	metric_t *old_metrics,*new_metrics;
 	decision_t *decisions;   /* decisions */
+	
+	uint8_t *data;
+	COMPUTETYPE *symbols;
+	int16_t	frameBits;
+	int spiral;
 };
 
-	void	initViterbi768	(int16_t);
-	void	destroyViterbi768	(void);
-	void	deconvolve	(int16_t *, uint8_t *);
+void	initViterbi768	(struct v *vp, int16_t, int spiral);
+void	destroyViterbi768	(struct v *vp);
+void	deconvolve	(struct v * vp, int16_t *, uint8_t *);
 
 #endif
 

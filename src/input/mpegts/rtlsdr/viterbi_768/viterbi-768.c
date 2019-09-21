@@ -61,25 +61,16 @@
 #define SUBSHIFT 0
 #endif
 
-struct v	vp;
 COMPUTETYPE Branchtab[NUMSTATES / 2 * RATE] __attribute__((aligned(16)));
-//	int	parityb		(uint8_t);
 int	parity(int);
-void	partab_init(void);
-//	uint8_t	Partab	[256];
 void	init_viterbi(struct v *, int16_t);
 void	update_viterbi_blk_GENERIC(struct v *, COMPUTETYPE *,
 	int16_t);
 void	update_viterbi_blk_SPIRAL(struct v *, COMPUTETYPE *,
 	int16_t);
-void	chainback_viterbi(struct v *, uint8_t *, int16_t, uint16_t);
-struct v *viterbi_alloc(int32_t);
+void	chainback_viterbi(struct v *, int16_t, uint16_t);
 void	BFLY(int32_t, int, COMPUTETYPE *,
 	struct v *, decision_t *);
-//	uint8_t *bits;
-uint8_t *data;
-COMPUTETYPE *symbols;
-int16_t	frameBits;
 
 
 static uint8_t Partab [] = 
@@ -100,30 +91,11 @@ static uint8_t Partab [] =
   1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
   0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
 
-//
-//	One could create the table above, i.e. a 256 entry
-//	odd-parity lookup table by the following function
-//	It is now precomputed
-void	partab_init (void){
-int16_t i,cnt,ti;
-
-	for (i = 0; i < 256; i++){
-	   cnt = 0;
-	   ti = i;
-	   while (ti != 0) {
-	      if (ti & 1) cnt++;
-	      ti >>= 1;
-	   }
-	   Partab [i] = cnt & 1;
-	}
-}
-
 int 	parity (int x){
 	/* Fold down to one byte */
 	x ^= (x >> 16);
 	x ^= (x >> 8);
 	return Partab [x];
-//	return parityb(x);
 }
 
 static inline
@@ -145,15 +117,15 @@ int32_t	i;
 //	There are (in mode 1) 3 ofdm blocks, giving 4 FIC blocks
 //	There all have a predefined length. In that case we use the
 //	"fast" (i.e. spiral) code, otherwise we use the generic code
-void initViterbi768 (int16_t wordlength) {
+void initViterbi768 (struct v *vp, int16_t wordlength, int spiral) {
 int polys [RATE] = POLYS;
 int16_t	i, state;
 #ifdef	__MINGW32__
 uint32_t	size;
 #endif
 
-	frameBits		= wordlength;
-//	partab_init	();
+	vp->frameBits		= wordlength;
+	vp->spiral		= spiral;
 
 // B I G N O T E	The spiral code uses (wordLength + (VITERBI_K - 1) * sizeof ...
 // However, the application then crashes, so something is not OK
@@ -161,22 +133,22 @@ uint32_t	size;
 // and not further investigation.
 #ifdef __MINGW32__
 	size = 2 * ((wordlength + (VITERBI_K - 1)) / 8 + 1 + 16) & ~0xF;
-	data	= (uint8_t *)_aligned_malloc (size, 16);
+	vp->data	= (uint8_t *)_aligned_malloc (size, 16);
 	size = 2 * (RATE * (wordlength + (VITERBI_K - 1)) * sizeof(COMPUTETYPE) + 16) & ~0xF;
-	symbols	= (COMPUTETYPE *)_aligned_malloc (size, 16);
+	vp->symbols	= (COMPUTETYPE *)_aligned_malloc (size, 16);
 	size	= 2 * (wordlength + (VITERBI_K - 1)) * sizeof (decision_t);	
 	size	= (size + 16) & ~0xF;
-	vp. decisions = (decision_t  *)_aligned_malloc (size, 16);
+	vp->decisions = (decision_t  *)_aligned_malloc (size, 16);
 #else
-	if (posix_memalign ((void**)&data, 16,
+	if (posix_memalign ((void**)&vp->data, 16,
 	                        (wordlength + (VITERBI_K - 1))/ 8 + 1)){
 	   printf("Allocation of data array failed\n");
 	}
-	if (posix_memalign ((void**)&symbols, 16,
-	                     RATE * (wordlength + (VITERBI_K - 1)) * sizeof(COMPUTETYPE))){
+	if (posix_memalign ((void**)&vp->symbols, 16,
+	                     2* (RATE * (wordlength + (VITERBI_K - 1)) * sizeof(COMPUTETYPE)))){
 	   printf("Allocation of symbols array failed\n");
 	}
-	if (posix_memalign ((void**)&(vp. decisions),
+	if (posix_memalign ((void**)&(vp->decisions),
 	                    16,
 	                    2 * (wordlength + (VITERBI_K - 1)) * sizeof (decision_t))){
 	   printf ("Allocation of vp decisions failed\n");
@@ -190,19 +162,19 @@ uint32_t	size;
 	                        parity((2 * state) & abs (polys[i])) ? 255 : 0;
 	}
 //
-	init_viterbi (&vp, 0);
+	init_viterbi (vp, 0);
 }
 
 
-void destroyViterbi768	(void) {
+void destroyViterbi768	(struct v *vp) {
 #ifdef	__MINGW32__
-	_aligned_free (vp. decisions);
-	_aligned_free (data);
-	_aligned_free (symbols);
+	_aligned_free (vp->decisions);
+	_aligned_free (vp->data);
+	_aligned_free (vp->symbols);
 #else
-	free (vp. decisions);
-	free (data);
-	free (symbols);
+	free (vp->decisions);
+	free (vp->data);
+	free (vp->symbols);
 #endif
 }
 
@@ -241,23 +213,45 @@ uint8_t getbit (uint8_t v, int32_t o) {
 //	Note that our DAB environment maps the softbits to -127 .. 127
 //	we have to map that onto 0 .. 255
 
-void	deconvolve	(int16_t *input, uint8_t *output) {
-uint32_t	i;
+#ifdef TRACE_VITERBI
+static int temp_file_i = 0;
+#endif
 
-	init_viterbi (&vp, 0);
-	for (i = 0; i < (uint16_t)(frameBits + (VITERBI_K - 1)) * RATE; i ++) {
+void	deconvolve	(struct v * vp, int16_t *input, uint8_t *output) {
+uint32_t	i;
+#ifdef TRACE_VITERBI
+        char* filename = malloc(256);
+#endif
+
+	init_viterbi (vp, 0);
+	for (i = 0; i < (uint16_t)(vp->frameBits + (VITERBI_K - 1)) * RATE; i ++) {
 	   int16_t temp = input [i] + 127;
 	   if (temp < 0) temp = 0;
 	   if (temp > 255) temp = 255;
-	   symbols [i] = temp;
+	   vp->symbols [i] = temp;
 	}
-//	update_viterbi_blk_GENERIC(&vp, symbols, frameBits + (VITERBI_K - 1));
-	update_viterbi_blk_SPIRAL (&vp, symbols, frameBits + (VITERBI_K - 1));
+	if (vp->spiral) {
+		update_viterbi_blk_SPIRAL (vp, vp->symbols, vp->frameBits + (VITERBI_K - 1));
+	} else {
+		update_viterbi_blk_GENERIC(vp, vp->symbols, vp->frameBits + (VITERBI_K - 1));
+	}
 
-	chainback_viterbi (&vp, data, frameBits, 0);
+	chainback_viterbi (vp, vp->frameBits, 0);
 
-	for (i = 0; i < (uint16_t)frameBits; i ++)
-	   output [i] = getbit (data [i >> 3], i & 07);
+	for (i = 0; i < (uint16_t)vp->frameBits; i ++)
+	   output [i] = getbit (vp->data [i >> 3], i & 07);
+	   
+#ifdef TRACE_VITERBI
+        snprintf(filename, 256, "/tmp/input%d", temp_file_i);
+        FILE *pFile = fopen (filename, "wb");
+        fwrite (input, 2, 3072 + 24, pFile);
+        fclose (pFile);
+        snprintf(filename, 256, "/tmp/output%d", temp_file_i++);
+        pFile = fopen (filename, "wb");
+        fwrite (output, 1, frameBits, pFile);
+        fclose (pFile);
+        free(filename);
+#endif
 }
 
 /* C-language butterfly */
@@ -317,7 +311,7 @@ int32_t  s, i;
 
 #if defined(SSE_AVAILABLE)
 void FULL_SPIRAL_sse (int,
-#elif defined(NEON_AVAILABLE)
+#elif defined(CONFIG_NEON)
 void FULL_SPIRAL_neon (int,
 #else
 void FULL_SPIRAL_no_sse (int,
@@ -339,7 +333,7 @@ int32_t s;
 
 #if defined(SSE_AVAILABLE)
 	FULL_SPIRAL_sse (nbits,
-#elif defined(NEON_AVAILABLE)
+#elif defined(CONFIG_NEON)
 	FULL_SPIRAL_neon (nbits,
 #else
 	FULL_SPIRAL_no_sse (nbits,
@@ -353,7 +347,6 @@ int32_t s;
 //
 /* Viterbi chainback */
 void	chainback_viterbi (struct v *vp,
-	                            uint8_t *data, /* Decoded output data */
 	                            int16_t nbits, /* Number of data bits */
 	                            uint16_t endstate){ /*Terminal encoder state */
 decision_t *d = vp -> decisions;
@@ -374,7 +367,7 @@ decision_t *d = vp -> decisions;
 	   k = (d [nbits].w [(endstate >> ADDSHIFT) / 32] >>
 	                       ((endstate>>ADDSHIFT) % 32)) & 1;
 	   endstate = (endstate >> 1) | (k << (VITERBI_K - 2 + ADDSHIFT));
-	   data [nbits >> 3] = endstate >> SUBSHIFT;
+	   vp->data [nbits >> 3] = endstate >> SUBSHIFT;
 	}
 }
 

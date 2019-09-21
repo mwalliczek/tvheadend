@@ -33,6 +33,8 @@ nbproject
 *.orig
 *.patch
 
+*.o
+
 debian/changelog
 debian/files
 debian/tvheadend

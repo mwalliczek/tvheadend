@@ -11,6 +11,8 @@
 #include "sdr_fifo.h"
 #include "dab_constants.h"
 
+#include "viterbi_768/viterbi-768.h"
+
 /* A demapped transmission frame represents a transmission frame in
    the final state before the FIC-specific and MSC-specific decoding
    stages.
@@ -110,6 +112,8 @@ struct sdr_state_t {
 	int			fibProcessorIsSynced;
 	int			fibCRCtotal;
 	int			fibCRCsuccess;
+	
+	struct v vp;
 };
 
 float jan_abs(float _Complex z);
