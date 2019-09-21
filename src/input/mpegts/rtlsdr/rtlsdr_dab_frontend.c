@@ -491,9 +491,9 @@ rtlsdr_frontend_monitor(void *aux)
 		sdr->frequency = lfe->lfe_freq;
 
 		rtlsdr_reset_buffer(lfe->dev);
-		tvhthread_create(&lfe->demod_thread, NULL,
+		tvh_thread_create(&lfe->demod_thread, NULL,
 			rtlsdr_demod_thread_fn, lfe, "rtlsdr-front");
-		tvhthread_create(&lfe->read_thread, NULL,
+		tvh_thread_create(&lfe->read_thread, NULL,
 			rtlsdr_read_thread_fn, lfe, "rtlsdr-front-read");
 
 	} else  {
@@ -520,9 +520,9 @@ rtlsdr_frontend_monitor(void *aux)
 
 		LIST_FOREACH(s, &mmi->mmi_mux->mm_transports, s_active_link) {
 			tvhtrace(LS_RTLSDR, "sending streaming statistics to %s", s->s_nicename);
-			pthread_mutex_lock(&s->s_stream_mutex);
+			tvh_mutex_lock(&s->s_stream_mutex);
 			streaming_service_deliver(s, streaming_msg_clone(&sm));
-			pthread_mutex_unlock(&s->s_stream_mutex);
+			tvh_mutex_unlock(&s->s_stream_mutex);
 		}
 	}
 }

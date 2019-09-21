@@ -68,7 +68,7 @@ void initOfdmDecoder(struct sdr_state_t *sdr) {
 		//	we now have a table with values from lwb - T_u / 2 .. lwb + T_u / 2
 	}
 	tvh_pipe(0, &sdr->ofdmDecoder.pipe);
-	tvhthread_create(&sdr->ofdmDecoder.thread, NULL,
+	tvh_thread_create(&sdr->ofdmDecoder.thread, NULL,
 		run_thread_fn, sdr, "rtlsdr-ofdm");
 }
 
@@ -82,7 +82,9 @@ void destroyOfdmDecoder(struct sdr_state_t *sdr) {
 void processBlock_0(struct sdr_state_t *sdr, float _Complex* v) {
 	int blkno = 0;
 	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_u);
-	write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno));
+	if (write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno)) == -1) {
+		tvherror(LS_RTLSDR, "write to pipe failed!");
+	}
 }
 
 void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v) {
@@ -123,7 +125,9 @@ int16_t	get_snr(float _Complex* v) {
 
 void decodeBlock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_s);
-	write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno));
+	if (write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno)) == -1) {
+		tvherror(LS_RTLSDR, "write to pipe failed!");
+	}
 }
 
 void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {

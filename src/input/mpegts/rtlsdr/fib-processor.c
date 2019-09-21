@@ -1209,7 +1209,7 @@ int save = 0;
 
 	tvhtrace(LS_RTLSDR, "add to ensemble (%d) %s", s->serviceId, s->serviceLabel.label);
 
-	pthread_mutex_lock(&global_lock);
+	tvh_mutex_lock(&global_lock);
 
 	m_service = mpegts_service_find(mm, s->serviceId, 0, 1, &save);
 	/*	mpegts_table_add(mm, DVB_PMT_BASE, DVB_PMT_MASK, dvb_pmt_callback,
@@ -1223,7 +1223,7 @@ int save = 0;
 	idnode_changed(&m_service->s_id);
 	service_refresh_channel((service_t*)m_service);
 
-	pthread_mutex_unlock(&global_lock);
+	tvh_mutex_unlock(&global_lock);
 
 	ServiceComps [firstFree]. inUse		= 1;
 	ServiceComps [firstFree]. TMid		= TMid;
@@ -1303,13 +1303,13 @@ int16_t i;
 void	nameofEnsemble  (struct sdr_state_t *sdr, int id, char *s) {
 	tvhtrace(LS_RTLSDR, "name of ensemble (%d) %s", id, s);
 
-	pthread_mutex_lock(&global_lock);
+	tvh_mutex_lock(&global_lock);
 
 	sdr->mmi->mmi_mux->mm_tsid = id;
 	if (mpegts_mux_set_network_name(sdr->mmi->mmi_mux, s))
 		idnode_changed(&sdr->mmi->mmi_mux->mm_id);
 
-	pthread_mutex_unlock(&global_lock);
+	tvh_mutex_unlock(&global_lock);
 
 	sdr->fibProcessorIsSynced = 1;
 	tvhinfo(LS_RTLSDR, "FIC in sync");
