@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
     
     initFicHandler(&sdr);
     
-    pFile = fopen ("input/mpegts/rtlsdr/ficInput" , "rb" );
+    pFile = fopen ("input/dab/rtlsdr/ficInput" , "rb" );
     fread (sdr.ofdm_input, 2, 2304, pFile);
     fclose(pFile);
     
@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     
     output = malloc(256);
     
-    pFile = fopen ("input/mpegts/rtlsdr/ficOutput" , "rb" );
+    pFile = fopen ("input/dab/rtlsdr/ficOutput" , "rb" );
     fread (output, 1, 256, pFile);
     fclose(pFile);
     

@@ -439,21 +439,22 @@ I18N-C += $(SRCS-LINUXDVB)
 
 # RTLSDR
 SRCS-RTLSDR = \
-    src/input/mpegts/rtlsdr/dab_tables.c \
-    src/input/mpegts/rtlsdr/phasereference.c \
-    src/input/mpegts/rtlsdr/input_sdr.c \
-    src/input/mpegts/rtlsdr/sdr_fifo.c \
-    src/input/mpegts/rtlsdr/ofdmDecoder.c \
-    src/input/mpegts/rtlsdr/protTables.c \
-    src/input/mpegts/rtlsdr/ficHandler.c \
-    src/input/mpegts/rtlsdr/viterbi_768/viterbi-768.c \
-    src/input/mpegts/rtlsdr/viterbi_768/spiral-sse.c \
-    src/input/mpegts/rtlsdr/viterbi_768/spiral-neon.c \
-    src/input/mpegts/rtlsdr/viterbi_768/spiral-no-sse.c \
-    src/input/mpegts/rtlsdr/charsets.c \
-    src/input/mpegts/rtlsdr/fib-processor.c \
-    src/input/mpegts/rtlsdr/rtlsdr_dab_frontend.c \
-	src/input/mpegts/rtlsdr/rtlsdr.c
+    src/input/dab.c \
+    src/input/dab/rtlsdr/dab_tables.c \
+    src/input/dab/rtlsdr/phasereference.c \
+    src/input/dab/rtlsdr/input_sdr.c \
+    src/input/dab/rtlsdr/sdr_fifo.c \
+    src/input/dab/rtlsdr/ofdmDecoder.c \
+    src/input/dab/rtlsdr/protTables.c \
+    src/input/dab/rtlsdr/ficHandler.c \
+    src/input/dab/rtlsdr/viterbi_768/viterbi-768.c \
+    src/input/dab/rtlsdr/viterbi_768/spiral-sse.c \
+    src/input/dab/rtlsdr/viterbi_768/spiral-neon.c \
+    src/input/dab/rtlsdr/viterbi_768/spiral-no-sse.c \
+    src/input/dab/rtlsdr/charsets.c \
+    src/input/dab/rtlsdr/fib-processor.c \
+    src/input/dab/rtlsdr/rtlsdr_dab_frontend.c \
+    src/input/dab/rtlsdr/rtlsdr.c
 SRCS-${CONFIG_RTLSDR} += $(SRCS-RTLSDR)
 I18N-C += $(SRCS-RTLSDR)
 

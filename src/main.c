@@ -1300,6 +1300,9 @@ main(int argc, char **argv)
   tvhftrace(LS_MAIN, mpegts_init, adapter_mask, opt_nosatip, &opt_satip_xml,
             &opt_tsfile, opt_tsfile_tuner);
 #endif
+#if ENABLE_RTLSDR
+  tvhftrace(LS_MAIN, dab_init);
+#endif
   tvhftrace(LS_MAIN, channel_init);
   tvhftrace(LS_MAIN, bouquet_service_resolve);
   tvhftrace(LS_MAIN, subscription_init);
@@ -1394,6 +1397,10 @@ main(int argc, char **argv)
   tvhftrace(LS_MAIN, epggrab_done);
 #if ENABLE_MPEGTS
   tvhftrace(LS_MAIN, mpegts_done);
+#endif
+  /* RTL SDR */
+#if ENABLE_RTLSDR
+  tvhftrace(LS_MAIN, dab_done);
 #endif
   tvhftrace(LS_MAIN, dvr_done);
   tvhftrace(LS_MAIN, descrambler_done);

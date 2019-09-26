@@ -184,7 +184,8 @@ void tvh_input_instance_clear_stats ( tvh_input_instance_t *tii );
 #include "input/mpegts/tvhdhomerun/tvhdhomerun.h"
 #endif
 #if ENABLE_RTLSDR
-#include "input/mpegts/rtlsdr.h"
+#include "input/dab.h"
+#include "input/dab/rtlsdr.h"
 #endif
 #endif
 

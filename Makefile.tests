@@ -7,25 +7,25 @@ CFLAGS += -g --coverage -DENABLE_TRACE=1
 tests:		tests/viterbiTest tests/ficHandlerTest
 		cd tests && ./viterbiTest
 		cd tests && ./ficHandlerTest
-		gcov -o tests src/input/mpegts/rtlsdr/viterbi_768/*.c src/input/mpegts/rtlsdr/*.c
+		gcov -o tests src/input/dab/rtlsdr/viterbi_768/*.c src/input/dab/rtlsdr/*.c
 
 tests/utilities.o:	tests/utilities.c
 		gcc $(INC) $(CFLAGS) -c tests/utilities.c -o tests/utilities.o
 
-tests/viterbiTest.o:	tests/input/mpegts/rtlsdr/viterbi_768/viterbiTest.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/viterbi_768/ $(CFLAGS) -c tests/input/mpegts/rtlsdr/viterbi_768/viterbiTest.c -o tests/viterbiTest.o
+tests/viterbiTest.o:	tests/input/dab/rtlsdr/viterbi_768/viterbiTest.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/viterbi_768/ $(CFLAGS) -c tests/input/dab/rtlsdr/viterbi_768/viterbiTest.c -o tests/viterbiTest.o
 
-tests/viterbi-768.o:	src/input/mpegts/rtlsdr/viterbi_768/viterbi-768.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/viterbi_768/ $(CFLAGS) -c src/input/mpegts/rtlsdr/viterbi_768/viterbi-768.c -o tests/viterbi-768.o
+tests/viterbi-768.o:	src/input/dab/rtlsdr/viterbi_768/viterbi-768.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/viterbi_768/ $(CFLAGS) -c src/input/dab/rtlsdr/viterbi_768/viterbi-768.c -o tests/viterbi-768.o
 		
-tests/viterbi-neu.o:	src/input/mpegts/rtlsdr/viterbi_768/viterbi-neu.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/viterbi_768/ $(CFLAGS) -c src/input/mpegts/rtlsdr/viterbi_768/viterbi-neu.c -o tests/viterbi-neu.o
+tests/viterbi-neu.o:	src/input/dab/rtlsdr/viterbi_768/viterbi-neu.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/viterbi_768/ $(CFLAGS) -c src/input/dab/rtlsdr/viterbi_768/viterbi-neu.c -o tests/viterbi-neu.o
 		
-tests/spiral-no-sse.o:	src/input/mpegts/rtlsdr/viterbi_768/spiral-no-sse.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/viterbi_768/ $(CFLAGS) -c src/input/mpegts/rtlsdr/viterbi_768/spiral-no-sse.c -o tests/spiral-no-sse.o
+tests/spiral-no-sse.o:	src/input/dab/rtlsdr/viterbi_768/spiral-no-sse.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/viterbi_768/ $(CFLAGS) -c src/input/dab/rtlsdr/viterbi_768/spiral-no-sse.c -o tests/spiral-no-sse.o
 		
-tests/spiral-neon.o:	src/input/mpegts/rtlsdr/viterbi_768/spiral-neon.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/viterbi_768/ $(CFLAGS) -c src/input/mpegts/rtlsdr/viterbi_768/spiral-neon.c -o tests/spiral-neon.o
+tests/spiral-neon.o:	src/input/dab/rtlsdr/viterbi_768/spiral-neon.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/viterbi_768/ $(CFLAGS) -c src/input/dab/rtlsdr/viterbi_768/spiral-neon.c -o tests/spiral-neon.o
 		
 tests/viterbiTest:		tests/viterbiTest.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o
 		gcc -o tests/viterbiTest $(CFLAGS) tests/viterbiTest.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o -lgcov
@@ -34,17 +34,17 @@ tests/viterbiTest-neu:	tests/viterbiTest.o tests/viterbi-neu.o
 		gcc -o tests/viterbiTest-neu $(CFLAGS) tests/viterbiTest.o tests/viterbi-neu.o -lgcov
 
 
-tests/ficHandler.o:	src/input/mpegts/rtlsdr/ficHandler.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/ $(CFLAGS) -c src/input/mpegts/rtlsdr/ficHandler.c -o tests/ficHandler.o
+tests/ficHandler.o:	src/input/dab/rtlsdr/ficHandler.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/ficHandler.c -o tests/ficHandler.o
 
-tests/protTables.o:	src/input/mpegts/rtlsdr/protTables.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/ $(CFLAGS) -c src/input/mpegts/rtlsdr/protTables.c -o tests/protTables.o
+tests/protTables.o:	src/input/dab/rtlsdr/protTables.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/protTables.c -o tests/protTables.o
 
-tests/ficHandlerTest.o:	tests/input/mpegts/rtlsdr/ficHandlerTest.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/ $(CFLAGS) -c tests/input/mpegts/rtlsdr/ficHandlerTest.c -o tests/ficHandlerTest.o
+tests/ficHandlerTest.o:	tests/input/dab/rtlsdr/ficHandlerTest.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/ficHandlerTest.c -o tests/ficHandlerTest.o
 
-tests/fib-processorMock.o:	tests/input/mpegts/rtlsdr/fib-processorMock.c
-		gcc $(INC) -Isrc/input/mpegts/rtlsdr/ $(CFLAGS) -c tests/input/mpegts/rtlsdr/fib-processorMock.c -o tests/fib-processorMock.o
+tests/fib-processorMock.o:	tests/input/dab/rtlsdr/fib-processorMock.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/fib-processorMock.c -o tests/fib-processorMock.o
 
 tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o
 		gcc -o tests/ficHandlerTest $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o

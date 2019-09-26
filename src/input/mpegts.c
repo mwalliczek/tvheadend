@@ -86,10 +86,6 @@ mpegts_init ( int linuxdvb_mask, int nosatip, str_list_t *satip_client,
   mpegts_mux_sched_init();
 #endif
 
-  /* RTL SDR */
-#if ENABLE_RTLSDR
-  rtlsdr_init();
-#endif
 }
 
 void
@@ -105,9 +101,6 @@ mpegts_done ( void )
 #endif
 #if ENABLE_LINUXDVB
   tvhftrace(LS_MAIN, linuxdvb_done);
-#endif
-#if ENABLE_RTLSDR
-  tvhftrace(LS_MAIN, rtlsdr_done);
 #endif
 #if ENABLE_SATIP_CLIENT
   tvhftrace(LS_MAIN, satip_done);

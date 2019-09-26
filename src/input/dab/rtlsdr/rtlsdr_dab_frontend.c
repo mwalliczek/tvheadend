@@ -33,8 +33,9 @@ const idclass_t rtlsdr_frontend_class =
 	.ic_doc = tvh_doc_rtlsdr_frontend_class,
 	.ic_changed = rtlsdr_frontend_class_changed,
 	.ic_properties = (const property_t[]) {
-		{}
-}
+		{
+		}
+	}
 };
 
 
@@ -210,6 +211,26 @@ rtlsdr_frontend_start_mux
 		lfe->lfe_refcount--;
 	}
 	return res;
+}
+
+static void
+rtlsdr_frontend_create_mux_instance
+  ( mpegts_input_t *mi, mpegts_mux_t *mm )
+{
+  tvh_hardware_t *th;
+  rtlsdr_adapter_t *la;
+  rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t *)mi, *lfe2;
+  char ubuf[UUID_HEX_SIZE];
+
+  idnode_uuid_as_str(&lfe->ti_id, ubuf);
+  mpegts_input_create_mux_instance(mi, mm);
+  /* create the instances for the slaves */
+  LIST_FOREACH(th, &tvh_hardware, th_link) {
+    if (!idnode_is_instance(&th->th_id, &rtlsdr_adapter_class)) continue;
+    la = (rtlsdr_adapter_t*)th;
+    LIST_FOREACH(lfe2, &la->la_frontends, lfe_link)
+      mpegts_input_create_mux_instance((mpegts_input_t *)lfe2, mm);
+  }
 }
 
 static idnode_set_t *
@@ -581,8 +602,7 @@ rtlsdr_frontend_tune
 	if (r < 0)
 		tvherror(LS_RTLSDR, "WARNING: Failed to set center freq.\n");
 	else {
-		time(&lfe->lfe_monitor);
-		lfe->lfe_monitor += 4;
+		lfe->lfe_monitor = mclk() + sec2mono(4);
 		mtimer_arm_rel(&lfe->lfe_monitor_timer, rtlsdr_frontend_monitor, lfe, ms2mono(50));
 		lfe->lfe_ready = 1;
 	}
@@ -695,6 +715,7 @@ rtlsdr_frontend_create
 	lfe->mi_stop_mux = rtlsdr_frontend_stop_mux;
 	lfe->mi_network_list = rtlsdr_frontend_network_list;
 //	lfe->mi_update_pids = mpegts_mux_update_pids;
+	lfe->mi_create_mux_instance = rtlsdr_frontend_create_mux_instance;
 	lfe->mi_enabled_updated = rtlsdr_frontend_enabled_updated;
 	lfe->mi_empty_status = mpegts_input_empty_status;
 

@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
     
     initViterbi768(&vp, 768, 1);
     
-    pFile = fopen ("input/mpegts/rtlsdr/viterbi_768/input" , "rb" );
+    pFile = fopen ("input/dab/rtlsdr/viterbi_768/input" , "rb" );
     fread (input, 2, 3072 + 24, pFile);
     fclose(pFile);
 
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 
     output2 = malloc(768);
     
-    pFile = fopen ("input/mpegts/rtlsdr/viterbi_768/output", "rb" );
+    pFile = fopen ("input/dab/rtlsdr/viterbi_768/output", "rb" );
     fread (output2, 1, 768, pFile);
     fclose(pFile);
     
