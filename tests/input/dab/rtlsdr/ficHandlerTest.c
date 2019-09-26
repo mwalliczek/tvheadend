@@ -27,5 +27,8 @@ int main(int argc, char** argv) {
     
     printf("memcmp: %d\n", memcmp(output, &sdr.bitBuffer_out[512], 256));
     
+    destroyFicHandler(&sdr);
+    free(output);
+    
     exit(EXIT_SUCCESS);
 }

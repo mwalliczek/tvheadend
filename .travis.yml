@@ -7,9 +7,12 @@ before_install:
 script:
   - ./Autobuild.sh -t raspbianstretch-armhf
   - build-wrapper-linux-x86-64 --out-dir bw-output make -f Makefile.tests tests
+  - gcov -o tests src/input/dab/rtlsdr/viterbi_768/*.c src/input/dab/rtlsdr/*.c
   - sonar-scanner
 addons:
   sonarcloud:
     organization: "mwalliczek-github"
     token:
       secure: liphF2KAcO+IoD3G6oqPkzZCHrRceUTUa8iQ4uA4q8oMp+QNSZ8rMIuKsC51otRB+Vt2BQBdn2/sWk1Lff67+1Aj0jSfEOBzRxYI24djDE20DfcLeJ8Bludtjby7+n5XzdyMnWouDCefkW1YV4P30FFRRvb/1bbFA+sdfZRyc/FkOQ2o2NJm5oaSQ0fz5Wdtufxd0xn7HuQw0yDkYIDeiBA87GU4abujd4UU9HFWCxZ7E9NFG53RYui2wT+4KGTazHsWZcki+f/RQLImHhhJ0nEwbMWLe5WnEOFrwc5dSDIIdBy2SqtbzvQYHT5NdrAXW8d5bturVQLYzJSwV8dLg9D+o70JyTOk3aexjHTvoQfWh1++EBbCoTb60b0s59iW/bvc6rjY4ilNfYYTlYov2cRpVWjD5ZwdI55I21/Ew1fg5bCIeTDUwKfqk5JUYzOTMYkJUL1Inxr/aV77IL3onar0ZAXS4yh6qjYnNYrPQye217OS4tH0BSruxQNA7PG6dhdtujj9fXjGNu1JGGISy2wYtfaHnU2KImpqQW2aN/XcaYfyUWv7CPCECUIihdvWjEw+FrvGxrQTAclsgRzP12zQYgvfrgyUKyGewGu8GG+zy4IjvlS2KuHzVJW5eafFW8jF8XsiW6GvxX2tKrY7RfzYbS+JuhHxNrEo2972RtE=
+env:
+  - COVERAGE=yes
