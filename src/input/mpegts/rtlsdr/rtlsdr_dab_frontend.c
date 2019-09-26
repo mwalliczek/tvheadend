@@ -6,6 +6,7 @@
 #include "rtlsdr_private.h"
 #include "phasereference.h"
 #include "ofdmDecoder.h"
+#include "ficHandler.h"
 
 #define DEFAULT_ASYNC_BUF_NUMBER 32
 
@@ -150,6 +151,7 @@ rtlsdr_frontend_stop_mux
 		rtlsdr_cancel_async(lfe->dev);
 	}
 
+	destroyFicHandler(&lfe->sdr);
 	destroyPhaseReference(&lfe->sdr);
 	destroyOfdmDecoder(&lfe->sdr);
 	cbFree(&lfe->sdr.fifo);

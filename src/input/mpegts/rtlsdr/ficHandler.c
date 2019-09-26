@@ -95,6 +95,10 @@ void initFicHandler(struct sdr_state_t *sdr) {
 	initViterbi768(&sdr->vp, 768, 1);
 }
 
+void destroyFicHandler(struct sdr_state_t *sdr) {
+	destroyViterbi768(&sdr->vp);
+}
+
 void process_ficBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
 	int32_t	i;
 
