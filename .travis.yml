@@ -7,7 +7,7 @@ before_install:
 script:
   - ./Autobuild.sh -t raspbianstretch-armhf
   - build-wrapper-linux-x86-64 --out-dir bw-output make -f Makefile.tests tests
-  - gcov -o tests src/input/dab/rtlsdr/viterbi_768/*.c src/input/dab/rtlsdr/*.c
+  - gcov -o tests src/input/mpegts/rtlsdr/viterbi_768/*.c src/input/mpegts/rtlsdr/*.c
   - sonar-scanner
 addons:
   sonarcloud:

@@ -4,17 +4,20 @@ INC=-Isrc -Ibuild.linux
 
 CFLAGS += -g -DENABLE_TRACE=1
 
-ifdef $(COVERAGE)
+ifeq ($(COVERAGE),yes)
 CFLAGS += --coverage
 LIBS += -lgcov
+else
+CFLAGS += -Og
 endif
 
 clean:
-		rm -f tests/*.o tests/viterbiTest tests/viterbiTest-neu tests/ficHandlerTest
+		rm -f tests/*.o tests/viterbiTest tests/viterbiTest-neu tests/ficHandlerTest tests/phasereferenceTest
 
-tests:		tests/viterbiTest tests/ficHandlerTest
+tests:		tests/viterbiTest tests/ficHandlerTest tests/phasereferenceTest
 		cd tests && ./viterbiTest
 		cd tests && ./ficHandlerTest
+		cd tests && ./phasereferenceTest
 
 tests/utilities.o:	tests/utilities.c
 		gcc $(INC) $(CFLAGS) -c tests/utilities.c -o $@
@@ -55,3 +58,14 @@ tests/fib-processorMock.o:	tests/input/mpegts/rtlsdr/fib-processorMock.c
 
 tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o
 		gcc $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o $(LIBS) -o $@
+
+
+tests/phasereference.o:	src/input/mpegts/rtlsdr/phasereference.c
+		 gcc $(INC) -Isrc/input/mpegts/rtlsdr/ $(CFLAGS) -c src/input/mpegts/rtlsdr/phasereference.c -o $@
+
+tests/phasereferenceTest.o:	tests/input/mpegts/rtlsdr/phasereferenceTest.c
+		gcc $(INC) -Isrc/input/mpegts/rtlsdr/ $(CFLAGS) -c tests/input/mpegts/rtlsdr/phasereferenceTest.c -o $@
+
+tests/phasereferenceTest:	tests/phasereferenceTest.o tests/phasereference.o
+		gcc $(CFLAGS) tests/phasereferenceTest.o tests/phasereference.o $(LIBS) -lfftw3f -lm -o $@
+

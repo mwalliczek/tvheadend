@@ -354,6 +354,12 @@ static void *rtlsdr_demod_thread_fn(void *arg)
 			}
 			continue;
 		}
+#ifdef TRACE_PHASEREFERENCE
+        	FILE *pFile = fopen ("/tmp/phasereferenceInput", "wb");
+        	fwrite (ofdmBuffer, sizeof(float _Complex), T_s, pFile);
+        	fclose (pFile);
+        	exit(0);
+#endif		
 		index_attempts = 0;
 		tvhtrace(LS_RTLSDR, "sync found!");
 		sdr->isSynced = 1;
