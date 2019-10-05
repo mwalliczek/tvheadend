@@ -310,6 +310,7 @@ SRCS-2 = \
 	src/api/api_channel.c \
 	src/api/api_service.c \
 	src/api/api_mpegts.c \
+	src/api/api_dab.c \
 	src/api/api_epg.c \
 	src/api/api_epggrab.c \
 	src/api/api_imagecache.c \
@@ -440,6 +441,13 @@ I18N-C += $(SRCS-LINUXDVB)
 # RTLSDR
 SRCS-RTLSDR = \
     src/input/dab.c \
+    src/input/dab/dab_input.c \
+    src/input/dab/dab_ensemble.c \
+    src/input/dab/dab_service.c \
+    src/input/dab/dab_network.c \
+    src/input/dab/dab_network_scan.c \
+    src/input/dab/fib-processor.c \
+    src/input/dab/charsets.c \
     src/input/dab/rtlsdr/dab_tables.c \
     src/input/dab/rtlsdr/phasereference.c \
     src/input/dab/rtlsdr/input_sdr.c \
@@ -451,8 +459,6 @@ SRCS-RTLSDR = \
     src/input/dab/rtlsdr/viterbi_768/spiral-sse.c \
     src/input/dab/rtlsdr/viterbi_768/spiral-neon.c \
     src/input/dab/rtlsdr/viterbi_768/spiral-no-sse.c \
-    src/input/dab/rtlsdr/charsets.c \
-    src/input/dab/rtlsdr/fib-processor.c \
     src/input/dab/rtlsdr/rtlsdr_dab_frontend.c \
     src/input/dab/rtlsdr/rtlsdr.c
 SRCS-${CONFIG_RTLSDR} += $(SRCS-RTLSDR)

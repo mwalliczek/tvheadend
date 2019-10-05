@@ -2,7 +2,7 @@
 #define _PHASEREFERENCE_H
 
 #include "tvheadend.h"
-#include "dab_constants.h"
+#include "../dab_constants.h"
 #include "dab.h"
 
 void initPhaseReference(struct sdr_state_t *sdr);

@@ -22,11 +22,12 @@
  * 	fib and fig processor
  */
 #include "dab_constants.h"
-#include "dab.h"
 #include	"fib-processor.h"
 #include	"charsets.h"
 #include "tvheadend.h"
- //
+#include "dab_private.h"
+
+//
 //
 // Tabelle ETSI EN 300 401 Page 50
 // Table is copied from the work of Michael Hoehn
@@ -96,36 +97,30 @@
                                    {416,1,384}};
 
    void		*userData;
-   serviceId	*findServiceId(int32_t);
-   serviceComponent *find_packetComponent(int16_t);
-   serviceComponent *find_serviceComponent(int32_t SId, int16_t SCId);
-   serviceId	*findServiceIdByName(char *);
-   void            bind_audioService(mpegts_mux_t *mm, int8_t,
+   serviceComponent *find_packetComponent(dab_ensemble_instance_t *dei, int16_t);
+   serviceComponent *find_serviceComponent(dab_ensemble_instance_t *dei, int32_t SId, int16_t SCId);
+   void            bind_audioService(dab_ensemble_instance_t *dei, int8_t,
 	   uint32_t, int16_t,
 	   int16_t, int16_t, int16_t);
-   void            bind_packetService(int8_t,
+   void            bind_packetService(dab_ensemble_instance_t *dei, int8_t,
 	   uint32_t, int16_t,
 	   int16_t, int16_t, int16_t);
-   void		process_FIG0(mpegts_mux_t *mm, uint8_t *);
-   void		process_FIG1(struct sdr_state_t *sdr, uint8_t *);
+   void		process_FIG0(dab_ensemble_instance_t *dei, uint8_t *);
+   void		process_FIG1(dab_ensemble_instance_t *dei, uint8_t *);
    void		FIG0Extension0(uint8_t *);
-   void		FIG0Extension1(uint8_t *);
-   void		FIG0Extension2(mpegts_mux_t *mm, uint8_t *);
-   void		FIG0Extension3(mpegts_mux_t *mm, uint8_t *);
+   void		FIG0Extension1(dab_ensemble_instance_t *dei, uint8_t *);
+   void		FIG0Extension2(dab_ensemble_instance_t *dei, uint8_t *);
+   void		FIG0Extension3(dab_ensemble_instance_t *dei, uint8_t *);
    void		FIG0Extension4(uint8_t *);
-   void		FIG0Extension5(uint8_t *);
+   void		FIG0Extension5(dab_ensemble_instance_t *dei, uint8_t *);
    void		FIG0Extension6(uint8_t *);
    void            FIG0Extension7(uint8_t *);
    void            FIG0Extension8(uint8_t *);
-   void            FIG0Extension9(uint8_t *);
-   void            FIG0Extension10(uint8_t *);
    void            FIG0Extension11(uint8_t *);
    void            FIG0Extension12(uint8_t *);
-   void            FIG0Extension13(uint8_t *);
-   void            FIG0Extension14(uint8_t *);
-   void            FIG0Extension15(uint8_t *);
-   void            FIG0Extension16(uint8_t *);
-   void            FIG0Extension17(uint8_t *);
+   void            FIG0Extension13(dab_ensemble_instance_t *dei, uint8_t *);
+   void            FIG0Extension14(dab_ensemble_instance_t *dei, uint8_t *);
+   void            FIG0Extension17(dab_ensemble_instance_t *dei, uint8_t *);
    void            FIG0Extension18(uint8_t *);
    void            FIG0Extension19(uint8_t *);
    void            FIG0Extension20(uint8_t *);
@@ -136,27 +131,18 @@
    void            FIG0Extension25(uint8_t *);
    void            FIG0Extension26(uint8_t *);
 
-   int16_t		HandleFIG0Extension1(uint8_t *,
+   int16_t		HandleFIG0Extension1(dab_ensemble_instance_t *dei, uint8_t *,
 	   int16_t, uint8_t);
-   int16_t		HandleFIG0Extension2(mpegts_mux_t *mm, uint8_t *,
+   int16_t		HandleFIG0Extension2(dab_ensemble_instance_t *dei, uint8_t *,
 	   int16_t, uint8_t, uint8_t);
-   int16_t		HandleFIG0Extension3(mpegts_mux_t *mm, uint8_t *, int16_t);
-   int16_t		HandleFIG0Extension5(uint8_t *, int16_t);
+   int16_t		HandleFIG0Extension3(dab_ensemble_instance_t *dei, uint8_t *, int16_t);
+   int16_t		HandleFIG0Extension5(dab_ensemble_instance_t *dei, uint8_t *, int16_t);
    int16_t		HandleFIG0Extension8(uint8_t *,
 	   int16_t, uint8_t);
-   int16_t		HandleFIG0Extension13(uint8_t *,
+   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, uint8_t *,
 	   int16_t, uint8_t);
    int16_t		HandleFIG0Extension22(uint8_t *, int16_t);
-
-   void	addtoEnsemble(mpegts_mux_t *mm, char *s, serviceId *service);
-   void	nameofEnsemble(struct sdr_state_t *sdr, int id, char *s);
-
-   int32_t		dateTime[8];
-   channelMap	subChannels[64];
-   serviceComponent	ServiceComps[64];
-   serviceId	listofServices[64];
-   int		dateFlag;
-   int		firstTime;
+   void    nameofEnsemble  (dab_ensemble_instance_t *dei, int id, char *s);
 
 
 //
@@ -165,21 +151,22 @@
 //	FIB's are segments of 256 bits. When here, they already
 //	passed the crc and we start unpacking into FIGs
 //	This is merely a dispatcher
-void	process_FIB (struct sdr_state_t *sdr, uint8_t *p, uint16_t fib) {
+void	process_FIB (dab_ensemble_instance_t *dei, uint8_t *p, uint16_t fib) {
 uint8_t	FIGtype;
 int8_t	processedBytes	= 0;
 uint8_t	*d		= p;
 
 	(void)fib;
+	tvh_mutex_lock(&dei->mmi_ensemble->mm_tables_lock);
 	while (processedBytes  < 30) {
 	   FIGtype 		= getBits_3 (d, 0);
 	   switch (FIGtype) {
 	      case 0:
-	         process_FIG0 (sdr->mmi->mmi_mux, d);	
+	         process_FIG0 (dei, d);	
 	         break;
 
 	      case 1:
-	         process_FIG1 (sdr, d);
+	         process_FIG1 (dei, d);
 	         break;
 
 	      case 7:
@@ -196,11 +183,12 @@ uint8_t	*d		= p;
 //	   processedBytes += getBits (p, 3, 5) + 1;
 	   d = p + processedBytes * 8;
 	}
+	tvh_mutex_unlock(&dei->mmi_ensemble->mm_tables_lock);
 }
 //
 //	Handle ensemble is all through FIG0
 //
-void	process_FIG0 (mpegts_mux_t *mm, uint8_t *d) {
+void	process_FIG0 (dab_ensemble_instance_t *dei, uint8_t *d) {
 uint8_t	extension	= getBits_5 (d, 8 + 3);
 //uint8_t	CN	= getBits_1 (d, 8 + 0);
 
@@ -210,15 +198,15 @@ uint8_t	extension	= getBits_5 (d, 8 + 3);
 	      break;
 
 	   case 1:
-	      FIG0Extension1 (d);
+	      FIG0Extension1 (dei, d);
 	      break;
 
 	   case 2:
-	      FIG0Extension2 (mm, d);
+	      FIG0Extension2 (dei, d);
 	      break;
 
 	   case 3:
-	      FIG0Extension3 (mm, d);
+	      FIG0Extension3 (dei, d);
 	      break;
 
 	   case 4:
@@ -226,7 +214,7 @@ uint8_t	extension	= getBits_5 (d, 8 + 3);
 	      break;
 
 	   case 5:
-	      FIG0Extension5 (d);
+	      FIG0Extension5 (dei, d);
 	      break;
 
 	   case 6:
@@ -241,14 +229,6 @@ uint8_t	extension	= getBits_5 (d, 8 + 3);
 	      FIG0Extension8 (d);
 	      break;
 
-	   case 9:
-	      FIG0Extension9 (d);
-	      break;
-
-	   case 10:
-	      FIG0Extension10 (d);
-	      break;
-
 	   case 11:
 	      FIG0Extension11 (d);
 	      break;
@@ -258,23 +238,15 @@ uint8_t	extension	= getBits_5 (d, 8 + 3);
 	      break;
 
 	   case 13:
-	      FIG0Extension13 (d);
+	      FIG0Extension13 (dei, d);
 	      break;
 
 	   case 14:
-	      FIG0Extension14 (d);
-	      break;
-
-	   case 15:
-	      FIG0Extension14 (d);
-	      break;
-
-	   case 16:
-	      FIG0Extension16 (d);
+	      FIG0Extension14 (dei, d);
 	      break;
 
 	   case 17:
-	      FIG0Extension17 (d);
+	      FIG0Extension17 (dei, d);
 	      break;
 
 	   case 18:
@@ -366,70 +338,71 @@ uint8_t	CN	= getBits_1 (d, 8 + 0);
 //	FIG0 extension 1 creates a mapping between the
 //	sub channel identifications and the positions in the
 //	relevant CIF.
-void	FIG0Extension1 (uint8_t *d) {
+void	FIG0Extension1 (dab_ensemble_instance_t *dei, uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 //uint8_t	CN	= getBits_1 (d, 8 + 0);
 
 	while (used < Length - 1)
-	   used = HandleFIG0Extension1 (d, used, PD_bit);
+	   used = HandleFIG0Extension1 (dei, d, used, PD_bit);
 }
 //
 //	defining the channels 
-int16_t	HandleFIG0Extension1 (uint8_t *d,
+int16_t	HandleFIG0Extension1 (dab_ensemble_instance_t *dei, uint8_t *d,
 	                                     int16_t offset,
 	                                     uint8_t pd) {
+dab_ensemble_t *mm = dei->mmi_ensemble;
 int16_t	bitOffset	= offset * 8;
 int16_t	SubChId		= getBits_6 (d, bitOffset);
 int16_t StartAdr	= getBits (d, bitOffset + 6, 10);
 int16_t	tabelIndex;
 int16_t	option, protLevel, subChanSize;
 	(void)pd;		// not used right now, maybe later
-	subChannels [SubChId]. StartAddr = StartAdr;
-	subChannels [SubChId]. inUse	 = 1;
+	mm->subChannels [SubChId]. StartAddr = StartAdr;
+	mm->subChannels [SubChId]. inUse	 = 1;
 	if (getBits_1 (d, bitOffset + 16) == 0) {	// short form
 	   tabelIndex = getBits_6 (d, bitOffset + 18);
-	   subChannels [SubChId]. Length  	= ProtLevel [tabelIndex][0];
-	   subChannels [SubChId]. shortForm	= 1;
-	   subChannels [SubChId]. protLevel	= ProtLevel [tabelIndex][1];
-	   subChannels [SubChId]. BitRate	= ProtLevel [tabelIndex][2];
+	   mm->subChannels [SubChId]. Length  	= ProtLevel [tabelIndex][0];
+	   mm->subChannels [SubChId]. shortForm	= 1;
+	   mm->subChannels [SubChId]. protLevel	= ProtLevel [tabelIndex][1];
+	   mm->subChannels [SubChId]. BitRate	= ProtLevel [tabelIndex][2];
 	   bitOffset += 24;
 	}
 	else { 	// EEP long form
-	   subChannels [SubChId]. shortForm	= 0;
+	   mm->subChannels [SubChId]. shortForm	= 0;
 	   option = getBits_3 (d, bitOffset + 17);
 	   if (option == 0) { 		// A Level protection
 	      protLevel = getBits_2 (d, bitOffset + 20);
 //
-	      subChannels [SubChId]. protLevel = protLevel;
+	      mm->subChannels [SubChId]. protLevel = protLevel;
 	      subChanSize = getBits (d, bitOffset + 22, 10);
-	      subChannels [SubChId]. Length	= subChanSize;
+	      mm->subChannels [SubChId]. Length	= subChanSize;
 	      if (protLevel == 0)	// actually protLevel 1
-	         subChannels [SubChId]. BitRate	= subChanSize / 12 * 8;
+	         mm->subChannels [SubChId]. BitRate	= subChanSize / 12 * 8;
 	      if (protLevel == 1)
-	         subChannels [SubChId]. BitRate	= subChanSize / 8 * 8;
+	         mm->subChannels [SubChId]. BitRate	= subChanSize / 8 * 8;
 	      if (protLevel == 2)
-	         subChannels [SubChId]. BitRate	= subChanSize / 6 * 8;
+	         mm->subChannels [SubChId]. BitRate	= subChanSize / 6 * 8;
 	      if (protLevel == 3)
-	         subChannels [SubChId]. BitRate	= subChanSize / 4 * 8;
+	         mm->subChannels [SubChId]. BitRate	= subChanSize / 4 * 8;
 	   }
 	   else			// option should be 001
 	   if (option == 001) {		// B Level protection
 	      protLevel = getBits_2 (d, bitOffset + 20);
 //
 //	we encode the B protection levels by adding a 04 to the level
-	      subChannels [SubChId]. protLevel = protLevel + (1 << 2);
+	      mm->subChannels [SubChId]. protLevel = protLevel + (1 << 2);
 	      subChanSize = getBits (d, bitOffset + 22, 10);
-	      subChannels [SubChId]. Length = subChanSize;
+	      mm->subChannels [SubChId]. Length = subChanSize;
 	      if (protLevel == 0)	// actually prot level 1
-	         subChannels [SubChId]. BitRate	= subChanSize / 27 * 32;
+	         mm->subChannels [SubChId]. BitRate	= subChanSize / 27 * 32;
 	      if (protLevel == 1)
-	         subChannels [SubChId]. BitRate	= subChanSize / 21 * 32;
+	         mm->subChannels [SubChId]. BitRate	= subChanSize / 21 * 32;
 	      if (protLevel == 2)
-	         subChannels [SubChId]. BitRate	= subChanSize / 18 * 32;
+	         mm->subChannels [SubChId]. BitRate	= subChanSize / 18 * 32;
 	      if (protLevel == 3)
-	         subChannels [SubChId]. BitRate	= subChanSize / 15 * 32;
+	         mm->subChannels [SubChId]. BitRate	= subChanSize / 15 * 32;
 	   }
 
 	   bitOffset += 32;
@@ -439,19 +412,19 @@ int16_t	option, protLevel, subChanSize;
 //
 //	Service organization, 6.3.1
 //	bind channels to serviceIds
-void	FIG0Extension2 (mpegts_mux_t *mm, uint8_t *d) {
+void	FIG0Extension2 (dab_ensemble_instance_t *dei, uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 uint8_t	CN	= getBits_1 (d, 8 + 0);
 
 	while (used < Length) {
-	   used = HandleFIG0Extension2 (mm, d, used, CN, PD_bit);
+	   used = HandleFIG0Extension2 (dei, d, used, CN, PD_bit);
 	}
 }
 //
 //	Note Offset is in bytes
-int16_t	HandleFIG0Extension2 (mpegts_mux_t *mm, uint8_t *d,
+int16_t	HandleFIG0Extension2 (dab_ensemble_instance_t *dei, uint8_t *d,
 	                                     int16_t offset,
 	                                     uint8_t cn,
 	                                     uint8_t pd) {
@@ -484,14 +457,14 @@ int16_t		numberofComponents;
 	      uint8_t	ASCTy	= getBits_6 (d, lOffset + 2);
 	      uint8_t	SubChId	= getBits_6 (d, lOffset + 8);
 	      uint8_t	PS_flag	= getBits_1 (d, lOffset + 14);
-	      bind_audioService (mm, TMid, SId, i, SubChId, PS_flag, ASCTy);
+	      bind_audioService (dei, TMid, SId, i, SubChId, PS_flag, ASCTy);
 	   }
 	   else
 	   if (TMid == 3) { // MSC packet data
 	      int16_t SCId	= getBits (d, lOffset + 2, 12);
 	      uint8_t PS_flag	= getBits_1 (d, lOffset + 14);
 	      uint8_t CA_flag	= getBits_1 (d, lOffset + 15);
-	      bind_packetService (TMid, SId, i, SCId, PS_flag, CA_flag);
+	      bind_packetService (dei, TMid, SId, i, SCId, PS_flag, CA_flag);
            }
 	   else
 	      {;}		// for now
@@ -505,17 +478,17 @@ int16_t		numberofComponents;
 //      additional information about the service component
 //      description in packet mode.
 //      manual: page 55
-void	FIG0Extension3 (mpegts_mux_t *mm, uint8_t *d) {
+void	FIG0Extension3 (dab_ensemble_instance_t *dei, uint8_t *d) {
 int16_t	used	= 2;
 int16_t	Length	= getBits_5 (d, 3);
 
 	while (used < Length)
-	   used = HandleFIG0Extension3 (mm, d, used);
+	   used = HandleFIG0Extension3 (dei, d, used);
 }
 
 //
 //      DSCTy   DataService Component Type
-int16_t HandleFIG0Extension3 (mpegts_mux_t *mm, uint8_t *d, int16_t used) {
+int16_t HandleFIG0Extension3 (dab_ensemble_instance_t *dei, uint8_t *d, int16_t used) {
 int16_t	SCId            = getBits (d, used * 8, 12);
 int16_t CAOrgflag       = getBits_1 (d, used * 8 + 15);
 int16_t DGflag          = getBits_1 (d, used * 8 + 16);
@@ -524,7 +497,8 @@ int16_t SubChId         = getBits_6 (d, used * 8 + 24);
 int16_t packetAddress   = getBits (d, used * 8 + 30, 10);
 uint16_t CAOrg;
 
-serviceComponent *packetComp = find_packetComponent (SCId);
+serviceComponent *packetComp = find_packetComponent (dei, SCId);
+dab_ensemble_t *mm = dei->mmi_ensemble;
 //serviceId	 *service;
 
 	if (CAOrgflag == 1) {
@@ -537,7 +511,7 @@ serviceComponent *packetComp = find_packetComponent (SCId);
            return used;
 
 //      We want to have the subchannel OK
-	if (!subChannels [SubChId]. inUse)
+	if (!mm->subChannels [SubChId]. inUse)
 	   return used;
 
 //      If the component exists, we first look whether is
@@ -546,7 +520,7 @@ serviceComponent *packetComp = find_packetComponent (SCId);
            return used;
 //
 //      We want to have the subchannel OK
-        if (!subChannels [SubChId]. inUse)
+        if (!mm->subChannels [SubChId]. inUse)
            return used;
 
 //      if the  Data Service Component Type == 0, we do not deal
@@ -580,25 +554,26 @@ int32_t CAOrg = getBits (d, 2 + 6, 16);
 }
 //
 //	Service component language
-void	FIG0Extension5 (uint8_t *d) {
+void	FIG0Extension5 (dab_ensemble_instance_t *dei, uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 
 	while (used < Length) {
-	   used = HandleFIG0Extension5 (d, used);
+	   used = HandleFIG0Extension5 (dei, d, used);
 	}
 }
 
-int16_t	HandleFIG0Extension5 (uint8_t* d, int16_t offset) {
+int16_t	HandleFIG0Extension5 (dab_ensemble_instance_t *dei, uint8_t* d, int16_t offset) {
 int16_t	loffset	= offset * 8;
 uint8_t	lsFlag	= getBits_1 (d, loffset);
 int16_t	subChId, serviceComp, language;
+dab_ensemble_t *mm = dei->mmi_ensemble;
 
 	if (lsFlag == 0) {	// short form
 	   if (getBits_1 (d, loffset + 1) == 0) {
 	      subChId	= getBits_6 (d, loffset + 2);
 	      language	= getBits_8 (d, loffset + 8);
-	      subChannels [subChId]. language = language;
+	      mm->subChannels [subChId]. language = language;
 	   }
 	   loffset += 16;
 	}
@@ -668,54 +643,6 @@ uint8_t		extensionFlag;
 	return lOffset / 8;
 }
 //
-//	Country, LTO & international table 8.1.3.2
-//	FIG0/9 and FIG0/10 are copied from the work of
-//	Michael Hoehn
-void FIG0Extension9 (uint8_t *d) {
-int16_t	offset	= 16;
-
-	dateTime [6] = (getBits_1 (d, offset + 2) == 1)?
-	                -1 * getBits_4 (d, offset + 3):
-	                     getBits_4 (d, offset + 3);
-	dateTime [7] = (getBits_1 (d, offset + 7) == 1)? 30 : 0;
-}
-
-//
-void FIG0Extension10 (uint8_t *fig) {
-int16_t		offset = 16;
-int32_t		mjd	= getLBits (fig, offset + 1, 17);
-// Modified Julian Date umrechnen (Nach wikipedia)
-int32_t J	= mjd + 2400001;
-int32_t j	= J + 32044;
-int32_t g	= j / 146097; 
-int32_t	dg	= j % 146097;
-int32_t c	= ((dg / 36524) + 1) * 3 / 4; 
-int32_t dc	= dg - c * 36524;
-int32_t b	= dc / 1461;
-int32_t db	= dc%1461;
-int32_t a	= ((db / 365) + 1) * 3 / 4; 
-int32_t da	= db - a * 365;
-int32_t y	= g * 400 + c * 100 + b * 4 + a;
-int32_t m	= ((da * 5 + 308) / 153) - 2;
-int32_t d	= da - ((m + 4) * 153 / 5) + 122;
-int32_t Y	= y - 4800 + ((m + 2) / 12); 
-int32_t M	= ((m + 2) % 12) + 1; 
-int32_t D	= d + 1;
-	
-	dateTime [0] = Y;	// Jahr
-	dateTime [1] = M;	// Monat
-	dateTime [2] = D;	// Tag
-	dateTime [3] = getBits_5 (fig, offset + 21);	// Stunden
-	if (getBits_6 (fig, offset + 26) != dateTime [4]) 
-	   dateTime [5] =  0;	// Sekunden (Uebergang abfangen)
-
-	dateTime [4] = getBits_6 (fig, offset + 26);	// Minuten
-	if (fig [offset + 20] == 1)
-	   dateTime [5] = getBits_6 (fig, offset + 32);	// Sekunden
-	dateFlag	= 1;
-//	emit newDateTime (dateTime);
-}
-//
 //
 void    FIG0Extension11 (uint8_t *d) {
         (void)d;
@@ -727,16 +654,16 @@ void    FIG0Extension12 (uint8_t *d) {
 }
 //
 //
-void	FIG0Extension13 (uint8_t *d) {
+void	FIG0Extension13 (dab_ensemble_instance_t *dei, uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 
 	while (used < Length) 
-	   used = HandleFIG0Extension13 (d, used, PD_bit);
+	   used = HandleFIG0Extension13 (dei, d, used, PD_bit);
 }
 
-int16_t	HandleFIG0Extension13 (uint8_t *d,
+int16_t	HandleFIG0Extension13 (dab_ensemble_instance_t *dei, uint8_t *d,
 	                                     int16_t used,
 	                                     uint8_t pdBit) {
 int16_t	lOffset		= used * 8;
@@ -756,7 +683,7 @@ int16_t		appType;
 	   int16_t length	= getBits_5 (d, lOffset + 11);
 	   lOffset += (11 + 5 + 8 * length);
 	   serviceComponent *packetComp        =
-	                         find_serviceComponent (SId, SCIdS);
+	                         find_serviceComponent (dei, SId, SCIdS);
 	   if (packetComp != NULL) 
 	      packetComp      -> appType       = appType;
 	}
@@ -765,52 +692,30 @@ int16_t		appType;
 }
 //
 //      FEC sub-channel organization 6.2.2
-void	FIG0Extension14 (uint8_t *d) {
+void	FIG0Extension14 (dab_ensemble_instance_t *dei, uint8_t *d) {
 int16_t	Length	= getBits_5 (d, 3);	// in Bytes
 int16_t	used	= 2;			// in Bytes
 int16_t	i;
+dab_ensemble_t *mm = dei->mmi_ensemble;
 
 	while (used < Length) {
 	   int16_t SubChId	= getBits_6 (d, used * 8);
 	   uint8_t FEC_scheme	= getBits_2 (d, used * 8 + 6);
 	   used = used + 1;
 	   for (i = 0; i < 64; i ++) {
-              if (subChannels [i]. SubChId == SubChId) {
-                 subChannels [i]. FEC_scheme = FEC_scheme;
+              if (mm->subChannels [i]. SubChId == SubChId) {
+                 mm->subChannels [i]. FEC_scheme = FEC_scheme;
               }
            }
 	}
 }
 
-void    FIG0Extension15 (uint8_t *d) {
-        (void)d;
-}
-//
-//      Obsolete in ETSI EN 300 401 V2.1.1 (2017-01)
-void	FIG0Extension16 (uint8_t *d) {
-int16_t	length 	= getBits_5 (d, 3);	// in bytes
-int16_t	offset	= 16;			// in bits
-serviceId	*s;
-
-	while (offset < length * 8) {
-	   uint16_t	SId	= getBits (d, offset, 16);
-	   s	= findServiceId (SId);
-	   if (!s -> hasPNum) {
-	      uint8_t PNum = getBits (d, offset + 16, 16);
-	      s -> pNum		= PNum;
-	      s -> hasPNum	= 1;
-//	      fprintf (stderr, "Program number info SId = %.8X, PNum = %d\n",
-//	      	                               SId, PNum);
-	   }
-	   offset += 72;
-	}
-}
 //
 //      Programme Type (PTy) 8.1.5
-void	FIG0Extension17 (uint8_t *d) {
+void	FIG0Extension17 (dab_ensemble_instance_t *dei, uint8_t *d) {
 int16_t	length	= getBits_5 (d, 3);
 int16_t	offset	= 16;
-serviceId	*s;
+dab_service_t	*s;
 
 	while (offset < length * 8) {
 	   uint16_t	SId	= getBits (d, offset, 16);
@@ -818,7 +723,9 @@ serviceId	*s;
 	   int	CC_flag	= getBits_1 (d, offset + 19);
 	   int16_t type;
 	   int16_t Language = 0x00;	// init with unknown language
-	   s	= findServiceId (SId);
+	   tvh_mutex_lock(&global_lock);
+	   s	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
+	   tvh_mutex_unlock(&global_lock);
 	   if (L_flag) {		// language field present
 	      Language = getBits_8 (d, offset + 24);
 	      s -> language = Language;
@@ -955,12 +862,12 @@ void    FIG0Extension26 (uint8_t *d) {
 
 //      FIG 1 - Cover the different possible labels, section 5.2
 //
-void	process_FIG1 (struct sdr_state_t *sdr, uint8_t *d) {
+void	process_FIG1 (dab_ensemble_instance_t *dei, uint8_t *d) {
 uint8_t		charSet, extension;
 uint32_t	SId	= 0;
 uint8_t		Rfu;
 int16_t		offset	= 0;
-serviceId	*myIndex;
+dab_service_t	*myIndex;
 int16_t		i;
 uint8_t		pd_flag;
 uint8_t		SCidS;
@@ -988,18 +895,15 @@ char		label [17];
 	         for (i = 0; i < 16; i ++) {
 	            label [i] = getBits_8 (d, offset + 8 * i);
 	         }
-			 tvhtrace(LS_RTLSDR, "Ensemblename: %16s", label);
+		 tvhtrace(LS_RTLSDR, "Ensemblename: %16s", label);
 	         {
 	            char *name = toStringUsingCharset (
 	                                      (const char *) label,
 	                                      (CharacterSet) charSet, 
 										  -1);
-	            if (firstTime)
-	               nameofEnsemble (sdr, SId, name);
-	            firstTime	= 0;
-	            sdr->fibProcessorIsSynced = 1;
+	            nameofEnsemble (dei, SId, name);
 				tvhinfo(LS_RTLSDR, "FIC in sync");
-			 }
+		 }
 	      }
 	      tvhtrace(LS_RTLSDR, 
 	               "charset %d is used for ensemblename", charSet);
@@ -1008,20 +912,23 @@ char		label [17];
 	   case 1:	// 16 bit Identifier field for service label 8.1.14.1
 	      SId	= getBits (d, 16, 16);
 	      offset	= 32;
-	      myIndex	= findServiceId (SId);
-	      if ((!myIndex -> serviceLabel. hasName) && (charSet <= 16)) {
+	      tvh_mutex_lock(&global_lock);
+	      myIndex	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
+	      if ((!myIndex->s_dab_svcname) && (charSet <= 16)) {
 	         for (i = 0; i < 16; i ++) {
 	            label [i] = getBits_8 (d, offset + 8 * i);
 	         }
-
-	         myIndex -> serviceLabel. label = 
-	                       toStringUsingCharset (
-	                                (const char *) label,
-	                                (CharacterSet) charSet, 
-							        -1);
-			 tvhtrace(LS_RTLSDR, "FIG1/1: SId = %4x\t%s", SId, label);
-	         myIndex -> serviceLabel. hasName = 1;
+	         
+	         tvh_str_set(&myIndex->s_dab_svcname, toStringUsingCharset (
+                                        (const char *) label,
+                                        (CharacterSet) charSet,
+                                                                -1));
+		 idnode_changed(&myIndex->s_id);
+		 service_refresh_channel((service_t*)myIndex);
+			 
+		 tvhtrace(LS_RTLSDR, "FIG1/1: SId = %4x\t%s", SId, label);
 	      }
+	      tvh_mutex_unlock(&global_lock);
 	      break;
 
 	   case 3:
@@ -1058,20 +965,9 @@ char		label [17];
 	   case 5:	 // Data service label - 32 bits 8.1.14.2
 	      SId	= getLBits (d, 16, 32);
 	      offset	= 48;
-	      myIndex   = findServiceId (SId);
-              if ((!myIndex -> serviceLabel. hasName) && (charSet <= 16)) {
-                 for (i = 0; i < 16; i ++) {
-                    label [i] = getBits_8 (d, offset + 8 * i);
-                 }
-                 myIndex -> serviceLabel. label =
-                               toStringUsingCharset (
-                                         (const char *) label,
-                                         (CharacterSet) charSet, -1);
-                 myIndex -> serviceLabel. hasName = 1;
-//		         addtoEnsemble (sdr->mmi->mmi_mux, myIndex -> serviceLabel. label, myIndex);
-              }
-	      break;
-
+	      for (i = 0; i < 16; i ++) 
+                 label [i] = getBits_8 (d, offset + 8 * i);
+              break;
 	   case 6:	// XPAD label - 8.1.14.4
 	      pd_flag	= getLBits (d, 16, 1);
 	      SCidS	= getLBits (d, 20, 4);
@@ -1102,74 +998,32 @@ char		label [17];
 	(void)flagfield;
 }
 
-//
-static
-int	compareNames (char* in, char* ref) {
-
-	if (ref == in)
-	   return 1;
-
-	return strstr(ref, in) == ref;
-}
-
-//	locate - and create if needed - a reference to the entry
-//	for the serviceId serviceId
-serviceId	*findServiceId (int32_t serviceId) {
-int16_t	i;
-
-	for (i = 0; i < 64; i ++)
-	   if ((listofServices [i]. inUse) &&
-	        (listofServices [i]. serviceId == (uint32_t)serviceId))
-	      return &listofServices [i];
-
-	for (i = 0; i < 64; i ++)
-	   if (!listofServices [i]. inUse) {
-	      listofServices [i]. inUse = 1;
-	      listofServices [i]. serviceLabel. hasName = 0;
-	      listofServices [i]. serviceId = serviceId;
-	      listofServices [i]. language = -1;
-	      return &listofServices [i];
-	   }
-
-	return &listofServices [0];	// should not happen
-}
-
-serviceId	*findServiceIdByName(char *serviceName) {
-int16_t	i;
-
-	for (i = 0; i < 64; i ++)
-	   if ((listofServices [i]. inUse) &&
-	        compareNames (serviceName,
-	                     listofServices [i]. serviceLabel. label))
-	      return &listofServices [i];
-
-	return NULL;
-}
-
-serviceComponent *find_packetComponent (int16_t SCId) {
+serviceComponent *find_packetComponent (dab_ensemble_instance_t *dei, int16_t SCId) {
 int16_t i;
+dab_ensemble_t *mm = dei->mmi_ensemble;
 
         for (i = 0; i < 64; i ++) {
-           if (!ServiceComps [i]. inUse)
+           if (!mm->ServiceComps [i]. inUse)
               continue;
-           if (ServiceComps [i]. TMid != 03)
+           if (mm->ServiceComps [i]. TMid != 03)
               continue;
-           if (ServiceComps [i]. SCId == SCId)
-              return &ServiceComps [i];
+           if (mm->ServiceComps [i]. SCId == SCId)
+              return &mm->ServiceComps [i];
         }
         return NULL;
 }
 
-serviceComponent *find_serviceComponent (int32_t SId,
+serviceComponent *find_serviceComponent (dab_ensemble_instance_t *dei, int32_t SId,
 	                                                int16_t SCIdS) {
 int16_t i;
+dab_ensemble_t *mm = dei->mmi_ensemble;
 
 	for (i = 0; i < 64; i ++) {
-	   if (!ServiceComps [i]. inUse)
+	   if (!mm->ServiceComps [i]. inUse)
 	      continue;
 
-	   if ( (findServiceId (SId) == ServiceComps [i]. service)) {
-	      return &ServiceComps [i];
+	   if ( (dab_ensemble_find_service(mm, SId) == mm->ServiceComps [i]. service)) {
+	      return &mm->ServiceComps [i];
 	   }
 	}
 
@@ -1178,139 +1032,132 @@ int16_t i;
 
 //	bind_audioService is the main processor for - what the name suggests -
 //	connecting the description of audioservices to a SID
-void	bind_audioService (mpegts_mux_t *mm, int8_t TMid,
+void	bind_audioService (dab_ensemble_instance_t *dei, int8_t TMid,
 	                                  uint32_t SId,
 	                                  int16_t compnr,
 	                                  int16_t SubChId,
 	                                  int16_t ps_flag,
 	                                  int16_t ASCTy) {
-serviceId *s	= findServiceId	(SId);
+dab_ensemble_t *mm = dei->mmi_ensemble;
+dab_service_t *s;
 int16_t	i;
 int16_t	firstFree	= -1;
-mpegts_service_t *m_service;
-int save = 0;
 
-	if (!s -> serviceLabel. hasName)
+	tvh_mutex_lock(&global_lock);
+	
+	s = dab_service_find(mm, SId, 1, 0);
+	if (!s ->s_dab_svcname) {
+	   tvh_mutex_unlock(&global_lock);
 	   return;
+	}
 
-	if (!subChannels [SubChId]. inUse)
+	if (!mm->subChannels [SubChId]. inUse) {
+	   tvh_mutex_unlock(&global_lock);
 	   return;
+	}
 
 	for (i = 0; i < 64; i ++) {
-	   if (!ServiceComps [i]. inUse) {
+	   if (!mm->ServiceComps [i]. inUse) {
 	      if (firstFree == -1)
 	         firstFree = i;
 	      continue;
 	   }
-	   if ((ServiceComps [i]. service == s) &&
-               (ServiceComps [i]. componentNr == compnr))
+	   if ((mm->ServiceComps [i]. service == s) &&
+               (mm->ServiceComps [i]. componentNr == compnr)) {
+              tvh_mutex_unlock(&global_lock);
 	      return;
+	   }
 	}
 
-	tvhtrace(LS_RTLSDR, "add to ensemble (%d) %s", s->serviceId, s->serviceLabel.label);
+	tvhtrace(LS_RTLSDR, "add to ensemble (%d) %s", service_id16(s), s->s_dab_svcname);
 
-	tvh_mutex_lock(&global_lock);
-
-	m_service = mpegts_service_find(mm, s->serviceId, 0, 1, &save);
 	/*	mpegts_table_add(mm, DVB_PMT_BASE, DVB_PMT_MASK, dvb_pmt_callback,
 	NULL, "pmt", LS_TBL_BASE,
 	MT_CRC | MT_QUICKREQ | MT_ONESHOT | MT_SCANSUBS,
 	service->pNum, MPS_WEIGHT_PMT_SCAN); */
-	tvh_str_set(&m_service->s_dvb_svcname, s->serviceLabel.label);
-	m_service->s_servicetype = ST_RADIO;
-	m_service->s_verified = 1;
-	mpegts_network_bouquet_trigger(mm->mm_network, 0);
-	idnode_changed(&m_service->s_id);
-	service_refresh_channel((service_t*)m_service);
+	s->s_verified = 1;
+	idnode_changed(&s->s_id);
+	service_refresh_channel((service_t*)s);
 
 	tvh_mutex_unlock(&global_lock);
 
-	ServiceComps [firstFree]. inUse		= 1;
-	ServiceComps [firstFree]. TMid		= TMid;
-	ServiceComps [firstFree]. componentNr	= compnr;
-	ServiceComps [firstFree]. service	= s;
-	ServiceComps [firstFree]. subchannelId = SubChId;
-	ServiceComps [firstFree]. PS_flag	= ps_flag;
-	ServiceComps [firstFree]. ASCTy		= ASCTy;
+	mm->ServiceComps [firstFree]. inUse		= 1;
+	mm->ServiceComps [firstFree]. TMid		= TMid;
+	mm->ServiceComps [firstFree]. componentNr	= compnr;
+	mm->ServiceComps [firstFree]. service	= s;
+	mm->ServiceComps [firstFree]. subchannelId = SubChId;
+	mm->ServiceComps [firstFree]. PS_flag	= ps_flag;
+	mm->ServiceComps [firstFree]. ASCTy		= ASCTy;
+	
+	s->serviceComponent = &mm->ServiceComps [firstFree];
+	s->subChId = SubChId;
 }
 
 //      bind_packetService is the main processor for - what the name suggests -
 //      connecting the service component defining the service to the SId,
 ///     Note that the subchannel is assigned through a FIG0/3
-void    bind_packetService (int8_t TMid,
+void    bind_packetService (dab_ensemble_instance_t *dei, int8_t TMid,
                                            uint32_t SId,
                                            int16_t compnr,
                                            int16_t SCId,
                                            int16_t ps_flag,
                                            int16_t CAflag) {
-serviceId *s    = findServiceId (SId);
+dab_ensemble_t *mm = dei->mmi_ensemble;
 int16_t i;
 int16_t	firstFree	= -1;
 
-	if (!s -> serviceLabel. hasName)        // wait until we have a name
-           return;
+//	if (!s -> serviceLabel. hasName)        // wait until we have a name
+//           return;
 
 	for (i = 0; i < 64; i ++) {
-	   if ((ServiceComps [i]. inUse) &&
-	                      (ServiceComps [i]. SCId == SCId))
+	   if ((mm->ServiceComps [i]. inUse) &&
+	                      (mm->ServiceComps [i]. SCId == SCId))
 	      return;
 
-	   if (!ServiceComps [i]. inUse) {
+	   if (!mm->ServiceComps [i]. inUse) {
 	      if (firstFree == -1)
 	         firstFree = i;
 	      continue;
 	   }
 	}
 
-	ServiceComps [firstFree]. inUse  = 1;
-	ServiceComps [firstFree]. TMid   = TMid;
-	ServiceComps [firstFree]. service = s;
-	ServiceComps [firstFree]. componentNr = compnr;
-	ServiceComps [firstFree]. SCId   = SCId;
-	ServiceComps [firstFree]. PS_flag = ps_flag;
-	ServiceComps [firstFree]. CAflag = CAflag;
-	ServiceComps [firstFree]. is_madePublic = 0;
+	mm->ServiceComps [firstFree]. inUse  = 1;
+	mm->ServiceComps [firstFree]. TMid   = TMid;
+//	mm->ServiceComps [firstFree]. service = s;
+	mm->ServiceComps [firstFree]. componentNr = compnr;
+	mm->ServiceComps [firstFree]. SCId   = SCId;
+	mm->ServiceComps [firstFree]. PS_flag = ps_flag;
+	mm->ServiceComps [firstFree]. CAflag = CAflag;
+	mm->ServiceComps [firstFree]. is_madePublic = 0;
 }
 
-void	setupforNewFrame (struct sdr_state_t *sdr) {
+void	setupforNewFrame (dab_ensemble_instance_t *dei) {
 int16_t	i;
-	sdr->fibProcessorIsSynced = 0;
+dab_ensemble_t *mm = dei->mmi_ensemble;
 	tvhinfo(LS_RTLSDR, "FIC out of sync");
 	for (i = 0; i < 64; i ++)
-	   ServiceComps [i]. inUse = 0;
+	   mm->ServiceComps [i]. inUse = 0;
 	
 }
 
-void	clearEnsemble (struct sdr_state_t *sdr) {
-int16_t i;
-
-	setupforNewFrame (sdr);
-	memset (ServiceComps, 0, sizeof (ServiceComps));
-	memset (subChannels, 0, sizeof (subChannels));
-	for (i = 0; i < 64; i ++) {
-	   listofServices [i]. inUse = 0;
-	   listofServices [i]. serviceId = -1;
-	   if (listofServices[i].serviceLabel.label != 0) {
-		   free(listofServices[i].serviceLabel.label);
-		   listofServices[i].serviceLabel.label = 0;
-	   }
-	   ServiceComps [i]. inUse	= 0;
-	   subChannels [i]. inUse	= 0;
-	}
-	firstTime	= 1;
+void	clearEnsemble (dab_ensemble_instance_t *dei) {
+dab_ensemble_t *mm = dei->mmi_ensemble;
+	setupforNewFrame (dei);
+	memset (mm->ServiceComps, 0, sizeof (mm->ServiceComps));
+	memset (mm->subChannels, 0, sizeof (mm->subChannels));
 }
 
-void	nameofEnsemble  (struct sdr_state_t *sdr, int id, char *s) {
+void	nameofEnsemble  (dab_ensemble_instance_t *dei, int id, char *s) {
 	tvhtrace(LS_RTLSDR, "name of ensemble (%d) %s", id, s);
 
 	tvh_mutex_lock(&global_lock);
 
-	sdr->mmi->mmi_mux->mm_tsid = id;
-	if (mpegts_mux_set_network_name(sdr->mmi->mmi_mux, s))
-		idnode_changed(&sdr->mmi->mmi_mux->mm_id);
+	dei->mmi_ensemble->mm_onid = id;
+	if (dab_ensemble_set_network_name(dei->mmi_ensemble, s))
+		idnode_changed(&dei->mmi_ensemble->mm_id);
 
 	tvh_mutex_unlock(&global_lock);
 
-	sdr->fibProcessorIsSynced = 1;
+	dei->fibProcessorIsSynced = 1;
 	tvhinfo(LS_RTLSDR, "FIC in sync");
 }

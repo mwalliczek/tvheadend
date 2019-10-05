@@ -1,4 +1,4 @@
-/*
+  /*
  *  TVheadend
  *  Copyright (C) 2019 Matthias Walliczek
  *
@@ -19,9 +19,23 @@
 #include "input.h"
 
 void dab_init(void) {
+  /* Register classes (avoid API 400 errors due to not yet defined) */
+  idclass_register(&dab_network_class);
+  idclass_register(&dab_ensemble_class);
+  idclass_register(&dab_ensemble_instance_class);
+  idclass_register(&dab_service_class);
+  idclass_register(&dab_service_raw_class);
+
+  dab_network_init();
+
   rtlsdr_init();
+  
+  dab_network_scan_init();
 }
 
 void dab_done(void) {
+  tvhftrace(LS_MAIN, dab_network_scan_done);
+  tvhftrace(LS_MAIN, dab_network_done);
+
   tvhftrace(LS_MAIN, rtlsdr_done);
 }

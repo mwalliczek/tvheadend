@@ -4,7 +4,7 @@
 /*
  * 	Viterbi.h according to the SPIRAL project
  */
-#include	"../dab_constants.h"
+#include	"../../dab_constants.h"
 
 //	For our particular viterbi decoder, we have
 #define	RATE	4

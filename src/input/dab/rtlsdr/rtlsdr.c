@@ -102,7 +102,7 @@ rtlsdr_adapter_is_enabled(rtlsdr_adapter_t *la)
 {
 	rtlsdr_frontend_t *lfe;
 	LIST_FOREACH(lfe, &la->la_frontends, lfe_link) {
-		if (lfe->mi_is_enabled((mpegts_input_t*)lfe, NULL, 0, -1) != MI_IS_ENABLED_NEVER)
+		if (lfe->mi_is_enabled((dab_input_t*)lfe, NULL, 0, -1) != MI_IS_ENABLED_NEVER)
 			return 1;
 	}
 	return 0;

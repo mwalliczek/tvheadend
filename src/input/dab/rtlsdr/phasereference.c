@@ -26,7 +26,7 @@
 #include <complex.h>
 
 #include "tvheadend.h"
-#include "dab_constants.h"
+#include "../dab_constants.h"
 #include "phasereference.h"
 #include "dab.h"
 

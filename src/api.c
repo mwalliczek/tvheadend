@@ -138,6 +138,7 @@ void api_init ( void )
   api_config_init();
   api_input_init();
   api_mpegts_init();
+  api_dab_init();
   api_service_init();
   api_channel_init();
   api_bouquet_init();

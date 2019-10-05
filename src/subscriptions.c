@@ -957,6 +957,33 @@ subscription_create_from_mux(profile_chain_t *prch,
 /**
  *
  */
+#if ENABLE_RTLSDR
+th_subscription_t *
+subscription_create_from_ensemble(profile_chain_t *prch,
+                             tvh_input_t *ti,
+                             unsigned int weight,
+                             const char *name,
+                             int flags,
+                             const char *hostname,
+                             const char *username,
+                             const char *client,
+                             int *error)
+{
+  dab_ensemble_t *mm = prch->prch_id;
+  dab_service_t *s = dab_service_create_raw(mm);
+
+  if (!s)
+    return NULL;
+
+  return subscription_create_from_channel_or_service
+    (prch, ti, weight, name, flags, hostname, username, client,
+     error, (service_t *)s);
+}
+#endif
+
+/**
+ *
+ */
 th_subscription_t *
 subscription_create_from_file(const char *name,
                               const char *charset,

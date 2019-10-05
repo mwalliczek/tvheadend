@@ -1,30 +1,30 @@
 /*
- * DVB network
+ * DAB network
  */
-tvheadend.mpegts = {};
+tvheadend.dab = {};
 
-tvheadend.mpegts.networks = function(panel, index)
+tvheadend.dab.networks = function(panel, index)
 {
-    if (!tvheadend.mpegts.network_list) {
-        tvheadend.mpegts.network_list = new Ext.data.JsonStore({
+    if (!tvheadend.dab.network_list) {
+        tvheadend.dab.network_list = new Ext.data.JsonStore({
             url: 'api/idnode/load',
-            baseParams: { 'class': 'mpegts_network', 'enum': 1 },
+            baseParams: { 'class': 'dab_network', 'enum': 1 },
             root: 'entries',
             fields: ['key', 'val'],
             id: 'key',
             autoLoad: true
         });
-        tvheadend.mpegts.network_builders = new Ext.data.JsonStore({
-            url: 'api/mpegts/network/builders',
+        tvheadend.dab.network_builders = new Ext.data.JsonStore({
+            url: 'api/dab/network/builders',
             root: 'entries',
             fields: ['class', 'caption', 'order', 'groups', 'props'],
             id: 'class',
             autoLoad: true
         });
-        tvheadend.comet.on('mpegts_network', function() {
+        tvheadend.comet.on('dab_network', function() {
             // TODO: Might be a bit excessive
-            tvheadend.mpegts.network_builders.reload();
-            tvheadend.mpegts.network_list.reload();
+            tvheadend.dab.network_builders.reload();
+            tvheadend.dab.network_list.reload();
         });
     }
 
@@ -45,7 +45,7 @@ tvheadend.mpegts.networks = function(panel, index)
                 for (var i = 0; i < r.length; i++)
                     uuids.push(r[i].id);
                 tvheadend.Ajax({
-                    url: 'api/mpegts/network/scan',
+                    url: 'api/dab/network/scan',
                     params: {
                         uuid: Ext.encode(uuids)
                     },    
@@ -62,8 +62,8 @@ tvheadend.mpegts.networks = function(panel, index)
     }
 
     tvheadend.idnode_grid(panel, {
-        id: 'mpegts_network',
-        url: 'api/mpegts/network',
+        id: 'dab_network',
+        url: 'api/dab/network',
         titleS: _('Network'),
         titleP: _('Networks'),
         iconCls: 'networks',
@@ -73,13 +73,13 @@ tvheadend.mpegts.networks = function(panel, index)
             titleS: _('Network'),
             select: {
                 label: _('Type'),
-                store: tvheadend.mpegts.network_builders,
+                store: tvheadend.dab.network_builders,
                 fullRecord: true,
                 displayField: 'caption',
                 valueField: 'class'
             },
             create: {
-                url: 'api/mpegts/network/create'
+                url: 'api/dab/network/create'
             }
         },
         del: true,
@@ -91,10 +91,10 @@ tvheadend.mpegts.networks = function(panel, index)
     });
 };
 
-tvheadend.mpegts.muxes = function(panel, index)
+tvheadend.dab.muxes = function(panel, index)
 {
     tvheadend.idnode_grid(panel, {
-        url: 'api/mpegts/mux',
+        url: 'api/dab/mux',
         titleS: _('Mux'),
         titleP: _('Muxes'),
         iconCls: 'muxes',
@@ -104,15 +104,15 @@ tvheadend.mpegts.muxes = function(panel, index)
             titleS: _('Mux'),
             select: {
                 label: _('Network'),
-                store: tvheadend.mpegts.network_list,
+                store: tvheadend.dab.network_list,
                 valueField: 'key',
                 displayField: 'val',
                 clazz: {
-                    url: 'api/mpegts/network/mux_class'
+                    url: 'api/dab/network/mux_class'
                 }
             },
             create: {
-                url: 'api/mpegts/network/mux_create'
+                url: 'api/dab/network/mux_create'
             }
         },
         del: true,
@@ -138,7 +138,7 @@ tvheadend.mpegts.muxes = function(panel, index)
     });
 };
 
-tvheadend.mpegts.show_service_streams = function(data) {
+tvheadend.dab.show_service_streams = function(data) {
     var i, j;
     var html = '';
 
@@ -262,7 +262,7 @@ tvheadend.mpegts.show_service_streams = function(data) {
     win.show();
 };
 
-tvheadend.mpegts.services = function(panel, index)
+tvheadend.dab.services = function(panel, index)
 {
     function builder(conf) {
         var mapButton = {
@@ -290,8 +290,8 @@ tvheadend.mpegts.services = function(panel, index)
                 });
             },
             callback: {
-                mapall: tvheadend.mpegts.service_mapper_all,
-                mapsel: tvheadend.mpegts.service_mapper_sel,
+                mapall: tvheadend.dab.service_mapper_all,
+                mapsel: tvheadend.dab.service_mapper_sel,
             }
         };
         
@@ -359,7 +359,7 @@ tvheadend.mpegts.services = function(panel, index)
                             },
                             success: function(r, o) {
                                 var d = Ext.util.JSON.decode(r.responseText);
-                                tvheadend.mpegts.show_service_streams(d);
+                                tvheadend.dab.show_service_streams(d);
                             }
                         });
                     }
@@ -380,7 +380,7 @@ tvheadend.mpegts.services = function(panel, index)
     }
     tvheadend.idnode_grid(panel, {
         id: 'services',
-        url: 'api/mpegts/service',
+        url: 'api/dab/service',
         titleS: _('Service'),
         titleP: _('Services'),
         iconCls: 'services',
@@ -412,26 +412,5 @@ tvheadend.mpegts.services = function(panel, index)
         },
         builder: builder,
         destroyer: destroyer
-    });
-};
-
-tvheadend.mpegts.mux_sched = function(panel, index)
-{
-    tvheadend.idnode_grid(panel, {
-        url: 'api/mpegts/mux_sched',
-        titleS: _('Mux Scheduler'),
-        titleP: _('Mux Schedulers'),
-        iconCls: 'muxSchedulers',
-        tabIndex: index,
-        uilevel: 'expert',
-        hidemode: true,
-        add: {
-            url: 'api/mpegts/mux_sched',
-            titleS: _('Mux Scheduler'),
-            create: {
-                url: 'api/mpegts/mux_sched/create'
-            }
-        },
-        del: true
     });
 };

@@ -140,9 +140,14 @@ typedef struct th_subscription {
   /*
    * MPEG-TS mux chain
    */
-#if ENABLE_MPEGTS
+#if ENABLE_MPEGTS || ENABLE_RTLSDR
   service_t *ths_raw_service;
+#endif
+#if ENABLE_MPEGTS
   LIST_ENTRY(th_subscription) ths_mux_link;
+#endif
+#if ENABLE_RTLSDR
+  LIST_ENTRY(th_subscription) ths_ensemble_link;
 #endif
 
 } th_subscription_t;
@@ -189,6 +194,20 @@ subscription_create_from_service(struct profile_chain *prch,
 struct tvh_input;
 th_subscription_t *
 subscription_create_from_mux(struct profile_chain *prch,
+                             struct tvh_input *ti,
+                             unsigned int weight,
+                             const char *name,
+                             int flags,
+                             const char *hostname,
+                             const char *username,
+                             const char *client,
+                             int *error);
+#endif
+
+#if ENABLE_RTLSDR
+struct tvh_input;
+th_subscription_t *
+subscription_create_from_ensemble(struct profile_chain *prch,
                              struct tvh_input *ti,
                              unsigned int weight,
                              const char *name,

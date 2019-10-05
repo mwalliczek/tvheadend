@@ -186,6 +186,7 @@ void tvh_input_instance_clear_stats ( tvh_input_instance_t *tii );
 #if ENABLE_RTLSDR
 #include "input/dab.h"
 #include "input/dab/rtlsdr.h"
+#include "input/dab/dab_network_scan.h"
 #endif
 #endif
 
