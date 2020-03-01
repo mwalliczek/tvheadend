@@ -109,7 +109,11 @@ void rtlsdr_frontend_save(rtlsdr_frontend_t *lfe, htsmsg_t *m);
 
 void rtlsdr_frontend_destroy(rtlsdr_frontend_t *lfe);
 
-int rtlsdr_frontend_tune(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi, uint32_t freq);
+int rtlsdr_frontend_clear(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi);
+
+int rtlsdr_frontend_tune0(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi, uint32_t freq);
+
+int rtlsdr_frontend_tune1(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi, uint32_t freq);
 
 void rtlsdr_frontend_create_ensemble_instance0(rtlsdr_frontend_t *lfe, dab_ensemble_t *mm);
 

@@ -4506,6 +4506,7 @@ htsp_streaming_input(void *opaque, streaming_message_t *sm)
     break;
 
   case SMT_MPEGTS:
+  case SMT_DAB:
     break;
 
   case SMT_EXIT:

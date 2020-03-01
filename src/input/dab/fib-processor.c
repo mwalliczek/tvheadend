@@ -98,7 +98,7 @@
 
    void		*userData;
    serviceComponent *find_packetComponent(dab_ensemble_instance_t *dei, int16_t);
-   serviceComponent *find_serviceComponent(dab_ensemble_instance_t *dei, int32_t SId, int16_t SCId);
+//   serviceComponent *find_serviceComponent(dab_ensemble_instance_t *dei, int32_t SId, int16_t SCId);
    void            bind_audioService(dab_ensemble_instance_t *dei, int8_t,
 	   uint32_t, int16_t,
 	   int16_t, int16_t, int16_t);
@@ -139,8 +139,8 @@
    int16_t		HandleFIG0Extension5(dab_ensemble_instance_t *dei, uint8_t *, int16_t);
    int16_t		HandleFIG0Extension8(uint8_t *,
 	   int16_t, uint8_t);
-   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, uint8_t *,
-	   int16_t, uint8_t);
+//   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, uint8_t *,
+//	   int16_t, uint8_t);
    int16_t		HandleFIG0Extension22(uint8_t *, int16_t);
    void    nameofEnsemble  (dab_ensemble_instance_t *dei, int id, char *s);
 
@@ -655,15 +655,15 @@ void    FIG0Extension12 (uint8_t *d) {
 //
 //
 void	FIG0Extension13 (dab_ensemble_instance_t *dei, uint8_t *d) {
-int16_t	used	= 2;		// offset in bytes
-int16_t	Length	= getBits_5 (d, 3);
-uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
+//int16_t	used	= 2;		// offset in bytes
+//int16_t	Length	= getBits_5 (d, 3);
+//uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 
-	while (used < Length) 
-	   used = HandleFIG0Extension13 (dei, d, used, PD_bit);
+//	while (used < Length) 
+//	   used = HandleFIG0Extension13 (dei, d, used, PD_bit);
 }
 
-int16_t	HandleFIG0Extension13 (dab_ensemble_instance_t *dei, uint8_t *d,
+/*int16_t	HandleFIG0Extension13 (dab_ensemble_instance_t *dei, uint8_t *d,
 	                                     int16_t used,
 	                                     uint8_t pdBit) {
 int16_t	lOffset		= used * 8;
@@ -689,7 +689,7 @@ int16_t		appType;
 	}
 
 	return lOffset / 8;
-}
+}*/
 //
 //      FEC sub-channel organization 6.2.2
 void	FIG0Extension14 (dab_ensemble_instance_t *dei, uint8_t *d) {
@@ -1013,7 +1013,7 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
         return NULL;
 }
 
-serviceComponent *find_serviceComponent (dab_ensemble_instance_t *dei, int32_t SId,
+/*serviceComponent *find_serviceComponent (dab_ensemble_instance_t *dei, int32_t SId,
 	                                                int16_t SCIdS) {
 int16_t i;
 dab_ensemble_t *mm = dei->mmi_ensemble;
@@ -1028,7 +1028,7 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
 	}
 
 	return NULL;
-}
+}*/
 
 //	bind_audioService is the main processor for - what the name suggests -
 //	connecting the description of audioservices to a SID
@@ -1040,8 +1040,6 @@ void	bind_audioService (dab_ensemble_instance_t *dei, int8_t TMid,
 	                                  int16_t ASCTy) {
 dab_ensemble_t *mm = dei->mmi_ensemble;
 dab_service_t *s;
-int16_t	i;
-int16_t	firstFree	= -1;
 
 	tvh_mutex_lock(&global_lock);
 	
@@ -1056,41 +1054,21 @@ int16_t	firstFree	= -1;
 	   return;
 	}
 
-	for (i = 0; i < 64; i ++) {
-	   if (!mm->ServiceComps [i]. inUse) {
-	      if (firstFree == -1)
-	         firstFree = i;
-	      continue;
-	   }
-	   if ((mm->ServiceComps [i]. service == s) &&
-               (mm->ServiceComps [i]. componentNr == compnr)) {
-              tvh_mutex_unlock(&global_lock);
-	      return;
-	   }
-	}
-
 	tvhtrace(LS_RTLSDR, "add to ensemble (%d) %s", service_id16(s), s->s_dab_svcname);
 
-	/*	mpegts_table_add(mm, DVB_PMT_BASE, DVB_PMT_MASK, dvb_pmt_callback,
-	NULL, "pmt", LS_TBL_BASE,
-	MT_CRC | MT_QUICKREQ | MT_ONESHOT | MT_SCANSUBS,
-	service->pNum, MPS_WEIGHT_PMT_SCAN); */
 	s->s_verified = 1;
+
+	s->TMid		= TMid;
+	s->PS_flag	= ps_flag;
+	s->ASCTy	= ASCTy;
+	
+	s->subChId = SubChId;
+
 	idnode_changed(&s->s_id);
+
 	service_refresh_channel((service_t*)s);
 
 	tvh_mutex_unlock(&global_lock);
-
-	mm->ServiceComps [firstFree]. inUse		= 1;
-	mm->ServiceComps [firstFree]. TMid		= TMid;
-	mm->ServiceComps [firstFree]. componentNr	= compnr;
-	mm->ServiceComps [firstFree]. service	= s;
-	mm->ServiceComps [firstFree]. subchannelId = SubChId;
-	mm->ServiceComps [firstFree]. PS_flag	= ps_flag;
-	mm->ServiceComps [firstFree]. ASCTy		= ASCTy;
-	
-	s->serviceComponent = &mm->ServiceComps [firstFree];
-	s->subChId = SubChId;
 }
 
 //      bind_packetService is the main processor for - what the name suggests -

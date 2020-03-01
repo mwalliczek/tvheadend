@@ -353,6 +353,7 @@ static void _process_msg
     case SMT_SIGNAL_STATUS:
     case SMT_START:
     case SMT_MPEGTS:
+    case SMT_DAB:
       tvh_mutex_lock(&ts->state_mutex);
       if (!teletext) /* do not use time from teletext packets */
         ts->buf_time = sm->sm_time;

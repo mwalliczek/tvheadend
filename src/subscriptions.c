@@ -198,9 +198,15 @@ subscription_show_none(th_subscription_t *s)
                   s->ths_channel ?
                     channel_get_name(s->ths_channel, channel_blank_name) : "none");
 #if ENABLE_MPEGTS
-  else if (s->ths_raw_service) {
+  else if (s->ths_raw_service && s->ths_raw_service->s_source_type == S_MPEG_TS) {
     mpegts_service_t *ms = (mpegts_service_t *)s->ths_raw_service;
     tvh_strlcatf(buf, sizeof(buf), l, " to mux \"%s\"", ms->s_dvb_mux->mm_nicename);
+  }
+#endif
+#if ENABLE_RTLSDR
+  else if (s->ths_raw_service && s->ths_raw_service->s_source_type == S_DAB) {
+    dab_service_t *ms = (dab_service_t *)s->ths_raw_service;
+    tvh_strlcatf(buf, sizeof(buf), l, " to ensemble \"%s\"", ms->s_dab_ensemble->mm_nicename);
   }
 #endif
   else {
@@ -210,6 +216,12 @@ subscription_show_none(th_subscription_t *s)
     if (idnode_is_instance(&s->ths_service->s_id, &mpegts_service_class)) {
       mpegts_service_t *ms = (mpegts_service_t *)s->ths_service;
       tvh_strlcatf(buf, sizeof(buf), l, " in mux \"%s\"", ms->s_dvb_mux->mm_nicename);
+    }
+#endif
+#if ENABLE_RTLSDR
+    if (idnode_is_instance(&s->ths_service->s_id, &dab_service_class)) {
+      dab_service_t *ms = (dab_service_t *)s->ths_service;
+      tvh_strlcatf(buf, sizeof(buf), l, " in ensemble \"%s\"", ms->s_dab_ensemble->mm_nicename);
     }
 #endif
   }
@@ -230,9 +242,9 @@ subscription_show_info(th_subscription_t *s)
     tvh_strlcatf(buf, sizeof(buf), l, " on channel \"%s\"",
                   s->ths_channel ?
                     channel_get_name(s->ths_channel, channel_blank_name) : "none");
-#if ENABLE_MPEGTS
+#if ENABLE_MPEGTS || ENABLE_RTLSDR
   } else if (s->ths_raw_service && si.si_mux) {
-    tvh_strlcatf(buf, sizeof(buf), l, " to mux \"%s\"", si.si_mux);
+    tvh_strlcatf(buf, sizeof(buf), l, " to mux / ensemble \"%s\"", si.si_mux);
     mux = 1;
 #endif
   } else {
@@ -540,7 +552,7 @@ subscription_input_direct(void *opauqe, streaming_message_t *sm)
     atomic_add(&s->ths_total_err, pkt->pkt_err);
     if (pkt->pkt_payload)
       subscription_add_bytes_in(s, pktbuf_len(pkt->pkt_payload));
-  } else if(sm->sm_type == SMT_MPEGTS) {
+  } else if(sm->sm_type == SMT_MPEGTS || sm->sm_type == SMT_DAB) {
     pktbuf_t *pb = sm->sm_data;
     atomic_add(&s->ths_total_err, pb->pb_err);
     subscription_add_bytes_in(s, pktbuf_len(pb));
@@ -709,8 +721,14 @@ subscription_unsubscribe(th_subscription_t *s, int flags)
   LIST_SAFE_REMOVE(s, ths_remove_link);
 
 #if ENABLE_MPEGTS
-  if (raw && t == raw) {
+  if (raw && t == raw && t->s_source_type == S_MPEG_TS) {
     LIST_REMOVE(s, ths_mux_link);
+    service_remove_raw(raw);
+  }
+#endif
+#if ENABLE_RTLSDR
+  if (raw && t == raw && t->s_source_type == S_DAB) {
+    LIST_REMOVE(s, ths_ensemble_link);
     service_remove_raw(raw);
   }
 #endif
@@ -870,10 +888,17 @@ subscription_create_from_channel_or_service(profile_chain_t *prch,
     LIST_INSERT_HEAD(&ch->ch_subscriptions, s, ths_channel_link);
 
 #if ENABLE_MPEGTS
-  if (service && service->s_type == STYPE_RAW) {
+  if (service && service->s_type == STYPE_RAW && service->s_source_type == S_MPEG_TS) {
     mpegts_mux_t *mm = prch->prch_id;
     s->ths_raw_service = service;
     LIST_INSERT_HEAD(&mm->mm_raw_subs, s, ths_mux_link);
+  }
+#endif
+#if ENABLE_RTLSDR
+  if (service && service->s_type == STYPE_RAW && service->s_source_type == S_DAB) {
+    dab_ensemble_t *mm = prch->prch_id;
+    s->ths_raw_service = service;
+    LIST_INSERT_HEAD(&mm->mm_raw_subs, s, ths_ensemble_link);
   }
 #endif
 

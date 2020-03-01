@@ -290,8 +290,8 @@ tvheadend.mpegts.services = function(panel, index)
                 });
             },
             callback: {
-                mapall: tvheadend.mpegts.service_mapper_all,
-                mapsel: tvheadend.mpegts.service_mapper_sel,
+                mapall: tvheadend.service_mapper_all,
+                mapsel: tvheadend.service_mapper_sel,
             }
         };
         

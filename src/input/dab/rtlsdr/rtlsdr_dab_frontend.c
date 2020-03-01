@@ -55,18 +55,18 @@ const idclass_t rtlsdr_frontend_dab_class =
 * *************************************************************************/
 
 static void
-rtlsdr_frontend_close_fd(rtlsdr_frontend_t *lfe, int dev_index)
+rtlsdr_frontend_close_fd(rtlsdr_frontend_t *lfe)
 {
 	if (lfe->dev == NULL)
 		return;
 
-	tvhtrace(LS_RTLSDR, "closing FE %d", dev_index);
+	tvhdebug(LS_RTLSDR, "closing FE %d", lfe->lfe_adapter->dev_index);
 	rtlsdr_close(lfe->dev);
 	lfe->dev = NULL;
 }
 
 static int
-rtlsdr_frontend_open_fd(rtlsdr_frontend_t *lfe, int dev_index)
+rtlsdr_frontend_open_fd(rtlsdr_frontend_t *lfe)
 {
 	int r;
 
@@ -74,14 +74,14 @@ rtlsdr_frontend_open_fd(rtlsdr_frontend_t *lfe, int dev_index)
 		return 0;
 
 	if (lfe->dev == NULL) {
-		r = rtlsdr_open(&lfe->dev, dev_index);
+		r = rtlsdr_open(&lfe->dev, lfe->lfe_adapter->dev_index);
 		if (r < 0) {
-			tvherror(LS_RTLSDR, "Failed to open rtlsdr device #%d.\n", dev_index);
+			tvherror(LS_RTLSDR, "Failed to open rtlsdr device #%d.\n", lfe->lfe_adapter->dev_index);
 			exit(1);
 		}
 	}
 
-	tvhtrace(LS_RTLSDR, "opening FE %d", dev_index);
+	tvhdebug(LS_RTLSDR, "opening FE %d", lfe->lfe_adapter->dev_index);
 
 	return lfe->dev == NULL;
 }
@@ -90,18 +90,15 @@ static void
 rtlsdr_frontend_enabled_updated(dab_input_t *ti)
 {
 	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t *)ti;
-	int dev_index;
-
-	dev_index = lfe->lfe_adapter->dev_index;
 
 	/* Ensure disabled */
 	if (!lfe->mi_enabled) {
-		tvhtrace(LS_RTLSDR, "%d - disabling tuner", dev_index);
-		rtlsdr_frontend_close_fd(lfe, dev_index);
+		tvhtrace(LS_RTLSDR, "%d - disabling tuner", lfe->lfe_adapter->dev_index);
+		rtlsdr_frontend_close_fd(lfe);
 	}
 	else if (lfe->dev == NULL) {
 
-		rtlsdr_frontend_open_fd(lfe, dev_index);
+		rtlsdr_frontend_open_fd(lfe);
 
 	}
 }
@@ -193,7 +190,7 @@ rtlsdr_frontend_warm_ensemble(dab_input_t *ti, dab_ensemble_instance_t *mmi)
 			/* Stop */
 			lmmi->mmi_ensemble->mm_stop(lmmi->mmi_ensemble, 1, SM_CODE_ABORTED);
 		}
-		rtlsdr_frontend_close_fd(lfe2, lfe->lfe_adapter->dev_index);
+		rtlsdr_frontend_close_fd(lfe2);
 	}
 	return 0;
 }
@@ -208,7 +205,7 @@ static int rtlsdr_frontend_start_ensemble(dab_input_t *ti, dab_ensemble_instance
 	lfe->lfe_refcount++;
 	lfe->lfe_in_setup = 1;
 
-	res = rtlsdr_frontend_tune(lfe, mmi, -1);
+	res = rtlsdr_frontend_tune1(lfe, mmi, -1);
 
 	if (res) {
 		lfe->lfe_in_setup = 0;
@@ -246,17 +243,20 @@ rtlsdr_frontend_create_ensemble_instance0(rtlsdr_frontend_t *lfe, dab_ensemble_t
     dab_ensemble_instance_create(dab_ensemble_instance, NULL, (dab_input_t *)lfe, mm);
 }
 
-static void rtlsdr_frontend_open_service(dab_input_t *mi, dab_service_t *s, int flags, int first, int weight)
+static void rtlsdr_frontend_open_service(dab_input_t *di, dab_service_t *s, int flags, int first, int weight)
 {
+	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t *) di;
 	tvhtrace(LS_RTLSDR, "open service %s", s->s_nicename);
-	dab_input_open_service(mi, s, flags, first, weight);
+	dab_input_open_service(di, s, flags, first, weight);
+	if (s->s_type != STYPE_RAW) {
+		LIST_INSERT_HEAD(&lfe->sdr.active_service_instance, sdr_dab_service_instance_create(s), service_link);
+	}
 }
 
 static idnode_set_t *
 rtlsdr_frontend_network_list(dab_input_t *mi)
 {
-	tvhtrace(LS_RTLSDR, "%s: network list for DAB",
-		mi->mi_name ? : "");
+	tvhtrace(LS_RTLSDR, "%s: network list for DAB", mi->mi_name ? : "");
 
 	return idnode_find_all(&dab_network_class, NULL);
 }
@@ -501,7 +501,7 @@ rtlsdr_frontend_monitor(void *aux)
 
 	/* Close FE */
 	if (lfe->dev != NULL && !lfe->lfe_refcount) {
-		rtlsdr_frontend_close_fd(lfe, lfe->lfe_adapter->dev_index);
+		rtlsdr_frontend_close_fd(lfe);
 		return;
 	}
 
@@ -520,10 +520,6 @@ rtlsdr_frontend_monitor(void *aux)
 		lfe->running = 1;
 		/* Start input */
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_dvr_pipe);
-		sdr = &lfe->sdr;
-		memset(sdr, 0, sizeof(struct sdr_state_t));
-		sdr->mmi = mmi;
-		sdr_init(sdr);
 		sdr->mmi->tii_stats.snr_scale = SIGNAL_STATUS_SCALE_DECIBEL;
 		sdr->mmi->tii_stats.signal_scale = SIGNAL_STATUS_SCALE_RELATIVE;
 		tvh_pipe(O_NONBLOCK, &lfe->lfe_control_pipe);
@@ -572,18 +568,39 @@ rtlsdr_frontend_monitor(void *aux)
 * *************************************************************************/
 
 int
-rtlsdr_frontend_tune
+rtlsdr_frontend_clear
+(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi)
+{
+  char buf1[256];
+  struct sdr_state_t *sdr;
+
+  /* Open FE */
+  lfe->mi_display_name((dab_input_t*)lfe, buf1, sizeof(buf1));
+  tvhtrace(LS_RTLSDR, "%s - frontend clear", buf1);
+
+  if (rtlsdr_frontend_open_fd(lfe))
+    return SM_CODE_TUNING_FAILED;
+    
+  lfe->lfe_locked  = 0;
+  lfe->lfe_status  = 0;
+  
+  sdr = &lfe->sdr;
+  memset(sdr, 0, sizeof(struct sdr_state_t));
+  sdr->mmi = mmi;
+  sdr_init(sdr);
+
+  return 0;
+}
+
+int
+rtlsdr_frontend_tune0
 (rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi, uint32_t freq)
 {
 	int r = 0;
-	char buf1[256];
 	dab_ensemble_t *lm = mmi->mmi_ensemble;
-
-	lfe->mi_display_name((dab_input_t*)lfe, buf1, sizeof(buf1));
-	tvhdebug(LS_RTLSDR, "%s - starting %s", buf1, mmi->mmi_ensemble->mm_nicename);
-
-	/* Tune */
-	tvhtrace(LS_RTLSDR, "%s - tuning", buf1);
+		  
+	r = rtlsdr_frontend_clear(lfe, mmi);
+	if (r) return r;
 
 	if (freq != (uint32_t)-1)
 		lfe->lfe_freq = freq;
@@ -618,7 +635,27 @@ rtlsdr_frontend_tune
 	r = rtlsdr_set_center_freq(lfe->dev, freq);
 	if (r < 0)
 		tvherror(LS_RTLSDR, "WARNING: Failed to set center freq.\n");
-	else {
+	
+	return r;
+}
+
+int
+rtlsdr_frontend_tune1
+(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi, uint32_t freq)
+{
+	int r = 0;
+	char buf1[256];
+
+	lfe->mi_display_name((dab_input_t*)lfe, buf1, sizeof(buf1));
+	tvhdebug(LS_RTLSDR, "%s - starting %s", buf1, mmi->mmi_ensemble->mm_nicename);
+
+	/* Tune */
+	tvhtrace(LS_RTLSDR, "%s - tuning", buf1);
+
+	r = rtlsdr_frontend_tune0(lfe, mmi, freq);
+
+	/* Start monitor */
+	if (!r) {
 		lfe->lfe_monitor = mclk() + sec2mono(4);
 		mtimer_arm_rel(&lfe->lfe_monitor_timer, rtlsdr_frontend_monitor, lfe, ms2mono(50));
 		lfe->lfe_ready = 1;

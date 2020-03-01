@@ -349,6 +349,7 @@ gh_hold(globalheaders_t *gh, streaming_message_t *sm)
   case SMT_NOSTART:
   case SMT_NOSTART_WARN:
   case SMT_MPEGTS:
+  case SMT_DAB:
   case SMT_SPEED:
   case SMT_SKIP:
   case SMT_TIMESHIFT_STATUS:
@@ -386,6 +387,7 @@ gh_pass(globalheaders_t *gh, streaming_message_t *sm)
   case SMT_NOSTART:
   case SMT_NOSTART_WARN:
   case SMT_MPEGTS:
+  case SMT_DAB:
   case SMT_SKIP:
   case SMT_SPEED:
   case SMT_TIMESHIFT_STATUS:

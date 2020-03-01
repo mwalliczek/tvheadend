@@ -389,6 +389,7 @@ http_stream_run(http_connection_t *hc, profile_chain_t *prch,
 
     switch(sm->sm_type) {
     case SMT_MPEGTS:
+    case SMT_DAB:
     case SMT_PACKET:
       if(started) {
         pktbuf_t *pb;

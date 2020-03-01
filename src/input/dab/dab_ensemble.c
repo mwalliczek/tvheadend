@@ -263,7 +263,7 @@ CLASS_DOC(dab_ensemble)
 const idclass_t dab_ensemble_class =
 {
   .ic_class      = "dab_ensemble",
-  .ic_caption    = N_("DAB Inputs - Multiplex"),
+  .ic_caption    = N_("DAB Inputs - Ensemble"),
   .ic_event      = "dab_ensemble",
   .ic_doc        = tvh_doc_dab_ensemble_class,
   .ic_perm_def   = ACCESS_ADMIN,
@@ -275,8 +275,8 @@ const idclass_t dab_ensemble_class =
       .type     = PT_INT,
       .id       = "enabled",
       .name     = N_("Enabled"),
-      .desc     = N_("Enable, disable or ignore the mux. "
-                     "When the mux is marked as ignore, "
+      .desc     = N_("Enable, disable or ignore the ensemble. "
+                     "When the ensemble is marked as ignore, "
                      "all discovered services are removed."),
       .off      = offsetof(dab_ensemble_t, mm_enabled),
       .def.i    = MM_ENABLE,
@@ -288,7 +288,7 @@ const idclass_t dab_ensemble_class =
       .type     = PT_U32,
       .id       = "frequency",
       .name     = N_("Frequency (Hz)"),
-      .desc     = N_("The frequency of the mux (in Hertz)."),
+      .desc     = N_("The frequency of the ensemble (in Hertz)."),
       .off      = offsetof(dab_ensemble_t, mm_freq),
       .set      = dab_ensemble_class_frequency_set,
     },
@@ -296,7 +296,7 @@ const idclass_t dab_ensemble_class =
       .type     = PT_STR,
       .id       = "network",
       .name     = N_("Network"),
-      .desc     = N_("The network the mux is on."),
+      .desc     = N_("The network the ensemble is on."),
       .opts     = PO_RDONLY | PO_NOSAVE,
       .get      = dab_ensemble_class_get_network,
     },
@@ -312,7 +312,7 @@ const idclass_t dab_ensemble_class =
       .type     = PT_STR,
       .id       = "name",
       .name     = N_("Name"),
-      .desc     = N_("The name (or frequency) the mux is on."),
+      .desc     = N_("The name (or frequency) the ensemble is on."),
       .opts     = PO_RDONLY | PO_NOSAVE,
       .get      = dab_ensemble_class_get_name,
     },
@@ -336,9 +336,9 @@ const idclass_t dab_ensemble_class =
       .type     = PT_INT,
       .id       = "scan_state",
       .name     = N_("Scan status"),
-      .desc     = N_("The scan state. New muxes will automatically be "
+      .desc     = N_("The scan state. New ensembles will automatically be "
                      "changed to the PEND state. You can change this to "
-                     "ACTIVE to queue a scan of this mux."),
+                     "ACTIVE to queue a scan of this ensemble."),
       .off      = offsetof(dab_ensemble_t, mm_scan_state),
       .set      = dab_ensemble_class_scan_state_set,
       .list     = dab_ensemble_class_scan_state_enum,
@@ -374,7 +374,7 @@ const idclass_t dab_ensemble_class =
       .type     = PT_TIME,
       .id       = "created",
       .name     = N_("Created"),
-      .desc     = N_("When the mux was created."),
+      .desc     = N_("When the ensemble was created."),
       .off      = offsetof(dab_ensemble_t, mm_created),
       .opts     = PO_ADVANCED | PO_RDONLY,
     },
@@ -390,7 +390,7 @@ const idclass_t dab_ensemble_class =
       .type     = PT_TIME,
       .id       = "scan_last",
       .name     = N_("Last scan"),
-      .desc     = N_("When the mux was successfully scanned."),
+      .desc     = N_("When the ensemble was successfully scanned."),
       .off      = offsetof(dab_ensemble_t, mm_scan_last_seen),
       .opts     = PO_ADVANCED | PO_RDONLY,
     },
@@ -405,7 +405,7 @@ const idclass_t dab_ensemble_class =
 static void
 dab_ensemble_display_name ( dab_ensemble_t *mm, char *buf, size_t len )
 {
-  snprintf(buf, len, "Multiplex [onid:%04X]", mm->mm_onid);
+  snprintf(buf, len, "Ensemble [onid:%04X]", mm->mm_onid);
 }
 
 void
@@ -602,7 +602,7 @@ dab_ensemble_keep_exists
   LIST_FOREACH(mmi, &mi->mi_ensemble_active, mmi_active_link)
     LIST_FOREACH(ths, &mmi->mmi_ensemble->mm_raw_subs, ths_ensemble_link) {
       s = ths->ths_service;
-      if (s && s->s_type == STYPE_RAW && !strcmp(ths->ths_title, "keep")) {
+      if (s && s->s_type == STYPE_RAW && s->s_source_type == S_DAB && !strcmp(ths->ths_title, "keep")) {
         ret = 1;
         break;
       }
@@ -829,7 +829,7 @@ dab_ensemble_scan_done ( dab_ensemble_t *mm, const char *buf, int res )
   /* Log */
   tvh_mutex_lock(&mm->mm_tables_lock);
   LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link)
-    if (ms->s_dab_svcname && ms->serviceComponent && ms->subChId) {
+    if (ms->s_dab_svcname && ms->subChId) {
       complete++;
     } else {
       incomplete++;
@@ -878,7 +878,7 @@ dab_ensemble_scan_timeout ( void *aux )
   /* Check tables */
   tvh_mutex_lock(&mm->mm_tables_lock);
   LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link)
-    if (ms->s_dab_svcname && ms->serviceComponent && ms->subChId) {
+    if (ms->s_dab_svcname && ms->subChId) {
       complete++;
     } else {
       incomplete++;
@@ -913,6 +913,7 @@ dab_ensemble_t *dab_ensemble_create0
   htsmsg_field_t *f;
   char ubuf1[UUID_HEX_SIZE];
   char ubuf2[UUID_HEX_SIZE];
+  int i;
 
   if (idnode_insert(&mm->mm_id, uuid, class, 0)) {
     if (uuid)
@@ -957,6 +958,38 @@ dab_ensemble_t *dab_ensemble_create0
 
   /* No config */
   if (!conf) return mm;
+
+  c = htsmsg_get_map(conf, "serviceComponents");
+  if (c) {
+    HTSMSG_FOREACH(f, c) {
+      if (!(e = htsmsg_get_map_by_field(f))) continue;
+      i = atoi(htsmsg_field_name(f));
+      mm->ServiceComps [i].inUse = 1;
+      htsmsg_get_s32(e, "TMid", &mm->ServiceComps [i].TMid);
+      htsmsg_get_s32(e, "componentNr", &mm->ServiceComps [i].componentNr);
+      htsmsg_get_s32(e, "ASCTy", &mm->ServiceComps [i].ASCTy);
+      htsmsg_get_s32(e, "PS_flag", &mm->ServiceComps [i].PS_flag);
+      htsmsg_get_s32(e, "subchannelId", &mm->ServiceComps [i].subchannelId);
+      
+    }
+  }
+
+  c = htsmsg_get_map(conf, "subchannels");
+  if (c) {
+    HTSMSG_FOREACH(f, c) {
+      if (!(e = htsmsg_get_map_by_field(f))) continue;
+      i = atoi(htsmsg_field_name(f));
+      mm->subChannels [i].inUse = 1;
+      htsmsg_get_s32(e, "SubChId", &mm->subChannels [i].SubChId);
+      htsmsg_get_s32(e, "StartAddr", &mm->subChannels [i].StartAddr);
+      htsmsg_get_s32(e, "Length", &mm->subChannels [i].Length);
+      htsmsg_get_s32(e, "shortForm", &mm->subChannels [i].shortForm);
+      htsmsg_get_s32(e, "protLevel", &mm->subChannels [i].protLevel);
+      htsmsg_get_s32(e, "BitRate", &mm->subChannels [i].BitRate);
+      htsmsg_get_s32(e, "language", &mm->subChannels [i].language);
+      htsmsg_get_s32(e, "FEC_scheme", &mm->subChannels [i].FEC_scheme);
+    }
+  }
 
   /* Services */
   c2 = NULL;
@@ -1009,8 +1042,11 @@ dab_ensemble_save ( dab_ensemble_t *mm, htsmsg_t *c, int refs )
   dab_service_t *ms;
   htsmsg_t *root = !refs ? htsmsg_create_map() : c;
   htsmsg_t *services = !refs ? htsmsg_create_map() : htsmsg_create_list();
+  htsmsg_t *subchannels = htsmsg_create_map();
+  htsmsg_t *serviceComponents = htsmsg_create_map();
   htsmsg_t *e;
   char ubuf[UUID_HEX_SIZE];
+  int i;
 
   idnode_save(&mm->mm_id, root);
   LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link) {
@@ -1023,6 +1059,35 @@ dab_ensemble_save ( dab_ensemble_t *mm, htsmsg_t *c, int refs )
     }
   }
   htsmsg_add_msg(root, "services", services);
+  for (i = 0; i < 64; i ++) {
+    if (!mm->ServiceComps [i]. inUse)
+      continue;
+    e = htsmsg_create_map();
+    htsmsg_add_u32(e, "TMid", mm->ServiceComps [i].TMid);
+    htsmsg_add_u32(e, "componentNr", mm->ServiceComps [i].componentNr);
+    htsmsg_add_u32(e, "ASCTy", mm->ServiceComps [i].ASCTy);
+    htsmsg_add_u32(e, "PS_flag", mm->ServiceComps [i].PS_flag);
+    htsmsg_add_u32(e, "subchannelId", mm->ServiceComps [i].subchannelId);
+    snprintf(ubuf, UUID_HEX_SIZE, "%d", i);
+    htsmsg_add_msg(serviceComponents, ubuf, e);
+  }
+  htsmsg_add_msg(root, "serviceComponents", serviceComponents);
+  for (i = 0; i < 64; i ++) {
+    if (!mm->subChannels [i]. inUse)
+      continue;
+    e = htsmsg_create_map();
+    htsmsg_add_u32(e, "SubChId", mm->subChannels [i].SubChId);
+    htsmsg_add_u32(e, "StartAddr", mm->subChannels [i].StartAddr);
+    htsmsg_add_u32(e, "Length", mm->subChannels [i].Length);
+    htsmsg_add_u32(e, "shortForm", mm->subChannels [i].shortForm);
+    htsmsg_add_u32(e, "protLevel", mm->subChannels [i].protLevel);
+    htsmsg_add_u32(e, "BitRate", mm->subChannels [i].BitRate);
+    htsmsg_add_u32(e, "language", mm->subChannels [i].language);
+    htsmsg_add_u32(e, "FEC_scheme", mm->subChannels [i].FEC_scheme);
+    snprintf(ubuf, UUID_HEX_SIZE, "%d", i);
+    htsmsg_add_msg(subchannels, ubuf, e);
+  }
+  htsmsg_add_msg(root, "subchannels", subchannels);
   if (!refs)
     htsmsg_add_msg(c, "config", root);
 }
@@ -1116,7 +1181,7 @@ dab_ensemble_unsubscribe_by_name
   while (s) {
     n = LIST_NEXT(s, ths_mux_link);
     t = s->ths_service;
-    if (t && t->s_type == STYPE_RAW && !strcmp(s->ths_title, name))
+    if (t && t->s_type == STYPE_RAW && t->s_source_type == S_DAB && !strcmp(s->ths_title, name))
       subscription_unsubscribe(s, UNSUBSCRIBE_FINAL);
     s = n;
   }

@@ -15,6 +15,8 @@
 
 #define DEFAULT_BUF_LENGTH (16 * 16384)
 
+typedef struct sdr_dab_service_instance       sdr_dab_service_instance_t;
+
 struct phase_reference_t {
 	float _Complex *fftBuffer;
 	fftwf_plan plan;
@@ -27,6 +29,26 @@ struct ofdm_decoder_t {
 	pthread_t thread;
 	th_pipe_t pipe;
 	float _Complex buffer[L][T_s];
+};
+
+struct sdr_dab_service_instance
+{
+        dab_service_t   *dai_service;
+        
+        LIST_ENTRY(sdr_dab_service_instance) service_link;
+
+        pthread_t thread;
+        th_pipe_t pipe;
+        
+
+	int16_t		fragmentSize;
+        int16_t*	interleaveData[16];
+        uint8_t*	disperseVector;
+	int16_t		nextIn;
+	int16_t		nextOut;
+	int16_t		*theData [20];
+
+        subChannel* 	subChannel;
 };
 
 struct sdr_state_t {
@@ -51,6 +73,10 @@ struct sdr_state_t {
 
 	int			fibCRCtotal;
 	int			fibCRCsuccess;
+	
+	LIST_HEAD(,sdr_dab_service_instance) active_service_instance;
+	
+	int16_t		cifVector[55296];
 	
 	struct v vp;
 };
@@ -90,6 +116,10 @@ int	check_CRC_bits(uint8_t *in, int32_t size) {
 	return Sum == 0;
 }
 
+sdr_dab_service_instance_t* sdr_dab_service_instance_create(dab_service_t* service);
+
 void sdr_init(struct sdr_state_t *sdr);
+
+void sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, int16_t *v, int16_t cnt);
 
 #endif

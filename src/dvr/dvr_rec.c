@@ -1824,6 +1824,10 @@ dvr_thread(void *aux)
       packets++;
       break;
 
+    case SMT_DAB:
+      // TODO MWL
+      break;
+    
     case SMT_START:
       start_time = gclk();
       packets = 0;

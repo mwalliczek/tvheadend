@@ -95,13 +95,13 @@ tvheadend.dab.muxes = function(panel, index)
 {
     tvheadend.idnode_grid(panel, {
         url: 'api/dab/mux',
-        titleS: _('Mux'),
-        titleP: _('Muxes'),
+        titleS: _('Ensemble'),
+        titleP: _('Ensembles'),
         iconCls: 'muxes',
         tabIndex: index,
         hidemode: true,
         add: {
-            titleS: _('Mux'),
+            titleS: _('Ensemble'),
             select: {
                 label: _('Network'),
                 store: tvheadend.dab.network_list,
@@ -290,8 +290,8 @@ tvheadend.dab.services = function(panel, index)
                 });
             },
             callback: {
-                mapall: tvheadend.dab.service_mapper_all,
-                mapsel: tvheadend.dab.service_mapper_sel,
+                mapall: tvheadend.service_mapper_all,
+                mapsel: tvheadend.service_mapper_sel,
             }
         };
         

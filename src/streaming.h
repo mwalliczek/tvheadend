@@ -235,6 +235,11 @@ enum streaming_message_type {
   SMT_MPEGTS,
 
   /**
+   * Raw DAB data
+   */
+  SMT_DAB,
+
+  /**
    * Internal message to exit receiver
    */
   SMT_EXIT,

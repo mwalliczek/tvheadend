@@ -26,4 +26,8 @@
 
 #define		DIFF_LENGTH	42
 
+#define numberofblocksperCIF 18
+
+#define	CUSize	(4 * 16)
+
 #endif

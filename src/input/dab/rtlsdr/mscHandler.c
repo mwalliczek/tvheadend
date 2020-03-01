@@ -27,4 +27,28 @@
 #include "mscHandler.h"
 
 void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
+    int16_t	currentblk;
+    sdr_dab_service_instance_t* s;
+
+    currentblk	= (blkno - 4) % numberofblocksperCIF;
+    memcpy (&sdr->cifVector [currentblk * 2 * K], data, 2 * K * sizeof (int16_t));
+    if (currentblk < numberofblocksperCIF - 1) 
+        return;
+
+    // OK, now we have a full CIF
+    tvhtrace(LS_RTLSDR, "OK, now we have a full CIF");
+    LIST_FOREACH(s, &sdr->active_service_instance, service_link) {
+        tvhtrace(LS_RTLSDR, "checking %s", s->dai_service->s_nicename);
+	int startAddr	= s -> subChannel -> StartAddr;
+	int Length	= s -> subChannel -> Length;
+	if (Length > 0) {
+            int16_t myBegin [Length * CUSize];
+	    memcpy (myBegin, &sdr->cifVector [startAddr * CUSize],
+	                               Length * CUSize * sizeof (int16_t));
+            tvhtrace(LS_RTLSDR, "msc -> %s", s->dai_service->s_nicename);
+
+//        sdr_dab_service_instance_process(
+
+        }
+    }
 }

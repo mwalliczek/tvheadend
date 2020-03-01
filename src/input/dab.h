@@ -124,40 +124,39 @@ struct dab_network
   int      mn_localtime;
 };
 
-typedef struct subchannelmap channelMap;
+typedef struct subchannelmap subChannel;
 
 //      The service component describes the actual service
 //      It really should be a union
 struct servicecomponents {
                 int         inUse;          // just administration
-   int8_t       TMid;           // the transport mode
-   dab_service_t    *service;       // belongs to the service
-   int16_t      componentNr;    // component
+   int32_t       TMid;           // the transport mode
+   int32_t      componentNr;    // component
 
-   int16_t      ASCTy;          // used for audio
-   int16_t      PS_flag;        // use for both audio and packet
-   int16_t      subchannelId;   // used in both audio and packet
-   uint16_t     SCId;           // used in packet
-   uint8_t      CAflag;         // used in packet (or not at all)
-   int16_t      DSCTy;          // used in packet
-   uint8_t	DGflag;		// used for TDC
-   int16_t      packetAddress;  // used in packet
-   int16_t	appType;	// used in packet
+   int32_t      ASCTy;          // used for audio
+   int32_t      PS_flag;        // use for both audio and packet
+   int32_t      subchannelId;   // used in both audio and packet
+   uint32_t     SCId;           // used in packet
+   uint32_t     CAflag;         // used in packet (or not at all)
+   int32_t      DSCTy;          // used in packet
+   uint32_t	DGflag;		// used for TDC
+   int32_t      packetAddress;  // used in packet
+   int32_t	appType;	// used in packet
    int		is_madePublic;
 };
 
 typedef struct servicecomponents serviceComponent;
 
 struct subchannelmap {
-        int		inUse;
+   int		inUse;
    int32_t	SubChId;
    int32_t	StartAddr;
    int32_t	Length;
-   int		shortForm;
+   int32_t	shortForm;
    int32_t	protLevel;
    int32_t	BitRate;
-   int16_t	language;
-   int16_t	FEC_scheme;
+   int32_t	language;
+   int32_t	FEC_scheme;
 };
 
 struct dab_ensemble
@@ -217,7 +216,7 @@ struct dab_ensemble
          * Data processing
          */
         tvh_mutex_t                 mm_tables_lock;
-        channelMap	subChannels[64];
+        subChannel	subChannels[64];
         serviceComponent	ServiceComps[64];
 
         /*
@@ -258,12 +257,14 @@ struct dab_service
 	dab_ensemble_t          *s_dab_ensemble;
 	dab_input_t       	*s_dab_active_input;
 	
-	serviceComponent* serviceComponent;
-        int     subChId;
-        int     hasLanguage;
-        int16_t language;
-        int16_t programType;
-        int16_t FEC_scheme;
+        int32_t       TMid;           // the transport mode
+	int32_t      ASCTy;          // used for audio
+	int32_t      PS_flag;        // use for both audio and packet
+        int32_t      subChId;
+        int32_t      hasLanguage;
+        int32_t language;
+        int32_t programType;
+        int32_t FEC_scheme;
 };
 
 /* **************************************************************************

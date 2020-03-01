@@ -143,6 +143,46 @@ const idclass_t dab_service_class =
       .off      = offsetof(dab_service_t, s_dab_last_seen),
       .opts     = PO_ADVANCED | PO_RDONLY,
     },
+    {
+      .type     = PT_INT,
+      .id       = "TMid",
+      .name     = N_("Transport Mechanism Identifier"),
+      .desc     = N_("The transport mode."),
+      .opts     = PO_RDONLY | PO_ADVANCED,
+      .off      = offsetof(dab_service_t, TMid),
+    },
+    {
+      .type     = PT_INT,
+      .id       = "ASCTy",
+      .name     = N_("Audio Service Component Type"),
+      .desc     = N_("The type of the audio service component."),
+      .opts     = PO_RDONLY | PO_ADVANCED,
+      .off      = offsetof(dab_service_t, ASCTy),
+    },
+    {
+      .type     = PT_INT,
+      .id       = "PS_flag",
+      .name     = N_("Primary/Secondary"),
+      .desc     = N_("Indicate whether the service component is the primary one."),
+      .opts     = PO_RDONLY | PO_ADVANCED,
+      .off      = offsetof(dab_service_t, PS_flag),
+    },
+    {
+      .type     = PT_INT,
+      .id       = "subChId",
+      .name     = N_("Sub-channel Identifier"),
+      .desc     = N_("The sub-channel in which the service component is carried."),
+      .opts     = PO_RDONLY | PO_ADVANCED,
+      .off      = offsetof(dab_service_t, subChId),
+    },
+    {
+      .type     = PT_INT,
+      .id       = "FEC_scheme",
+      .name     = N_("Forward Error Correction"),
+      .desc     = N_("Forward Error Correcting scheme applied to sub-channels carrying packet mode service components."),
+      .opts     = PO_RDONLY | PO_ADVANCED,
+      .off      = offsetof(dab_service_t, FEC_scheme),
+    },
     {},
   }
 };
@@ -494,6 +534,7 @@ dab_service_create0
   s->s_unref          = dab_service_unref;
   s->s_is_enabled     = dab_service_is_enabled;
   s->s_config_save    = dab_service_config_save;
+  s->s_enlist         = dab_service_enlist_raw;
   s->s_start_feed     = dab_service_start;
   s->s_stop_feed      = dab_service_stop;
   s->s_refresh_feed   = dab_service_refresh;

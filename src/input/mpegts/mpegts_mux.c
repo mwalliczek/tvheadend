@@ -124,7 +124,7 @@ mpegts_mux_keep_exists
   LIST_FOREACH(mmi, &mi->mi_mux_active, mmi_active_link)
     LIST_FOREACH(ths, &mmi->mmi_mux->mm_raw_subs, ths_mux_link) {
       s = ths->ths_service;
-      if (s && s->s_type == STYPE_RAW && !strcmp(ths->ths_title, "keep")) {
+      if (s && s->s_type == STYPE_RAW && s->s_source_type == S_MPEG_TS && !strcmp(ths->ths_title, "keep")) {
         ret = 1;
         break;
       }
@@ -1456,7 +1456,7 @@ mpegts_mux_unsubscribe_by_name
   while (s) {
     n = LIST_NEXT(s, ths_mux_link);
     t = s->ths_service;
-    if (t && t->s_type == STYPE_RAW && !strcmp(s->ths_title, name))
+    if (t && t->s_type == STYPE_RAW && t->s_source_type == S_MPEG_TS && !strcmp(s->ths_title, name))
       subscription_unsubscribe(s, UNSUBSCRIBE_FINAL);
     s = n;
   }
@@ -1471,7 +1471,7 @@ mpegts_mux_find_subscription_by_name
 
   LIST_FOREACH(s, &mm->mm_raw_subs, ths_mux_link) {
     t = s->ths_service;
-    if (t && t->s_type == STYPE_RAW && !strcmp(s->ths_title, name))
+    if (t && t->s_type == STYPE_RAW && t->s_source_type == S_MPEG_TS && !strcmp(s->ths_title, name))
       return s;
   }
   return NULL;

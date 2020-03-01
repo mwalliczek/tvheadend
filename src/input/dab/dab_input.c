@@ -153,7 +153,7 @@ const idclass_t dab_input_class =
 {
   .ic_super      = &tvh_input_class,
   .ic_class      = "dab_input",
-  .ic_caption    = N_("MPEG-TS input"),
+  .ic_caption    = N_("DAB input"),
   .ic_event      = "dab_input",
   .ic_perm_def   = ACCESS_ADMIN,
   .ic_get_title  = dab_input_class_get_title,
