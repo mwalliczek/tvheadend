@@ -253,6 +253,23 @@ static void rtlsdr_frontend_open_service(dab_input_t *di, dab_service_t *s, int 
 	}
 }
 
+static void rtlsdr_frontend_close_service(dab_input_t *di, dab_service_t *s)
+{
+	rtlsdr_frontend_t *lfe = (rtlsdr_frontend_t *) di;
+	sdr_dab_service_instance_t *sds;
+	tvhtrace(LS_RTLSDR, "close service %s", s->s_nicename);
+	if (s->s_type != STYPE_RAW) {
+		LIST_FOREACH(sds, &lfe->sdr.active_service_instance, service_link) {
+			if (sds->dai_service == s) {
+				LIST_REMOVE(sds, service_link);
+				sdr_dab_service_instance_destroy(sds);
+				break;
+			}
+		}
+	}
+	dab_input_close_service(di, s);
+}
+
 static idnode_set_t *
 rtlsdr_frontend_network_list(dab_input_t *mi)
 {
@@ -763,6 +780,7 @@ rtlsdr_frontend_create
 	lfe->mi_start_ensemble = rtlsdr_frontend_start_ensemble;
 	lfe->mi_stop_ensemble = rtlsdr_frontend_stop_ensemble;
 	lfe->mi_open_service = rtlsdr_frontend_open_service;
+	lfe->mi_close_service = rtlsdr_frontend_close_service;
 	lfe->mi_network_list = rtlsdr_frontend_network_list;
 //	lfe->mi_update_pids = mpegts_mux_update_pids;
 	lfe->mi_create_ensemble_instance = rtlsdr_frontend_create_ensemble_instance;

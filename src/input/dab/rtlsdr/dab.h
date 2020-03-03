@@ -1,3 +1,22 @@
+/*
+ *  Tvheadend - RTL SDR Input System
+ *
+ *  Copyright (C) 2019 Matthias Walliczek
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef _DAB_H
 #define _DAB_H
 
@@ -10,6 +29,8 @@
 
 #include "sdr_fifo.h"
 #include "../dab_constants.h"
+
+#include "protection.h"
 
 #include "viterbi_768/viterbi-768.h"
 
@@ -43,12 +64,18 @@ struct sdr_dab_service_instance
 
 	int16_t		fragmentSize;
         int16_t*	interleaveData[16];
+	int16_t		interleaverIndex;
+	int16_t		countforInterleaver;
         uint8_t*	disperseVector;
+        uint8_t*        outV;
 	int16_t		nextIn;
 	int16_t		nextOut;
-	int16_t		*theData [20];
+	int16_t*	theData [20];
+	int16_t*	tempX;
 
         subChannel* 	subChannel;
+        
+        protection_t*	protection;
 };
 
 struct sdr_state_t {
@@ -117,6 +144,8 @@ int	check_CRC_bits(uint8_t *in, int32_t size) {
 }
 
 sdr_dab_service_instance_t* sdr_dab_service_instance_create(dab_service_t* service);
+
+void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds);
 
 void sdr_init(struct sdr_state_t *sdr);
 

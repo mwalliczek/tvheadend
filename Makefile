@@ -456,6 +456,9 @@ SRCS-RTLSDR = \
     src/input/dab/rtlsdr/protTables.c \
     src/input/dab/rtlsdr/ficHandler.c \
     src/input/dab/rtlsdr/mscHandler.c \
+    src/input/dab/rtlsdr/protection.c \
+    src/input/dab/rtlsdr/uep_protection.c \
+    src/input/dab/rtlsdr/eep_protection.c \
     src/input/dab/rtlsdr/sdr_dab_service_instance.c \
     src/input/dab/rtlsdr/viterbi_768/viterbi-768.c \
     src/input/dab/rtlsdr/viterbi_768/spiral-sse.c \

@@ -30,6 +30,8 @@ sdr_dab_service_instance_create(dab_service_t* service)
     res->dai_service = service;
     res->subChannel = &service->s_dab_ensemble->subChannels[service->subChId];
     
+    res->outV = calloc(1, sizeof (uint8_t) * 24 * res->subChannel -> BitRate);
+    
     res->fragmentSize = res->subChannel->Length * CUSize;
     
     for (i = 0; i < 16; i ++) {
@@ -37,6 +39,7 @@ sdr_dab_service_instance_create(dab_service_t* service)
 	memset (res->interleaveData [i], 0, res->fragmentSize * sizeof (int16_t));
     }
     
+    res->tempX = calloc(1, sizeof(int16_t) * res->fragmentSize);
     res->nextIn			= 0;
     res->nextOut		= 0;
     for (i = 0; i < 20; i ++)
@@ -53,15 +56,66 @@ sdr_dab_service_instance_create(dab_service_t* service)
         }
     }
     
+    if (res->subChannel->shortForm)
+	res->protection	= uep_protection_init(res->subChannel->BitRate,
+	                                              res->subChannel->protLevel);
+    else
+	res->protection	= eep_protection_init(res->subChannel->BitRate,
+	                                              res->subChannel->protLevel);
+    
     return res;
 }
 
+void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
+    int i;
+    
+    free(sds->tempX);
+    free(sds->disperseVector);
+    free(sds->outV);
+    for (i = 0; i < 16; i ++)
+        free(sds->interleaveData [i]);
+    for (i = 0; i < 20; i ++)
+        free(sds->theData [i]);
+    protection_destroy(sds->protection);
+    free(sds);
+}
+
 const	int16_t interleaveMap [] = {0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15};
+
+void    processSegment (sdr_dab_service_instance_t *sds, int16_t *Data);
+
+void    processSegment (sdr_dab_service_instance_t *sds, int16_t *Data) {
+    int16_t i;
+
+    for (i = 0; i < sds->fragmentSize; i ++) {
+        sds->tempX [i] = sds->interleaveData [(sds->interleaverIndex +
+                                     interleaveMap [i & 017]) & 017][i];
+        sds->interleaveData [sds->interleaverIndex][i] = Data [i];
+    }
+
+    sds->interleaverIndex = (sds->interleaverIndex + 1) & 0x0F;
+    
+//  only continue when de-interleaver is filled
+    if (sds->countforInterleaver <= 15) {
+        sds->countforInterleaver ++;
+        return;
+    }
+    
+    protection_deconvolve(sds->protection, sds->tempX, sds->fragmentSize,
+                                        sds->outV);
+                                        
+//
+//      and the energy dispersal
+    for (i = 0; i < sds->subChannel->BitRate * 24; i ++)
+	sds->outV [i] ^= sds->disperseVector [i];
+
+}
 
 void
 sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, int16_t *v, int16_t cnt)
 {
     memcpy (sds->theData [sds->nextIn], v, sds->fragmentSize * sizeof (int16_t));
+    processSegment (sds, sds->theData [sds->nextIn]);
     sds->nextIn = (sds->nextIn + 1) % 20;
     
 }
