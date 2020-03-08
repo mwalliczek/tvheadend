@@ -32,12 +32,14 @@ struct protection
     struct v	vp;
     int16_t*	viterbiBlock;
     uint8_t*	indexTable;
+    uint8_t*    disperseVector;
 };
 
-protection_t* protection_init(int16_t bitRate);
+protection_t* protection_init(int16_t bitRate, int spiral);
 protection_t* uep_protection_init(int16_t bitRate, int16_t protLevel);
 protection_t* eep_protection_init(int16_t bitRate, int16_t protLevel);
-void protection_deconvolve(protection_t *protection, int16_t *v, int32_t size, uint8_t *outBuffer);
+protection_t* fic_protection_init (void);
+void protection_deconvolve(protection_t *protection, int16_t *v, uint8_t *outBuffer);
 void protection_destroy(protection_t *protection);
 
 #endif

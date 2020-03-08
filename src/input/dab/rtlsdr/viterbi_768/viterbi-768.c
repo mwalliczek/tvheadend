@@ -61,7 +61,6 @@
 #define SUBSHIFT 0
 #endif
 
-COMPUTETYPE Branchtab[NUMSTATES / 2 * RATE] __attribute__((aligned(16)));
 int	parity(int);
 void	init_viterbi(struct v *, int16_t);
 void	update_viterbi_blk_GENERIC(struct v *, COMPUTETYPE *,
@@ -157,7 +156,7 @@ uint32_t	size;
 
 	for (state = 0; state < NUMSTATES / 2; state++) {
 	   for (i = 0; i < RATE; i++)
-	      Branchtab [i * NUMSTATES / 2 + state] =
+	      vp->Branchtab [i * NUMSTATES / 2 + state] =
 	                     (polys[i] < 0) ^
 	                        parity((2 * state) & abs (polys[i])) ? 255 : 0;
 	}
@@ -262,7 +261,7 @@ COMPUTETYPE metric,m0,m1,m2,m3;
 
 	metric =0;
 	for (j = 0; j < RATE;j++)
-	   metric += (Branchtab [i + j * NUMSTATES/2] ^ syms[s*RATE+j]) >>
+	   metric += (vp->Branchtab [i + j * NUMSTATES/2] ^ syms[s*RATE+j]) >>
 	                                                     METRICSHIFT ;
 	metric = metric >> PRECISIONSHIFT;
 	const COMPUTETYPE max =
@@ -341,7 +340,7 @@ int32_t s;
 	                 vp -> new_metrics -> t,
 	                 vp -> old_metrics -> t,
 	                 syms,
-	                 d -> t, Branchtab);
+	                 d -> t, vp->Branchtab);
 }
 
 //

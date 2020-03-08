@@ -24,7 +24,7 @@
 #include "protection.h"
 
 protection_t* eep_protection_init (int16_t bitRate, int16_t protLevel) {
-	protection_t* res = protection_init(bitRate);
+	protection_t* res = protection_init(bitRate, 0);
 	int16_t i, j;
 	int16_t viterbiCounter  = 0;
 	int16_t L1, L2;

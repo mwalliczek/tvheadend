@@ -519,12 +519,14 @@ dab_input_stream_status
   dab_ensemble_t *mm = mmi->mmi_ensemble;
   dab_input_t *mi = mmi->mmi_input;
 
-  LIST_FOREACH(t, &mm->mm_transports, s_active_link)
-    if (((dab_service_t *)t)->s_dab_ensemble == mm)
+  LIST_FOREACH(t, &mm->mm_transports, s_active_link) {
+    if (((dab_service_t *)t)->s_dab_ensemble == mm) {
       LIST_FOREACH(ths, &t->s_subscriptions, ths_service_link) {
         s++;
         w = MAX(w, ths->ths_weight);
       }
+    }
+  }
 
   st->uuid        = strdup(idnode_uuid_as_str(&mmi->tii_id, ubuf));
   mi->mi_display_name(mi, buf, sizeof(buf));

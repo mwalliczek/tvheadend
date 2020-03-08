@@ -45,6 +45,12 @@ tests/viterbiTest-neu:	tests/viterbiTest.o tests/viterbi-neu.o
 		gcc $(CFLAGS) tests/viterbiTest.o tests/viterbi-neu.o $(LIBS) -o $@
 
 
+tests/protection.o:	src/input/dab/rtlsdr/protection.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/protection.c -o $@ 
+
+tests/fic_protection.o:	src/input/dab/rtlsdr/fic_protection.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/fic_protection.c -o $@ 
+
 tests/ficHandler.o:	src/input/dab/rtlsdr/ficHandler.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/ficHandler.c -o $@
 
@@ -57,8 +63,8 @@ tests/ficHandlerTest.o:	tests/input/dab/rtlsdr/ficHandlerTest.c
 tests/fib-processorMock.o:	tests/input/dab/rtlsdr/fib-processorMock.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/fib-processorMock.c -o $@
 
-tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o
-		gcc $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o $(LIBS) -o $@
+tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o tests/fic_protection.o tests/protection.o
+		gcc $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o tests/fic_protection.o tests/protection.o $(LIBS) -o $@
 
 tests/firecheck.o:	src/input/dab/rtlsdr/firecheck.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/firecheck.c -o $@
@@ -81,9 +87,6 @@ tests/firecheckTest.o: tests/input/dab/rtlsdr/firecheckTest.c
 tests/firecheckTest: tests/firecheckTest.o tests/firecheck.o tests/utilities.o
 		gcc $(CFLAGS) tests/firecheckTest.o tests/firecheck.o tests/utilities.o $(LIBS) -o $@
 
-tests/protection.o:	src/input/dab/rtlsdr/protection.c
-		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/protection.c -o $@ 
-
 tests/eep_protection.o:	src/input/dab/rtlsdr/eep_protection.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/eep_protection.c -o $@ 
 
@@ -98,9 +101,6 @@ tests/eep_protectionTest: tests/eep_protectionTest.o tests/protection.o tests/ee
 
 tests/sdr_dab_service_instance.o:	src/input/dab/rtlsdr/sdr_dab_service_instance.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/sdr_dab_service_instance.c -o $@
-
-tests/reed-solomon.o:	 src/input/dab/rtlsdr/reed-solomon.c
-		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/reed-solomon.c -o $@
 
 tests/sdr_dab_service_instance_Test.o:	tests/input/dab/rtlsdr/sdr_dab_service_instance_Test.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/sdr_dab_service_instance_Test.c -o $@

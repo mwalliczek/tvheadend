@@ -460,6 +460,7 @@ SRCS-RTLSDR = \
     src/input/dab/rtlsdr/ficHandler.c \
     src/input/dab/rtlsdr/mscHandler.c \
     src/input/dab/rtlsdr/protection.c \
+    src/input/dab/rtlsdr/fic_protection.c \
     src/input/dab/rtlsdr/uep_protection.c \
     src/input/dab/rtlsdr/eep_protection.c \
     src/input/dab/rtlsdr/sdr_dab_service_instance.c \

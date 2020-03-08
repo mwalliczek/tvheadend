@@ -131,7 +131,7 @@ int16_t	i;
 }
 
 protection_t* uep_protection_init (int16_t bitRate, int16_t protLevel) {
-	protection_t* res = protection_init(bitRate);
+	protection_t* res = protection_init(bitRate, 0);
 	int16_t index, i, j;
 	int16_t viterbiCounter  = 0;
 	int16_t         L1;

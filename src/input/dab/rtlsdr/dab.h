@@ -68,7 +68,6 @@ struct sdr_dab_service_instance
         int16_t*	interleaveData[16];
 	int16_t		interleaverIndex;
 	int16_t		countforInterleaver;
-        uint8_t*	disperseVector;
         uint8_t*        outV;
 	int16_t		nextIn;
 	int16_t		nextOut;
@@ -109,7 +108,7 @@ struct sdr_state_t {
 	
 	int16_t		cifVector[55296];
 	
-	struct v vp;
+	protection_t*	protection;
 };
 
 float jan_abs(float _Complex z);

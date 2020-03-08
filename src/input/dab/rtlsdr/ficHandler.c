@@ -27,76 +27,20 @@
 #include "ficHandler.h"
 #include "protTables.h"
 #include "../fib-processor.h"
-#include "viterbi_768/viterbi-768.h"
-
-uint8_t		PRBS[768];
-uint8_t		shiftRegister[9];
-uint8_t		punctureTable[4 * 768 + 24];
 
 void process_ficInput(struct sdr_state_t *sdr, int16_t ficno);
 
 void initFicHandler(struct sdr_state_t *sdr) {
-	int16_t i, j, k;
-	int16_t	local = 0;
-
 	sdr->index = 0;
 	sdr->BitsperBlock = 2 * 1536;
 	sdr->ficno = 0;
 	sdr->fibCRCsuccess = 0;
 	sdr->fibCRCtotal = 0;
-	
-	memset(shiftRegister, 1, 9);
-
-	for (i = 0; i < 768; i++) {
-		PRBS[i] = shiftRegister[8] ^ shiftRegister[4];
-		for (j = 8; j > 0; j--)
-			shiftRegister[j] = shiftRegister[j - 1];
-
-		shiftRegister[0] = PRBS[i];
-	}
-	/**
-	*	a block of 2304 bits is considered to be a codeword
-	*	In the first step we have 21 blocks with puncturing according to PI_16
-	*	each 128 bit block contains 4 subblocks of 32 bits
-	*	on which the given puncturing is applied
-	*/
-	memset(punctureTable, 0, (3072 + 24) * sizeof(uint8_t));
-
-	for (i = 0; i < 21; i++) {
-		for (k = 0; k < 32 * 4; k++) {
-			if (get_PCodes(16 - 1)[k % 32] == 1)
-				punctureTable[local] = 1;
-			local++;
-		}
-	}
-	/**
-	*	In the second step
-	*	we have 3 blocks with puncturing according to PI_15
-	*	each 128 bit block contains 4 subblocks of 32 bits
-	*	on which the given puncturing is applied
-	*/
-	for (i = 0; i < 3; i++) {
-		for (k = 0; k < 32 * 4; k++) {
-			if (get_PCodes(15 - 1)[k % 32] == 1)
-				punctureTable[local] = 1;
-			local++;
-		}
-	}
-
-	/**
-	*	we have a final block of 24 bits  with puncturing according to PI_X
-	*	This block constitues the 6 * 4 bits of the register itself.
-	*/
-	for (k = 0; k < 24; k++) {
-		if (get_PCodes(8 - 1)[k] == 1)
-			punctureTable[local] = 1;
-		local++;
-	}
-	initViterbi768(&sdr->vp, 768, 1);
+	sdr->protection = fic_protection_init();
 }
 
 void destroyFicHandler(struct sdr_state_t *sdr) {
-	destroyViterbi768(&sdr->vp);
+	protection_destroy(sdr->protection);
 }
 
 void process_ficBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
@@ -125,29 +69,10 @@ void process_ficBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
 
 void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 	int16_t	i;
-	int16_t	viterbiBlock[3072 + 24];
-	int16_t	inputCount = 0;
 
 	tvhtrace(LS_RTLSDR, "process_ficInput started: %d", ficno);
-	memset(viterbiBlock, 0, (3072 + 24) * sizeof(int16_t));
+	protection_deconvolve(sdr->protection, sdr->ofdm_input, sdr->bitBuffer_out);
 
-	for (i = 0; i < 4 * 768 + 24; i++)
-		if (punctureTable[i])
-			viterbiBlock[i] = sdr->ofdm_input[inputCount++];
-	/**
-	*	Now we have the full word ready for deconvolution
-	*	deconvolution is according to DAB standard section 11.2
-	*/
-	deconvolve(&sdr->vp, viterbiBlock, sdr->bitBuffer_out);
-	/**
-	*	if everything worked as planned, we now have a
-	*	768 bit vector containing three FIB's
-	*
-	*	first step: energy dispersal according to the DAB standard
-	*	We use a predefined vector PRBS
-	*/
-	for (i = 0; i < 768; i++)
-		sdr->bitBuffer_out[i] ^= PRBS[i];
 	/**
 	*	each of the fib blocks is protected by a crc
 	*	(we know that there are three fib blocks each time we are here

@@ -23,8 +23,7 @@
 sdr_dab_service_instance_t * 
 sdr_dab_service_instance_create(dab_service_t* service)
 {
-    int i, j;
-    uint8_t	shiftRegister [9];
+    int i;
     sdr_dab_service_instance_t* res = calloc(1, sizeof(sdr_dab_service_instance_t));
     memset(res, 0, sizeof(sdr_dab_service_instance_t));
     res->dai_service = service;
@@ -57,18 +56,6 @@ sdr_dab_service_instance_create(dab_service_t* service)
     for (i = 0; i < 20; i ++)
         res->theData [i] = calloc(res->fragmentSize, sizeof (int16_t));
 
-    res->disperseVector = calloc(res->subChannel->BitRate * 24, sizeof (uint8_t));
-    memset (shiftRegister, 1, 9);
-    for (i = 0; i < res->subChannel->BitRate * 24; i ++) {
-        uint8_t b = shiftRegister [8] ^ shiftRegister [4];
-        for (j = 8; j > 0; j--)
-            shiftRegister [j] = shiftRegister [j - 1];
-        shiftRegister [0] = b;
-        res->disperseVector [i] = b;
-    }
-    
-
-
     return res;
 }
 
@@ -76,7 +63,6 @@ void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
     int i;
     
     free(sds->tempX);
-    free(sds->disperseVector);
     free(sds->outV);
     for (i = 0; i < 16; i ++)
         free(sds->interleaveData [i]);
@@ -108,14 +94,8 @@ void    processSegment (sdr_dab_service_instance_t *sds, int16_t *Data) {
         return;
     }
     
-    protection_deconvolve(sds->protection, sds->tempX, sds->fragmentSize,
-                                        sds->outV);
+    protection_deconvolve(sds->protection, sds->tempX, sds->outV);
                                         
-//
-//      and the energy dispersal
-    for (i = 0; i < sds->subChannel->BitRate * 24; i ++)
-	sds->outV [i] ^= sds->disperseVector [i];
-	
     mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
 
 }
