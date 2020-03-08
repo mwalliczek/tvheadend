@@ -49,7 +49,6 @@ struct mp4processor {
 	int16_t		rs_quality;
 
 	FILE 		*pFile;
-	int header;
 };
 
 mp4processor_t* init_mp4processor(int16_t bitRate);

@@ -88,8 +88,6 @@ mp4processor_t* init_mp4processor(int16_t bitRate) {
 	
 	res->pFile = fopen ("/tmp/temp.mp4", "wb");
 	
-	res->header = 0;
-	
 	return res;
 }
 
@@ -270,12 +268,7 @@ stream_parms	streamParameters;
 	      memcpy (&fileBuffer [7], 
 	              &mp4processor->outVector [mp4processor->au_start [i]],
 	              aac_frame_length);
-	      if (!mp4processor->header) {
-		      fwrite (&fileBuffer [0], 1, aac_frame_length + 7, mp4processor->pFile);
-		      mp4processor->header = 1;
-	      } else {
-		      fwrite (&fileBuffer [7], 1, aac_frame_length, mp4processor->pFile);
-	      }
+	      fwrite (&fileBuffer [0], 1, aac_frame_length + 7, mp4processor->pFile);
 //	      if (soundOut != NULL) 
 //	         (soundOut)((int16_t *)(&fileBuffer [0]),
 //	                    aac_frame_length + 7, 0, false, NULL);
