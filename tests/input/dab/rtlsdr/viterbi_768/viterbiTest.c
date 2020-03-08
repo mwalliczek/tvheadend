@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
         deconvolve(&vp, input, output);
     }
     end = clock();
-    printf("Total time taken by CPU: %Lf\n", (long double)(end - start) / CLOCKS_PER_SEC );
+    printf("Spiral: Total time taken by CPU: %Lf\n", (long double)(end - start) / CLOCKS_PER_SEC );
     
     destroyViterbi768(&vp);
     
@@ -48,6 +48,26 @@ int main(int argc, char** argv) {
     
     printf("memcmp: %d\n", memcmp(output, output2, 768));
     
+    input = malloc((3072 + 24) * 2);
+
+    initViterbi768(&vp, 768, 0);
+    
+    pFile = fopen ("input/dab/rtlsdr/viterbi_768/input" , "rb" );
+    fread (input, 2, 3072 + 24, pFile);
+    fclose(pFile);
+
+    start = clock();
+
+    for (i = 0; i < count; i++) {
+        deconvolve(&vp, input, output);
+    }
+    end = clock();
+    printf("Generic: Total time taken by CPU: %Lf\n", (long double)(end - start) / CLOCKS_PER_SEC );
+    
+    destroyViterbi768(&vp);
+    
+    free(input);
+
     free(output);
     free(output2);
 

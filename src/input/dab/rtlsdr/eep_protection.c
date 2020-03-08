@@ -30,6 +30,7 @@ protection_t* eep_protection_init (int16_t bitRate, int16_t protLevel) {
 	int16_t L1, L2;
 	int8_t  *PI1, *PI2, *PI_X;
 
+	tvhdebug(LS_RTLSDR, "eep_protection_init with bitrate %d and protLevel %d", bitRate, protLevel);
 	if ((protLevel & (1 << 2)) == 0) {	// set A profiles
 	   switch (protLevel & 03) {
 	      case 0:			// actually level 1

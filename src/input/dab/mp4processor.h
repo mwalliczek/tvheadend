@@ -19,11 +19,41 @@
 *       Adapted to tvheadend by Matthias Walliczek (matthias@walliczek.de)
 */
 
-#ifndef _MSCHANDLER_H
-#define _MSCHANDLER_H
+#ifndef _MP4PROCESSOR_H
+#define _MP4PROCESSOR_H
 
-#include "dab.h"
+#include "tvheadend.h"
 
-void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno);
+#include "rtlsdr/reed-solomon.h"
+
+typedef struct mp4processor mp4processor_t;
+
+struct mp4processor {
+	reedSolomon_t	*my_rsDecoder;
+	uint8_t		*outVector;
+
+	int16_t		blockFillIndex;
+	int16_t		blocksInBuffer;
+	int16_t		blockCount;
+	int16_t		bitRate;
+	uint8_t		*frameBytes;
+	int16_t		RSDims;
+	int16_t		au_start	[10];
+
+	int16_t		frameCount;
+	int16_t		successFrames;
+	int16_t		frameErrors;
+	int16_t		rsErrors;
+
+	int16_t		frame_quality;
+	int16_t		rs_quality;
+
+	FILE 		*pFile;
+	int header;
+};
+
+mp4processor_t* init_mp4processor(int16_t bitRate);
+void destroy_mp4processor(mp4processor_t* mp4processor);
+void	mp4Processor_addtoFrame (mp4processor_t* mp4processor, uint8_t *V);
 
 #endif

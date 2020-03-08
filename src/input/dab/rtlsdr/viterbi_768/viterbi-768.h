@@ -4,6 +4,8 @@
 /*
  * 	Viterbi.h according to the SPIRAL project
  */
+ #include 	"tvheadend.h"
+
 #include	"../../dab_constants.h"
 
 //	For our particular viterbi decoder, we have

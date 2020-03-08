@@ -34,6 +34,8 @@
 
 #include "viterbi_768/viterbi-768.h"
 
+#include "../mp4processor.h"
+
 #define DEFAULT_BUF_LENGTH (16 * 16384)
 
 typedef struct sdr_dab_service_instance       sdr_dab_service_instance_t;
@@ -76,6 +78,8 @@ struct sdr_dab_service_instance
         subChannel* 	subChannel;
         
         protection_t*	protection;
+        
+        mp4processor_t*	mp4processor;
 };
 
 struct sdr_state_t {

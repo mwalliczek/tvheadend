@@ -30,39 +30,45 @@ sdr_dab_service_instance_create(dab_service_t* service)
     res->dai_service = service;
     res->subChannel = &service->s_dab_ensemble->subChannels[service->subChId];
     
-    res->outV = calloc(1, sizeof (uint8_t) * 24 * res->subChannel -> BitRate);
+    res->outV = calloc(24 * res->subChannel -> BitRate, sizeof (uint8_t));
     
     res->fragmentSize = res->subChannel->Length * CUSize;
     
     for (i = 0; i < 16; i ++) {
-        res->interleaveData [i] = calloc(1, res->fragmentSize * sizeof (int16_t));
+        res->interleaveData [i] = calloc(res->fragmentSize, sizeof (int16_t));
 	memset (res->interleaveData [i], 0, res->fragmentSize * sizeof (int16_t));
     }
     
-    res->tempX = calloc(1, sizeof(int16_t) * res->fragmentSize);
-    res->nextIn			= 0;
-    res->nextOut		= 0;
-    for (i = 0; i < 20; i ++)
-        res->theData [i] = calloc(1, sizeof (int16_t) * res->fragmentSize);
+    res->interleaverIndex	= 0;
+    res->countforInterleaver	= 0;
 
-    res->disperseVector = calloc(1, sizeof (uint8_t) * res->subChannel->BitRate * 24);
-    memset (shiftRegister, 1, 9);
-    for (i = 0; i < res->subChannel->BitRate * 24; i ++) {
-        uint8_t b = shiftRegister [8] ^ shiftRegister [4];
-        for (j = 8; j > 0; j--) {
-            shiftRegister [j] = shiftRegister [j - 1];
-            shiftRegister [0] = b;
-            res->disperseVector [i] = b;
-        }
-    }
-    
     if (res->subChannel->shortForm)
 	res->protection	= uep_protection_init(res->subChannel->BitRate,
 	                                              res->subChannel->protLevel);
     else
 	res->protection	= eep_protection_init(res->subChannel->BitRate,
 	                                              res->subChannel->protLevel);
+
+    res->mp4processor = init_mp4processor(res->subChannel->BitRate);
+
+    res->tempX = calloc(res->fragmentSize, sizeof(int16_t));
+    res->nextIn			= 0;
+    res->nextOut		= 0;
+    for (i = 0; i < 20; i ++)
+        res->theData [i] = calloc(res->fragmentSize, sizeof (int16_t));
+
+    res->disperseVector = calloc(res->subChannel->BitRate * 24, sizeof (uint8_t));
+    memset (shiftRegister, 1, 9);
+    for (i = 0; i < res->subChannel->BitRate * 24; i ++) {
+        uint8_t b = shiftRegister [8] ^ shiftRegister [4];
+        for (j = 8; j > 0; j--)
+            shiftRegister [j] = shiftRegister [j - 1];
+        shiftRegister [0] = b;
+        res->disperseVector [i] = b;
+    }
     
+
+
     return res;
 }
 
@@ -77,6 +83,7 @@ void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
     for (i = 0; i < 20; i ++)
         free(sds->theData [i]);
     protection_destroy(sds->protection);
+    destroy_mp4processor(sds->mp4processor);
     free(sds);
 }
 
@@ -108,6 +115,8 @@ void    processSegment (sdr_dab_service_instance_t *sds, int16_t *Data) {
 //      and the energy dispersal
     for (i = 0; i < sds->subChannel->BitRate * 24; i ++)
 	sds->outV [i] ^= sds->disperseVector [i];
+	
+    mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
 
 }
 

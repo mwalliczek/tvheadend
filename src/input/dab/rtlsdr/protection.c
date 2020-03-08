@@ -26,8 +26,8 @@ protection_t* protection_init(int16_t bitRate) {
     protection_t* res = calloc(1, sizeof(protection_t));
     initViterbi768(&res->vp, 24 * bitRate, 0);
     res->outSize = 24 * bitRate;
-    res->indexTable = calloc(sizeof(uint8_t), res->outSize * 4 + 24);
-    res->viterbiBlock = calloc(sizeof(int16_t), res->outSize * 4 + 24);
+    res->indexTable = calloc(res->outSize * 4 + 24, sizeof(uint8_t));
+    res->viterbiBlock = calloc(res->outSize * 4 + 24, sizeof(int16_t));
     return res;
 }
 

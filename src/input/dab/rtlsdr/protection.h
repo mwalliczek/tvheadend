@@ -20,6 +20,8 @@
 #ifndef __TVH_DAB_RTLSDR_PROTECTION_H__
 #define __TVH_DAB_RTLSDR_PROTECTION_H__
 
+#include "tvheadend.h"
+
 #include "viterbi_768/viterbi-768.h"
 
 typedef struct protection protection_t;

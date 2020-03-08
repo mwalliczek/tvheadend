@@ -447,7 +447,10 @@ SRCS-RTLSDR = \
     src/input/dab/dab_network.c \
     src/input/dab/dab_network_scan.c \
     src/input/dab/fib-processor.c \
+    src/input/dab/mp4processor.c \
     src/input/dab/charsets.c \
+    src/input/dab/rtlsdr/reed-solomon.c \
+    src/input/dab/rtlsdr/firecheck.c \
     src/input/dab/rtlsdr/dab_tables.c \
     src/input/dab/rtlsdr/phasereference.c \
     src/input/dab/rtlsdr/input_sdr.c \

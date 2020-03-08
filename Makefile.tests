@@ -10,11 +10,15 @@ LIBS += -lgcov
 endif
 
 clean:
-		rm -f tests/*.o tests/viterbiTest tests/viterbiTest-neu tests/ficHandlerTest
+		rm -f tests/*.o tests/viterbiTest tests/viterbiTest-neu tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test
 
-tests:		tests/viterbiTest tests/ficHandlerTest
+tests:		tests/viterbiTest tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test
 		cd tests && ./viterbiTest
 		cd tests && ./ficHandlerTest
+		cd tests && ./mp4processorTest
+		cd tests && ./firecheckTest
+		cd tests && ./eep_protectionTest
+		cd tests && ./sdr_dab_service_instance_Test
 
 tests/utilities.o:	tests/utilities.c
 		gcc $(INC) $(CFLAGS) -c tests/utilities.c -o $@
@@ -55,3 +59,52 @@ tests/fib-processorMock.o:	tests/input/dab/rtlsdr/fib-processorMock.c
 
 tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o
 		gcc $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o $(LIBS) -o $@
+
+tests/firecheck.o:	src/input/dab/rtlsdr/firecheck.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/firecheck.c -o $@
+
+tests/reed-solomon.o:	src/input/dab/rtlsdr/reed-solomon.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/reed-solomon.c -o $@
+
+tests/mp4processor.o:	src/input/dab/mp4processor.c
+		gcc $(INC) -Isrc/input/dab/ $(CFLAGS) -c src/input/dab/mp4processor.c -o $@ 
+
+tests/mp4processorTest.o:	tests/input/dab/mp4processorTest.c
+		gcc $(INC) -Isrc/input/dab/ $(CFLAGS) -c tests/input/dab/mp4processorTest.c -o $@ 
+
+tests/mp4processorTest:	tests/mp4processorTest.o tests/mp4processor.o tests/utilities.o tests/firecheck.o tests/reed-solomon.o
+		gcc $(CFLAGS) tests/mp4processorTest.o tests/mp4processor.o tests/utilities.o tests/firecheck.o tests/reed-solomon.o $(LIBS) -o $@
+
+tests/firecheckTest.o: tests/input/dab/rtlsdr/firecheckTest.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/firecheckTest.c -o $@
+
+tests/firecheckTest: tests/firecheckTest.o tests/firecheck.o tests/utilities.o
+		gcc $(CFLAGS) tests/firecheckTest.o tests/firecheck.o tests/utilities.o $(LIBS) -o $@
+
+tests/protection.o:	src/input/dab/rtlsdr/protection.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/protection.c -o $@ 
+
+tests/eep_protection.o:	src/input/dab/rtlsdr/eep_protection.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/eep_protection.c -o $@ 
+
+tests/uep_protection.o:	src/input/dab/rtlsdr/uep_protection.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/uep_protection.c -o $@ 
+
+tests/eep_protectionTest.o: tests/input/dab/rtlsdr/eep_protectionTest.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/eep_protectionTest.c -o $@
+
+tests/eep_protectionTest: tests/eep_protectionTest.o tests/protection.o tests/eep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o 
+		gcc $(CFLAGS) tests/eep_protectionTest.o tests/protection.o tests/eep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o $(LIBS) -o $@
+
+tests/sdr_dab_service_instance.o:	src/input/dab/rtlsdr/sdr_dab_service_instance.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/sdr_dab_service_instance.c -o $@
+
+tests/reed-solomon.o:	 src/input/dab/rtlsdr/reed-solomon.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/reed-solomon.c -o $@
+
+tests/sdr_dab_service_instance_Test.o:	tests/input/dab/rtlsdr/sdr_dab_service_instance_Test.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/sdr_dab_service_instance_Test.c -o $@
+
+tests/sdr_dab_service_instance_Test:	tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o
+		gcc $(CFLAGS) tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o $(LIBS) -o $@
+

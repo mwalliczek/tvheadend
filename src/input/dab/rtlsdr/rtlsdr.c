@@ -14,6 +14,7 @@
 #include "queue.h"
 #include "fsmonitor.h"
 #include "settings.h"
+#include "firecheck.h"
 
 static htsmsg_t *
 rtlsdr_adapter_class_save(idnode_t *in, char *filename, size_t fsize)
@@ -218,6 +219,8 @@ void rtlsdr_init() {
 	for (i = 0; i < device_count; i++) {
 		rtlsdr_adapter_add(i);
 	}
+	
+	firecheck_init();
 }
 
 static void

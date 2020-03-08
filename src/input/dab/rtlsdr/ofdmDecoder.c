@@ -168,12 +168,6 @@ void decodeMscblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 	float _Complex r1;
 	int16_t ibits[2 * K];
 
-	const service_t *s;
-
-	tvhtrace(LS_RTLSDR, "decodeMscblock %d %s", blkno, sdr->mmi->mmi_ensemble->mm_nicename);
-	LIST_FOREACH(s, &sdr->mmi->mmi_ensemble->mm_transports, s_active_link)
-		tvhtrace(LS_RTLSDR, "-> %s", s->s_nicename);
-		
 	memcpy(sdr->ofdmDecoder.fftBuffer, &v[T_g], T_u * sizeof(float _Complex));
 	fftwf_execute(sdr->ofdmDecoder.plan);
 	
