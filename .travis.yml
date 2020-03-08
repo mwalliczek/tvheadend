@@ -6,8 +6,8 @@ before_install:
   - sudo ./Autobuild.sh -t raspbianstretch-armhf -o deps
 script:
   - ./Autobuild.sh -t raspbianstretch-armhf
-  - build-wrapper-linux-x86-64 --out-dir bw-output make -f Makefile.tests tests
-  - gcov -o tests src/input/dab/rtlsdr/viterbi_768/*.c src/input/dab/rtlsdr/*.c
+  - build-wrapper-linux-x86-64 --out-dir bw-output make COVERAGE=yes -f Makefile.tests tests
+  - gcov -o tests src/input/dab/rtlsdr/viterbi_768/*.c src/input/dab/rtlsdr/*.c src/input/dab/*.c
   - sonar-scanner
   - cppcheck --quiet --error-exitcode=1 src/input/dab
 addons:

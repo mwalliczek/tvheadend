@@ -4,7 +4,7 @@ INC=-Isrc -Ibuild.linux
 
 CFLAGS += -g -DENABLE_TRACE=1
 
-ifdef $(COVERAGE)
+ifdef COVERAGE
 CFLAGS += --coverage
 LIBS += -lgcov
 endif

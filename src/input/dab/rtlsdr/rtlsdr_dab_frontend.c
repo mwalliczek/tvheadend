@@ -249,7 +249,8 @@ static void rtlsdr_frontend_open_service(dab_input_t *di, dab_service_t *s, int 
 	tvhtrace(LS_RTLSDR, "open service %s", s->s_nicename);
 	dab_input_open_service(di, s, flags, first, weight);
 	if (s->s_type != STYPE_RAW) {
-		LIST_INSERT_HEAD(&lfe->sdr.active_service_instance, sdr_dab_service_instance_create(s), service_link);
+		sdr_dab_service_instance_t *sds = sdr_dab_service_instance_create(s);
+		LIST_INSERT_HEAD(&lfe->sdr.active_service_instance, sds, service_link);
 	}
 }
 
