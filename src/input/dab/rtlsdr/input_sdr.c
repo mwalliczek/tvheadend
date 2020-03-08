@@ -25,7 +25,6 @@ david.may.muc@googlemail.com
 #include "tvhpoll.h"
 #include "rtlsdr_private.h"
 #include "dab.h"
-#include "dab_tables.h"
 #include "phasereference.h"
 #include "ofdmDecoder.h"
 #include "ficHandler.h"

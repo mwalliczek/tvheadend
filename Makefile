@@ -451,7 +451,6 @@ SRCS-RTLSDR = \
     src/input/dab/charsets.c \
     src/input/dab/rtlsdr/reed-solomon.c \
     src/input/dab/rtlsdr/firecheck.c \
-    src/input/dab/rtlsdr/dab_tables.c \
     src/input/dab/rtlsdr/phasereference.c \
     src/input/dab/rtlsdr/input_sdr.c \
     src/input/dab/rtlsdr/sdr_fifo.c \
