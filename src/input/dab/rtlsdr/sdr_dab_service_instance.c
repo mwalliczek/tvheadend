@@ -20,6 +20,8 @@
 #include "dab.h"
 #include "tvheadend.h"
 
+void sdr_dab_service_instance_dataCallback(uint8_t* result, int16_t resultLength);
+
 sdr_dab_service_instance_t * 
 sdr_dab_service_instance_create(dab_service_t* service)
 {
@@ -28,83 +30,85 @@ sdr_dab_service_instance_create(dab_service_t* service)
     memset(res, 0, sizeof(sdr_dab_service_instance_t));
     res->dai_service = service;
     res->subChannel = &service->s_dab_ensemble->subChannels[service->subChId];
-    
-    res->outV = calloc(24 * res->subChannel -> BitRate, sizeof (uint8_t));
-    
+
+    res->outV = calloc(24 * res->subChannel->BitRate, sizeof(uint8_t));
+
     res->fragmentSize = res->subChannel->Length * CUSize;
-    
-    for (i = 0; i < 16; i ++) {
-        res->interleaveData [i] = calloc(res->fragmentSize, sizeof (int16_t));
-	memset (res->interleaveData [i], 0, res->fragmentSize * sizeof (int16_t));
+
+    for (i = 0; i < 16; i++) {
+        res->interleaveData[i] = calloc(res->fragmentSize, sizeof(int16_t));
+        memset(res->interleaveData[i], 0, res->fragmentSize * sizeof(int16_t));
     }
-    
-    res->interleaverIndex	= 0;
-    res->countforInterleaver	= 0;
+
+    res->interleaverIndex = 0;
+    res->countforInterleaver = 0;
 
     if (res->subChannel->shortForm)
-	res->protection	= uep_protection_init(res->subChannel->BitRate,
-	                                              res->subChannel->protLevel);
+        res->protection = uep_protection_init(res->subChannel->BitRate,
+            res->subChannel->protLevel);
     else
-	res->protection	= eep_protection_init(res->subChannel->BitRate,
-	                                              res->subChannel->protLevel);
+        res->protection = eep_protection_init(res->subChannel->BitRate,
+            res->subChannel->protLevel);
 
-    res->mp4processor = init_mp4processor(res->subChannel->BitRate);
+    res->mp4processor = init_mp4processor(res->subChannel->BitRate, sdr_dab_service_instance_dataCallback);
 
     res->tempX = calloc(res->fragmentSize, sizeof(int16_t));
-    res->nextIn			= 0;
-    res->nextOut		= 0;
-    for (i = 0; i < 20; i ++)
-        res->theData [i] = calloc(res->fragmentSize, sizeof (int16_t));
+    res->nextIn = 0;
+    res->nextOut = 0;
+    for (i = 0; i < 20; i++)
+        res->theData[i] = calloc(res->fragmentSize, sizeof(int16_t));
 
     return res;
 }
 
 void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
     int i;
-    
+
     free(sds->tempX);
     free(sds->outV);
-    for (i = 0; i < 16; i ++)
-        free(sds->interleaveData [i]);
-    for (i = 0; i < 20; i ++)
-        free(sds->theData [i]);
+    for (i = 0; i < 16; i++)
+        free(sds->interleaveData[i]);
+    for (i = 0; i < 20; i++)
+        free(sds->theData[i]);
     protection_destroy(sds->protection);
     destroy_mp4processor(sds->mp4processor);
     free(sds);
 }
 
-const	int16_t interleaveMap [] = {0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15};
+const	int16_t interleaveMap[] = { 0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15 };
 
-void    processSegment (sdr_dab_service_instance_t *sds, int16_t *Data);
+void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data);
 
-void    processSegment (sdr_dab_service_instance_t *sds, int16_t *Data) {
+void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     int16_t i;
 
-    for (i = 0; i < sds->fragmentSize; i ++) {
-        sds->tempX [i] = sds->interleaveData [(sds->interleaverIndex +
-                                     interleaveMap [i & 017]) & 017][i];
-        sds->interleaveData [sds->interleaverIndex][i] = Data [i];
+    for (i = 0; i < sds->fragmentSize; i++) {
+        sds->tempX[i] = sds->interleaveData[(sds->interleaverIndex +
+            interleaveMap[i & 017]) & 017][i];
+        sds->interleaveData[sds->interleaverIndex][i] = Data[i];
     }
 
     sds->interleaverIndex = (sds->interleaverIndex + 1) & 0x0F;
-    
-//  only continue when de-interleaver is filled
+
+    //  only continue when de-interleaver is filled
     if (sds->countforInterleaver <= 15) {
-        sds->countforInterleaver ++;
+        sds->countforInterleaver++;
         return;
     }
-    
+
     protection_deconvolve(sds->protection, sds->tempX, sds->outV);
-                                        
+
     mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
 
 }
 
 void
-sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, int16_t *v, int16_t cnt)
-{
-    memcpy (sds->theData [sds->nextIn], v, sds->fragmentSize * sizeof (int16_t));
-    processSegment (sds, sds->theData [sds->nextIn]);
+sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int16_t *v) {
+    memcpy(sds->theData[sds->nextIn], v, sds->fragmentSize * sizeof(int16_t));
+    processSegment(sds, sds->theData[sds->nextIn]);
     sds->nextIn = (sds->nextIn + 1) % 20;
-    
+
+}
+
+void sdr_dab_service_instance_dataCallback(uint8_t* result, int16_t resultLength) {
 }

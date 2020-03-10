@@ -29,30 +29,30 @@
 typedef struct mp4processor mp4processor_t;
 
 struct mp4processor {
-	reedSolomon_t	*my_rsDecoder;
-	uint8_t		*outVector;
+    reedSolomon_t	*my_rsDecoder;
+    uint8_t		*outVector;
 
-	int16_t		blockFillIndex;
-	int16_t		blocksInBuffer;
-	int16_t		blockCount;
-	int16_t		bitRate;
-	uint8_t		*frameBytes;
-	int16_t		RSDims;
-	int16_t		au_start	[10];
+    int16_t		blockFillIndex;
+    int16_t		blocksInBuffer;
+    int16_t		blockCount;
+    int16_t		bitRate;
+    uint8_t		*frameBytes;
+    int16_t		RSDims;
+    int16_t		au_start[10];
 
-	int16_t		frameCount;
-	int16_t		successFrames;
-	int16_t		frameErrors;
-	int16_t		rsErrors;
+    int16_t		frameCount;
+    int16_t		successFrames;
+    int16_t		frameErrors;
+    int16_t		rsErrors;
 
-	int16_t		frame_quality;
-	int16_t		rs_quality;
+    int16_t		frame_quality;
+    int16_t		rs_quality;
 
-	FILE 		*pFile;
+    void 		(*writeCb)(uint8_t*, int16_t);
 };
 
-mp4processor_t* init_mp4processor(int16_t bitRate);
+mp4processor_t* init_mp4processor(int16_t bitRate, void (*writeCb)(uint8_t*, int16_t));
 void destroy_mp4processor(mp4processor_t* mp4processor);
-void	mp4Processor_addtoFrame (mp4processor_t* mp4processor, uint8_t *V);
+void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V);
 
 #endif

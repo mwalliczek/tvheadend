@@ -152,6 +152,6 @@ void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds);
 
 void sdr_init(struct sdr_state_t *sdr);
 
-void sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, int16_t *v, int16_t cnt);
+void sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int16_t *v);
 
 #endif
