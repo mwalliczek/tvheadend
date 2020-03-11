@@ -20,7 +20,7 @@
 #include "dab.h"
 #include "tvheadend.h"
 
-void sdr_dab_service_instance_dataCallback(uint8_t* result, int16_t resultLength);
+void sdr_dab_service_instance_dataCallback(void* context, uint8_t* result, int16_t resultLength);
 
 sdr_dab_service_instance_t * 
 sdr_dab_service_instance_create(dab_service_t* service)
@@ -50,7 +50,7 @@ sdr_dab_service_instance_create(dab_service_t* service)
         res->protection = eep_protection_init(res->subChannel->BitRate,
             res->subChannel->protLevel);
 
-    res->mp4processor = init_mp4processor(res->subChannel->BitRate, sdr_dab_service_instance_dataCallback);
+    res->mp4processor = init_mp4processor(res->subChannel->BitRate, service, sdr_dab_service_instance_dataCallback);
 
     res->tempX = calloc(res->fragmentSize, sizeof(int16_t));
     res->nextIn = 0;
@@ -79,6 +79,9 @@ const	int16_t interleaveMap[] = { 0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15 };
 
 void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data);
 
+static void dab_flush(dab_service_t *t, sbuf_t *sb);
+
+
 void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     int16_t i;
 
@@ -99,7 +102,10 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     protection_deconvolve(sds->protection, sds->tempX, sds->outV);
 
     mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
-
+    
+    if(sds->dai_service->s_tsbuf.sb_ptr > 0) {
+      dab_flush(sds->dai_service, &sds->dai_service->s_tsbuf);
+    }
 }
 
 void
@@ -107,8 +113,46 @@ sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int
     memcpy(sds->theData[sds->nextIn], v, sds->fragmentSize * sizeof(int16_t));
     processSegment(sds, sds->theData[sds->nextIn]);
     sds->nextIn = (sds->nextIn + 1) % 20;
-
 }
 
-void sdr_dab_service_instance_dataCallback(uint8_t* result, int16_t resultLength) {
+#define DAB_BUFSIZE (6 * 1024)
+
+void sdr_dab_service_instance_dataCallback(void* context, uint8_t* result, int16_t resultLength) {
+  dab_service_t *t = (dab_service_t *) context;
+  sbuf_t *sb = &t->s_tsbuf;
+
+  if (sb->sb_data == NULL)
+    sbuf_init_fixed(sb, DAB_BUFSIZE);
+
+  sbuf_append(sb, result, resultLength);
+//  sb->sb_err += errors;
+}
+
+/**
+ *
+ */
+static void
+dab_flush(dab_service_t *t, sbuf_t *sb)
+{
+  streaming_message_t sm;
+  pktbuf_t *pb;
+
+  t->s_tsbuf_last = mclk();
+
+  pb = pktbuf_alloc(sb->sb_data, sb->sb_ptr);
+  pb->pb_err = sb->sb_err;
+
+  memset(&sm, 0, sizeof(sm));
+  sm.sm_type = SMT_DAB;
+  sm.sm_data = pb;
+  tvh_mutex_lock(&t->s_stream_mutex);
+  streaming_service_deliver((service_t *)t, streaming_msg_clone(&sm));
+
+  pktbuf_ref_dec(pb);
+
+  service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
+  t->s_streaming_live |= TSS_LIVE;
+  tvh_mutex_unlock(&t->s_stream_mutex);
+
+  sbuf_reset(sb, 2*DAB_BUFSIZE);
 }

@@ -257,6 +257,13 @@ struct dab_service
 	dab_ensemble_t          *s_dab_ensemble;
 	dab_input_t       	*s_dab_active_input;
 	
+	/**
+	 * When a subscription request SMT_DAB, chunk them together
+	 * in order to reduce load.
+	 */
+	sbuf_t s_tsbuf;
+	int64_t s_tsbuf_last;
+
         int32_t       TMid;           // the transport mode
 	int32_t      ASCTy;          // used for audio
 	int32_t      PS_flag;        // use for both audio and packet

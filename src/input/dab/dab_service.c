@@ -348,6 +348,9 @@ dab_service_stop(service_t *t)
   /* Stop */
   if (i)
     i->mi_close_service(i, s);
+
+  /* Save some memory */
+  sbuf_free(&s->s_tsbuf);
 }
 
 /*
@@ -474,6 +477,7 @@ dab_service_delete ( service_t *t, int delconf )
   /* Free memory */
   if (t->s_type == STYPE_STD)
     LIST_REMOVE(ms, s_dab_ensemble_link);
+  sbuf_free(&ms->s_tsbuf);
 
   // Note: the ultimate deletion and removal from the idnode list
   //       is done in service_destroy
@@ -523,6 +527,7 @@ dab_service_create0
     return NULL;
 
   /* Create */
+  sbuf_init(&s->s_tsbuf);
   if (conf) {
     if (s->s_dab_last_seen > gclk()) /* sanity check */
       s->s_dab_last_seen = gclk();
@@ -632,6 +637,8 @@ dab_service_create_raw ( dab_ensemble_t *mm )
     free(s);
     return NULL;
   }
+
+  sbuf_init(&s->s_tsbuf);
 
   s->s_dab_ensemble        = mm;
 

@@ -65,7 +65,7 @@ typedef struct {
     int mpegSurround;
 } stream_parms;
 
-mp4processor_t* init_mp4processor(int16_t bitRate, void(*writeCb)(uint8_t*, int16_t)) {
+mp4processor_t* init_mp4processor(int16_t bitRate, void *context, void(*writeCb)(void*,uint8_t*, int16_t)) {
     mp4processor_t* res = calloc(1, sizeof(mp4processor_t));
 
     res->my_rsDecoder = init_reedSolomon(8, 0435, 0, 1, 10);
@@ -86,6 +86,7 @@ mp4processor_t* init_mp4processor(int16_t bitRate, void(*writeCb)(uint8_t*, int1
     res->frame_quality = 0;
     res->rs_quality = 0;
 
+    res->context = context;
     res->writeCb = writeCb;
 
     return res;
@@ -280,7 +281,7 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
             memcpy(&fileBuffer[7],
                 &mp4processor->outVector[mp4processor->au_start[i]],
                 aac_frame_length);
-            mp4processor->writeCb(fileBuffer, aac_frame_length + 7);
+            mp4processor->writeCb(mp4processor->context, fileBuffer, aac_frame_length + 7);
 #ifdef TRACE_MP4
             exit(0);
 #endif

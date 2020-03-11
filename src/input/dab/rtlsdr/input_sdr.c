@@ -56,6 +56,7 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 		if (nfds < 1) continue;
 		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
 			if (read(lfe->lfe_dvr_pipe.rd, &b, 1) > 0) {
+				tvhpoll_destroy(efd);
 				return 0;
 			}
 			continue;
@@ -63,9 +64,11 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 		if (ev[0].ptr != lfe) break;
 		if (read(lfe->lfe_control_pipe.rd, &b, 1) > 0 && sdr->fifo.count > 0) {
 			tvhtrace(LS_RTLSDR, "fifo count %u", sdr->fifo.count);
+			tvhpoll_destroy(efd);
 			return 1;
 		}
 	}
+	tvhpoll_destroy(efd);
 	return 0;
 }
 

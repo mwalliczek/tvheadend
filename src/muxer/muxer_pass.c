@@ -691,10 +691,11 @@ pass_muxer_write_pkt(muxer_t *m, streaming_message_type_t smt, void *data)
   pktbuf_t *pb = (pktbuf_t*)data;
   pass_muxer_t *pm = (pass_muxer_t*)m;
 
-  assert(smt == SMT_MPEGTS);
+  assert(smt == SMT_MPEGTS || smt == SMT_DAB);
 
   switch(smt) {
   case SMT_MPEGTS:
+  case SMT_DAB:
     pass_muxer_write_ts(m, pb);
     break;
   default:
