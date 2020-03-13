@@ -40,7 +40,9 @@ void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v);
 
 int16_t myMapper[T_u];
 
+#ifndef DAB_SINGLE_THREAD
 static void *run_thread_fn(void *arg);
+#endif
 
 void initOfdmDecoder(struct sdr_state_t *sdr) {
 	int16_t tmp[T_u];
@@ -68,14 +70,18 @@ void initOfdmDecoder(struct sdr_state_t *sdr) {
 		myMapper[index++] = tmp[i] - T_u / 2;
 		//	we now have a table with values from lwb - T_u / 2 .. lwb + T_u / 2
 	}
+#ifndef DAB_SINGLE_THREAD
 	tvh_pipe(0, &sdr->ofdmDecoder.pipe);
 	tvh_thread_create(&sdr->ofdmDecoder.thread, NULL,
 		run_thread_fn, sdr, "rtlsdr-ofdm");
+#endif
 }
 
 void destroyOfdmDecoder(struct sdr_state_t *sdr) {
+#ifndef DAB_SINGLE_THREAD
 	tvh_pipe_close(&sdr->ofdmDecoder.pipe);
 	pthread_join(sdr->ofdmDecoder.thread, NULL);
+#endif
 	fftwf_destroy_plan(sdr->ofdmDecoder.plan);
 	fftwf_free(sdr->ofdmDecoder.fftBuffer);
 }
@@ -83,9 +89,13 @@ void destroyOfdmDecoder(struct sdr_state_t *sdr) {
 void processBlock_0(struct sdr_state_t *sdr, float _Complex* v) {
 	int blkno = 0;
 	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_u);
+#ifdef DAB_SINGLE_THREAD
+	processBlock_0_int(sdr, sdr->ofdmDecoder.buffer[blkno]);
+#else
 	if (write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno)) == -1) {
 		tvherror(LS_RTLSDR, "write to pipe failed!");
 	}
+#endif
 }
 
 void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v) {
@@ -126,9 +136,19 @@ int16_t	get_snr(float _Complex* v) {
 
 void decodeBlock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_s);
+#ifdef DAB_SINGLE_THREAD
+	if (blkno < 4) {
+		decodeFICblock(sdr, sdr->ofdmDecoder.buffer[blkno], blkno);
+	}
+	else 
+	{
+		decodeMscblock(sdr, sdr->ofdmDecoder.buffer[blkno], blkno);
+	}	
+#else
 	if (write(sdr->ofdmDecoder.pipe.wr, &blkno, sizeof(blkno)) == -1) {
 		tvherror(LS_RTLSDR, "write to pipe failed!");
 	}
+#endif
 }
 
 void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
@@ -191,6 +211,7 @@ void decodeMscblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 	process_mscBlock(sdr, ibits, blkno);
 }
 
+#ifndef DAB_SINGLE_THREAD
 static void *run_thread_fn(void *arg) {
 	struct sdr_state_t *sdr = arg;
 	int blkno;
@@ -212,3 +233,4 @@ static void *run_thread_fn(void *arg) {
 
 	return 0;
 }
+#endif

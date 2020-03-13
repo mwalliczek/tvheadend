@@ -109,6 +109,10 @@ struct sdr_state_t {
 	int16_t		cifVector[55296];
 	
 	protection_t*	protection;
+
+#ifdef TRACE_RTLSDR_RAW
+ 	FILE*		traceFile;
+#endif
 };
 
 float jan_abs(float _Complex z);
@@ -151,6 +155,8 @@ sdr_dab_service_instance_t* sdr_dab_service_instance_create(dab_service_t* servi
 void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds);
 
 void sdr_init(struct sdr_state_t *sdr);
+
+void sdr_destroy(struct sdr_state_t *sdr);
 
 void sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int16_t *v);
 

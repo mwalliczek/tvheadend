@@ -96,12 +96,14 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 		sdr->fibCRCsuccess++;
 #ifdef TRACE_FIC_HANDLER
 	        printf("i: %d\n", i);
-	        FILE *pFile = fopen ("/tmp/ficInput", "wb");
-	        fwrite (sdr->ofdm_input, 2, 2304, pFile);
-	        fclose (pFile);
-	        pFile = fopen ("/tmp/ficOutput", "wb");
-	        fwrite (p, 1, 256, pFile);
-	        fclose (pFile);
+	        FILE *pFileIn = fopen ("/tmp/ficInput", "wb");
+	        fwrite (sdr->ofdm_input, 2, 2304, pFileIn);
+	        fclose (pFileIn);
+#endif
+#if defined TRACE_FIC_HANDLER || defined TRACE_RTLSDR_DEMOD
+	        FILE *pFileOut = fopen ("/tmp/ficOutput", "wb");
+	        fwrite (p, 1, 256, pFileOut);
+	        fclose (pFileOut);
 	        exit(0);
 #endif
 	}

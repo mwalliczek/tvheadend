@@ -449,10 +449,12 @@ SRCS-RTLSDR = \
     src/input/dab/fib-processor.c \
     src/input/dab/mp4processor.c \
     src/input/dab/charsets.c \
+    src/input/dab/rtlsdr/sdr_dab_basic_demodulation.c \
     src/input/dab/rtlsdr/reed-solomon.c \
     src/input/dab/rtlsdr/firecheck.c \
     src/input/dab/rtlsdr/phasereference.c \
     src/input/dab/rtlsdr/input_sdr.c \
+    src/input/dab/rtlsdr/input_sdr_async.c \
     src/input/dab/rtlsdr/sdr_fifo.c \
     src/input/dab/rtlsdr/ofdmDecoder.c \
     src/input/dab/rtlsdr/protTables.c \

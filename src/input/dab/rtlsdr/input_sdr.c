@@ -22,55 +22,14 @@ david.may.muc@googlemail.com
 #include <math.h>
 
 #include "tvheadend.h"
-#include "tvhpoll.h"
 #include "rtlsdr_private.h"
 #include "dab.h"
 #include "phasereference.h"
 #include "ofdmDecoder.h"
 #include "ficHandler.h"
-
-int readFromDevice(rtlsdr_frontend_t *lfe);
+#include "input_sdr_async.h"
 
 float _Complex oscillatorTable[INPUT_RATE];
-
-int readFromDevice(rtlsdr_frontend_t *lfe) {
-	struct sdr_state_t *sdr = &lfe->sdr;
-	tvhpoll_event_t ev[2];
-	tvhpoll_t *efd;
-	char b;
-	int nfds;
-
-	/* Setup poll */
-	efd = tvhpoll_create(2);
-	memset(ev, 0, sizeof(ev));
-	ev[0].events = TVHPOLL_IN;
-	ev[0].fd = lfe->lfe_control_pipe.rd;
-	ev[0].ptr = lfe;
-	ev[1].events = TVHPOLL_IN;
-	ev[1].fd = lfe->lfe_dvr_pipe.rd;
-	ev[1].ptr = &lfe->lfe_dvr_pipe;
-	tvhpoll_add(efd, ev, 2);
-
-	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0) {
-		nfds = tvhpoll_wait(efd, ev, 1, 150);
-		if (nfds < 1) continue;
-		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {
-			if (read(lfe->lfe_dvr_pipe.rd, &b, 1) > 0) {
-				tvhpoll_destroy(efd);
-				return 0;
-			}
-			continue;
-		}
-		if (ev[0].ptr != lfe) break;
-		if (read(lfe->lfe_control_pipe.rd, &b, 1) > 0 && sdr->fifo.count > 0) {
-			tvhtrace(LS_RTLSDR, "fifo count %u", sdr->fifo.count);
-			tvhpoll_destroy(efd);
-			return 1;
-		}
-	}
-	tvhpoll_destroy(efd);
-	return 0;
-}
 
 float jan_abs(float _Complex z) {
 	float re = crealf(z);
@@ -163,4 +122,15 @@ void sdr_init(struct sdr_state_t *sdr)
   for (i = 0; i < INPUT_RATE; i++) {
 	  oscillatorTable[i] = cosf(2.0 * M_PI * i / INPUT_RATE) + sinf(2.0 * M_PI * i / INPUT_RATE) * I;
   }
+#ifdef TRACE_RTLSDR_RAW
+  sdr->traceFile = fopen("/tmp/rtlsdr_raw", "wb");
+#endif
+}
+
+void sdr_destroy(struct sdr_state_t *sdr)
+{
+        destroyFicHandler(sdr);
+        destroyPhaseReference(sdr);
+        destroyOfdmDecoder(sdr);
+        cbFree(&sdr->fifo);
 }

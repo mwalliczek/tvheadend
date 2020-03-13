@@ -1,8 +1,12 @@
 include $(dir $(lastword $(MAKEFILE_LIST))).config.mk
 
-INC=-Isrc -Ibuild.linux
+INC=-Ibuild.linux -Isrc
 
 CFLAGS += -g -DENABLE_TRACE=1
+
+CFLAGS  += -Wall -Wwrite-strings -Wno-deprecated-declarations
+CFLAGS  += -Wmissing-prototypes
+CFLAGS  += -fms-extensions -funsigned-char -fno-strict-aliasing
 
 ifdef COVERAGE
 CFLAGS += --coverage
@@ -10,18 +14,28 @@ LIBS += -lgcov
 endif
 
 clean:
-		rm -f tests/*.o tests/viterbiTest tests/viterbiTest-neu tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test
+		rm -f tests/*.o tests/viterbiTest tests/viterbiTest-neu tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test tests/input_sdrTest
 
-tests:		tests/viterbiTest tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test
+tests:		tests/viterbiTest tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test tests/input_sdrTest
 		cd tests && ./viterbiTest
 		cd tests && ./ficHandlerTest
 		cd tests && ./mp4processorTest
 		cd tests && ./firecheckTest
 		cd tests && ./eep_protectionTest
 		cd tests && ./sdr_dab_service_instance_Test
+		cd tests && ./input_sdrTest
 
 tests/utilities.o:	tests/utilities.c
 		gcc $(INC) $(CFLAGS) -c tests/utilities.c -o $@
+
+tests/packet.o:	src/packet.c
+		gcc $(INC) $(CFLAGS) -c src/packet.c -o $@
+
+tests/services.o:	tests/services.c
+		gcc $(INC) $(CFLAGS) -c tests/services.c -o $@
+
+tests/streaming.o:	tests/streaming.c
+		gcc $(INC) $(CFLAGS) -c tests/streaming.c -o $@
 
 tests/viterbiTest.o:	tests/input/dab/rtlsdr/viterbi_768/viterbiTest.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/viterbi_768/ $(CFLAGS) -c tests/input/dab/rtlsdr/viterbi_768/viterbiTest.c -o $@
@@ -105,6 +119,29 @@ tests/sdr_dab_service_instance.o:	src/input/dab/rtlsdr/sdr_dab_service_instance.
 tests/sdr_dab_service_instance_Test.o:	tests/input/dab/rtlsdr/sdr_dab_service_instance_Test.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/sdr_dab_service_instance_Test.c -o $@
 
-tests/sdr_dab_service_instance_Test:	tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o
-		gcc $(CFLAGS) tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o $(LIBS) -o $@
+tests/sdr_dab_service_instance_Test:	tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o tests/services.o tests/packet.o tests/streaming.o tests/tvh_thread.o
+		gcc $(CFLAGS) tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o tests/services.o tests/packet.o tests/streaming.o tests/tvh_thread.o $(LIBS) -lpthread -o $@
 
+tests/phasereference.o:	src/input/dab/rtlsdr/phasereference.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/phasereference.c -o $@
+
+tests/sdr_fifo.o:	src/input/dab/rtlsdr/sdr_fifo.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/sdr_fifo.c -o $@
+
+tests/input_sdr.o:	src/input/dab/rtlsdr/input_sdr.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/input_sdr.c -o $@
+
+tests/ofdmDecoder.o:	src/input/dab/rtlsdr/ofdmDecoder.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -DDAB_SINGLE_THREAD -c src/input/dab/rtlsdr/ofdmDecoder.c -o $@
+
+# tests/tvhpoll.o:	src/tvhpoll.c
+# 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/tvhpoll.c -o $@
+
+tests/tvh_thread.o:	tests/tvh_thread.c
+		gcc $(INC) $(CFLAGS) -c tests/tvh_thread.c -o $@
+
+tests/input_sdrTest.o:	tests/input/dab/rtlsdr/input_sdrTest.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c tests/input/dab/rtlsdr/input_sdrTest.c -o $@
+
+tests/input_sdrTest:	tests/input_sdrTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processorMock.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o
+		gcc $(CFLAGS) tests/input_sdrTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processorMock.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o $(LIBS) -lm -lfftw3f -o $@

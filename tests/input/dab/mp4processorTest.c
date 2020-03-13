@@ -7,7 +7,7 @@ int16_t myResultLength;
 void callback(uint8_t* result, int16_t resultLength);
 
 int main(int argc, char** argv) {
-    mp4processor_t* mp4 = init_mp4processor(72, callback);
+    mp4processor_t* mp4 = init_mp4processor(NULL, 72, callback);
     uint8_t *input = calloc(1728, sizeof(uint8_t));
     FILE *pFile;
     int i;
