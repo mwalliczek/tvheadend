@@ -140,7 +140,8 @@ rtlsdr_frontend_stop_ensemble
 		pthread_join(lfe->demod_thread, NULL);
 		tvh_pipe_close(&lfe->lfe_dvr_pipe);
 		tvhdebug(LS_RTLSDR, "%s - stopped dvr thread", buf1);
-		rtlsdr_cancel_async(lfe->dev);
+		pthread_join(lfe->read_thread, NULL);
+		tvh_pipe_close(&lfe->lfe_control_pipe);
 	}
 	
 	sdr_destroy(&lfe->sdr);
@@ -287,7 +288,8 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 #ifdef TRACE_RTLSDR_RAW
 	fwrite(buf, sizeof(uint8_t), len, sdr->traceFile);
 #endif
-	if (lfe->lfe_dvr_pipe.wr <= 0 || !lfe->running) {
+	if (lfe->lfe_dvr_pipe.wr < 0 || !lfe->running || !tvheadend_is_running()) {
+		rtlsdr_cancel_async(lfe->dev);
 		return;
 	}
 	/* write input data into fifo */

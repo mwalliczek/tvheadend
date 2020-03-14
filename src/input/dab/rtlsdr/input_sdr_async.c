@@ -21,7 +21,7 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 	ev[1].ptr = &lfe->lfe_dvr_pipe;
 	tvhpoll_add(efd, ev, 2);
 
-	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0) {
+	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0 && lfe->running) {
 		nfds = tvhpoll_wait(efd, ev, 1, 150);
 		if (nfds < 1) continue;
 		if (ev[0].ptr == &lfe->lfe_dvr_pipe) {

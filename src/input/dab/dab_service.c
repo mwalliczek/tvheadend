@@ -535,6 +535,7 @@ dab_service_create0
   s->s_dab_ensemble        = mm;
   LIST_INSERT_HEAD(&mm->mm_services, s, s_dab_ensemble_link);
   
+  s->s_servicetype    = ST_RADIO;
   s->s_delete         = dab_service_delete;
   s->s_unref          = dab_service_unref;
   s->s_is_enabled     = dab_service_is_enabled;
