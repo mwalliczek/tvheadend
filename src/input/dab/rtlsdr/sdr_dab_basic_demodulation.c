@@ -29,6 +29,18 @@ void *rtlsdr_demod_thread_fn(void *arg)
 	int		index_attempts = 0;
 
 	tvhtrace(LS_RTLSDR, "start polling");
+	
+        /* Setup poll */
+        sdr->efd = tvhpoll_create(2);
+        memset(sdr->ev, 0, sizeof(sdr->ev));
+        sdr->ev[0].events = TVHPOLL_IN;
+        sdr->ev[0].fd = lfe->lfe_control_pipe.rd;
+        sdr->ev[0].ptr = lfe;
+        sdr->ev[1].events = TVHPOLL_IN;
+        sdr->ev[1].fd = lfe->lfe_dvr_pipe.rd;
+        sdr->ev[1].ptr = &lfe->lfe_dvr_pipe;
+        tvhpoll_add(sdr->efd, sdr->ev, 2);
+	
 	/* Read */
 	if (getSamples(lfe, v, T_F / 2, 0) < T_F / 2) {
 		tvherror(LS_RTLSDR, "getSamples failed");
@@ -195,6 +207,11 @@ void *rtlsdr_demod_thread_fn(void *arg)
 				fineCorrector += carrierDiff;
 			}
 	}
+	
+	tvhtrace(LS_RTLSDR, "rtlsdr_demod_thread_fn end loop");
+
+	tvhpoll_destroy(sdr->efd);
+	
 	return 0;
 }
 

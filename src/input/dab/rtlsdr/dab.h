@@ -26,6 +26,7 @@
 #include <complex.h>
 
 #include "input.h"
+#include "tvhpoll.h"
 
 #include "sdr_fifo.h"
 #include "../dab_constants.h"
@@ -85,6 +86,9 @@ struct sdr_state_t {
 	dab_ensemble_instance_t	*mmi;
 	uint32_t frequency;
 	CircularBuffer fifo;
+	
+        tvhpoll_event_t ev[2];
+        tvhpoll_t 	*efd;
 
 	int		isSynced;
 
