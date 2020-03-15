@@ -248,7 +248,10 @@ static void rtlsdr_frontend_open_service(dab_input_t *di, dab_service_t *s, int 
 	dab_input_open_service(di, s, flags, first, weight);
 	if (s->s_type != STYPE_RAW) {
 		sdr_dab_service_instance_t *sds = sdr_dab_service_instance_create(s);
+		
+		tvh_mutex_lock(&lfe->sdr.active_service_mutex);
 		LIST_INSERT_HEAD(&lfe->sdr.active_service_instance, sds, service_link);
+		tvh_mutex_unlock(&lfe->sdr.active_service_mutex);
 	}
 }
 
@@ -258,6 +261,7 @@ static void rtlsdr_frontend_close_service(dab_input_t *di, dab_service_t *s)
 	sdr_dab_service_instance_t *sds;
 	tvhtrace(LS_RTLSDR, "close service %s", s->s_nicename);
 	if (s->s_type != STYPE_RAW) {
+		tvh_mutex_lock(&lfe->sdr.active_service_mutex);
 		LIST_FOREACH(sds, &lfe->sdr.active_service_instance, service_link) {
 			if (sds->dai_service == s) {
 				LIST_REMOVE(sds, service_link);
@@ -265,6 +269,7 @@ static void rtlsdr_frontend_close_service(dab_input_t *di, dab_service_t *s)
 				break;
 			}
 		}
+		tvh_mutex_unlock(&lfe->sdr.active_service_mutex);
 	}
 	dab_input_close_service(di, s);
 }

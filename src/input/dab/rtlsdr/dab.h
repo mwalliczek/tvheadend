@@ -61,10 +61,6 @@ struct sdr_dab_service_instance
         
         LIST_ENTRY(sdr_dab_service_instance) service_link;
 
-        pthread_t thread;
-        th_pipe_t pipe;
-        
-
 	int16_t		fragmentSize;
         int16_t*	interleaveData[16];
 	int16_t		interleaverIndex;
@@ -107,6 +103,8 @@ struct sdr_state_t {
 
 	int			fibCRCtotal;
 	int			fibCRCsuccess;
+	
+	tvh_mutex_t	active_service_mutex;
 	
 	LIST_HEAD(,sdr_dab_service_instance) active_service_instance;
 	
