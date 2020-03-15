@@ -33,10 +33,10 @@
 #include "ficHandler.h"
 #include "mscHandler.h"
 
-int16_t	get_snr(float _Complex* v);
-void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno);
-void decodeMscblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno);
-void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v);
+int16_t	get_snr(const float _Complex* v);
+void decodeFICblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno);
+void decodeMscblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno);
+void processBlock_0_int(struct sdr_state_t *sdr, const float _Complex* v);
 
 int16_t myMapper[T_u];
 
@@ -49,6 +49,7 @@ void initOfdmDecoder(struct sdr_state_t *sdr) {
 
 	sdr->mmi->tii_stats.snr = 0;
 
+	tvhdebug(LS_RTLSDR, "initOfdmDecoder");
 	sdr->ofdmDecoder.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
 	memset(sdr->ofdmDecoder.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
 	sdr->ofdmDecoder.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->ofdmDecoder.fftBuffer, (float(*)[2])sdr->ofdmDecoder.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
@@ -78,6 +79,7 @@ void initOfdmDecoder(struct sdr_state_t *sdr) {
 }
 
 void destroyOfdmDecoder(struct sdr_state_t *sdr) {
+	tvhdebug(LS_RTLSDR, "destroyOfdmDecoder");
 #ifndef DAB_SINGLE_THREAD
 	tvh_pipe_close(&sdr->ofdmDecoder.pipe);
 	pthread_join(sdr->ofdmDecoder.thread, NULL);
@@ -86,7 +88,7 @@ void destroyOfdmDecoder(struct sdr_state_t *sdr) {
 	fftwf_free(sdr->ofdmDecoder.fftBuffer);
 }
 
-void processBlock_0(struct sdr_state_t *sdr, float _Complex* v) {
+void processBlock_0(struct sdr_state_t *sdr, const float _Complex* v) {
 	int blkno = 0;
 	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_u);
 #ifdef DAB_SINGLE_THREAD
@@ -98,9 +100,14 @@ void processBlock_0(struct sdr_state_t *sdr, float _Complex* v) {
 #endif
 }
 
-void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v) {
+static void doFft(struct sdr_state_t *sdr, const float _Complex* v) {
 	memcpy(sdr->ofdmDecoder.fftBuffer, v, T_u * sizeof(float _Complex));
 	fftwf_execute(sdr->ofdmDecoder.plan);
+}
+
+void processBlock_0_int(struct sdr_state_t *sdr, const float _Complex* v) {
+	doFft(sdr, v);
+
 	/**
 	*	The SNR is determined by looking at a segment of bins
 	*	within the signal region and bits outside.
@@ -115,7 +122,7 @@ void processBlock_0_int(struct sdr_state_t *sdr, float _Complex* v) {
 		sdr->ofdmDecoder.fftBuffer, T_u * sizeof(float _Complex));
 }
 
-int16_t	get_snr(float _Complex* v) {
+int16_t	get_snr(const float _Complex* v) {
 	int16_t	i;
 	float	noise = 0;
 	float	signal = 0;
@@ -134,7 +141,7 @@ int16_t	get_snr(float _Complex* v) {
 	return get_db(signal / (K / 2)) - get_db(noise);
 }
 
-void decodeBlock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
+void decodeBlock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno) {
 	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_s);
 #ifdef DAB_SINGLE_THREAD
 	if (blkno < 4) {
@@ -151,13 +158,12 @@ void decodeBlock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 #endif
 }
 
-void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
+static void decodeBlockInt(struct sdr_state_t *sdr, const float _Complex* v, int16_t *ibits) {
 	int i;
 	float _Complex r1;
-	int16_t ibits[2 * K];
-
-	memcpy(sdr->ofdmDecoder.fftBuffer, &v[T_g], T_u * sizeof(float _Complex));
-	fftwf_execute(sdr->ofdmDecoder.plan);
+	
+	doFft(sdr, v);
+	
 	/**
 	*	Note that from here on, we are only interested in the
 	*	"carriers" useful carriers of the FFT output
@@ -174,40 +180,29 @@ void decodeFICblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
 		*/
 		r1 = sdr->ofdmDecoder.fftBuffer[index] * conjf(sdr->ofdmDecoder.phaseReference[index]);
 		//		conjVector[index] = r1;
+		//
+		//	The viterbi decoder expects values in the range 0 .. 255
 		float ab1 = jan_abs(r1);
 		ibits[i] = -crealf(r1) / ab1 * 127.0;
 		ibits[K + i] = -cimagf(r1) / ab1 * 127.0;
 	}
 	memcpy(sdr->ofdmDecoder.phaseReference,
 		sdr->ofdmDecoder.fftBuffer, T_u * sizeof(float _Complex));
+}
+
+void decodeFICblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno) {
+	int16_t ibits[2 * K];
+
+	decodeBlockInt(sdr, v, ibits);
+	
 	process_ficBlock(sdr, ibits, blkno);
 }
 
-void decodeMscblock(struct sdr_state_t *sdr, float _Complex* v, int32_t blkno) {
-	int i;
-	float _Complex r1;
+void decodeMscblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno) {
 	int16_t ibits[2 * K];
-
-	memcpy(sdr->ofdmDecoder.fftBuffer, &v[T_g], T_u * sizeof(float _Complex));
-	fftwf_execute(sdr->ofdmDecoder.plan);
 	
-	/**
-	*	Note that "mapIn" maps to -carriers / 2 .. carriers / 2
-	*	we did not set the fft output to low .. high
-	*/
-	for (i = 0; i < K; i++) {
-		int16_t	index = myMapper[i];
-		if (index < 0)
-			index += T_u;
-		r1 = sdr->ofdmDecoder.fftBuffer[index] * conjf(sdr->ofdmDecoder.phaseReference[index]);
-	//
-	//	The viterbi decoder expects values in the range 0 .. 255
-		float ab1 = jan_abs(r1);
-		ibits[i] = -crealf(r1) / ab1 * 127.0;
-		ibits[K + i] = -cimagf(r1) / ab1 * 127.0;
-	}
-	memcpy(sdr->ofdmDecoder.phaseReference,
-		sdr->ofdmDecoder.fftBuffer, T_u * sizeof(float _Complex));
+	decodeBlockInt(sdr, v, ibits);
+
 	process_mscBlock(sdr, ibits, blkno);
 }
 
