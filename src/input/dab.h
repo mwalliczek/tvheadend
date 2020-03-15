@@ -462,6 +462,8 @@ dab_service_t *dab_service_create0
 
 dab_service_t *dab_service_create_raw(dab_ensemble_t *mm);
 
+void dab_service_set_subchannel(dab_service_t *s, int16_t SubChId);
+
 void dab_service_unref ( service_t *s );
 
 void dab_service_delete ( service_t *s, int delconf );

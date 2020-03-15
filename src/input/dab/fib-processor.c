@@ -1062,8 +1062,8 @@ dab_service_t *s;
 	s->PS_flag	= ps_flag;
 	s->ASCTy	= ASCTy;
 	
-	s->subChId = SubChId;
-
+	dab_service_set_subchannel(s, SubChId);
+	
 	idnode_changed(&s->s_id);
 
 	service_refresh_channel((service_t*)s);

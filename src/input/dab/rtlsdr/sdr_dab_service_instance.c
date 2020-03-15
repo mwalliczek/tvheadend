@@ -81,6 +81,7 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data);
 
 static void dab_flush(dab_service_t *t, sbuf_t *sb);
 
+#define DAB_BUFSIZE (6 * 1024)
 
 void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     int16_t i;
@@ -104,7 +105,17 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
     
     if(sds->dai_service->s_tsbuf.sb_ptr > 0) {
-      dab_flush(sds->dai_service, &sds->dai_service->s_tsbuf);
+      dab_service_t* t = (dab_service_t*)sds->dai_service;
+      tvh_mutex_lock(&t->s_stream_mutex);
+      service_set_streaming_status_flags((service_t*)t, TSS_MUX_PACKETS);
+      if (streaming_pad_probe_type(&t->s_streaming_pad, SMT_DAB)) {
+        dab_flush(t, &t->s_tsbuf);
+      } else {
+        sbuf_reset(&t->s_tsbuf, 2*DAB_BUFSIZE);
+        service_set_streaming_status_flags((service_t*)t, TSS_PACKETS);
+        t->s_streaming_live |= TSS_LIVE;
+      }
+      tvh_mutex_unlock(&t->s_stream_mutex);
     }
 }
 
@@ -115,12 +126,11 @@ sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int
     sds->nextIn = (sds->nextIn + 1) % 20;
 }
 
-#define DAB_BUFSIZE (6 * 1024)
-
 void sdr_dab_service_instance_dataCallback(void* context, uint8_t* result, int16_t resultLength) {
   dab_service_t *t = (dab_service_t *) context;
   sbuf_t *sb = &t->s_tsbuf;
 
+  tvhtrace(LS_RTLSDR, "mp4 callback %d", resultLength);
   if (sb->sb_data == NULL)
     sbuf_init_fixed(sb, DAB_BUFSIZE);
 
@@ -139,20 +149,19 @@ dab_flush(dab_service_t *t, sbuf_t *sb)
 
   t->s_tsbuf_last = mclk();
 
+  tvhtrace(LS_RTLSDR, "mp4 flush %d", sb->sb_ptr);
   pb = pktbuf_alloc(sb->sb_data, sb->sb_ptr);
   pb->pb_err = sb->sb_err;
 
   memset(&sm, 0, sizeof(sm));
   sm.sm_type = SMT_DAB;
   sm.sm_data = pb;
-  tvh_mutex_lock(&t->s_stream_mutex);
   streaming_service_deliver((service_t *)t, streaming_msg_clone(&sm));
 
   pktbuf_ref_dec(pb);
 
   service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
   t->s_streaming_live |= TSS_LIVE;
-  tvh_mutex_unlock(&t->s_stream_mutex);
 
   sbuf_reset(sb, 2*DAB_BUFSIZE);
 }

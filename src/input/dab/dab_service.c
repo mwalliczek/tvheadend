@@ -226,6 +226,42 @@ dab_service_config_save ( service_t *t, char *filename, size_t fsize )
   return NULL;
 }
 
+void dab_service_set_subchannel(dab_service_t *s, int16_t SubChId)
+{
+  elementary_set_t *set = &s->s_components;
+  streaming_component_type_t hts_stream_type;
+  elementary_stream_t *st, *next;
+  
+  s->subChId = SubChId;
+  
+  /* Mark all streams for deletion */
+  TAILQ_FOREACH(st, &set->set_all, es_link) {
+    st->es_delete_me = 1;
+  }
+  
+  hts_stream_type = SCT_AAC;
+  
+  st = elementary_stream_find(set, SubChId);
+  if (st == NULL || st->es_type != hts_stream_type) {
+    st = elementary_stream_create(set, SubChId, hts_stream_type);
+  }
+
+  if (st->es_type != hts_stream_type) {
+    st->es_type = hts_stream_type;
+  }
+
+  st->es_delete_me = 0;
+  
+  /* Scan again to see if any streams should be deleted */
+  for(st = TAILQ_FIRST(&set->set_all); st != NULL; st = next) {
+    next = TAILQ_NEXT(st, es_link);
+
+    if(st->es_delete_me) {
+      elementary_set_stream_destroy(set, st);
+    }
+  }
+}
+
 /*
  * Service instance list
  */

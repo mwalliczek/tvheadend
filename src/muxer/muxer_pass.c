@@ -411,6 +411,8 @@ pass_muxer_mime(muxer_t* m, const struct streaming_start *ss)
     mc = MC_MPEGTS;
   else if(si->si_type == S_MPEG_PS)
     mc = MC_MPEGPS;
+  else if(si->si_type == S_DAB)
+    mc = MC_AAC;
   else
     mc = MC_UNKNOWN;
 
@@ -695,8 +697,10 @@ pass_muxer_write_pkt(muxer_t *m, streaming_message_type_t smt, void *data)
 
   switch(smt) {
   case SMT_MPEGTS:
-  case SMT_DAB:
     pass_muxer_write_ts(m, pb);
+    break;
+  case SMT_DAB:
+    pass_muxer_write(m, pktbuf_ptr(pb), pktbuf_len(pb));
     break;
   default:
     //TODO: add support for v4l (MPEG-PS)
