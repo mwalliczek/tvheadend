@@ -1044,12 +1044,7 @@ dab_service_t *s;
 	tvh_mutex_lock(&global_lock);
 	
 	s = dab_service_find(mm, SId, 1, 0);
-	if (!s ->s_dab_svcname) {
-	   tvh_mutex_unlock(&global_lock);
-	   return;
-	}
-
-	if (!mm->subChannels [SubChId]. inUse) {
+	if (!s ->s_dab_svcname || s->s_verified || !mm->subChannels [SubChId]. inUse) {
 	   tvh_mutex_unlock(&global_lock);
 	   return;
 	}

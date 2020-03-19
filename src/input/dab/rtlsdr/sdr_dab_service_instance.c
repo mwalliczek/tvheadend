@@ -58,11 +58,15 @@ sdr_dab_service_instance_create(dab_service_t* service)
     for (i = 0; i < 20; i++)
         res->theData[i] = calloc(res->fragmentSize, sizeof(int16_t));
 
+    tvhdebug(LS_RTLSDR, "created sdr_dab_service_instance_t %p", res);
+
     return res;
 }
 
 void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
     int i;
+
+    tvhdebug(LS_RTLSDR, "destroy sdr_dab_service_instance_t %p", sds);
 
     free(sds->tempX);
     free(sds->outV);
@@ -107,13 +111,12 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     if(sds->dai_service->s_tsbuf.sb_ptr > 0) {
       dab_service_t* t = (dab_service_t*)sds->dai_service;
       tvh_mutex_lock(&t->s_stream_mutex);
-      service_set_streaming_status_flags((service_t*)t, TSS_MUX_PACKETS);
+      service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
+      t->s_streaming_live |= TSS_LIVE;
       if (streaming_pad_probe_type(&t->s_streaming_pad, SMT_DAB)) {
         dab_flush(t, &t->s_tsbuf);
       } else {
         sbuf_reset(&t->s_tsbuf, 2*DAB_BUFSIZE);
-        service_set_streaming_status_flags((service_t*)t, TSS_PACKETS);
-        t->s_streaming_live |= TSS_LIVE;
       }
       tvh_mutex_unlock(&t->s_stream_mutex);
     }
@@ -159,9 +162,6 @@ dab_flush(dab_service_t *t, sbuf_t *sb)
   streaming_service_deliver((service_t *)t, streaming_msg_clone(&sm));
 
   pktbuf_ref_dec(pb);
-
-  service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
-  t->s_streaming_live |= TSS_LIVE;
 
   sbuf_reset(sb, 2*DAB_BUFSIZE);
 }
