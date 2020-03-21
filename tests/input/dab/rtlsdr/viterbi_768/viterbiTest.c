@@ -22,6 +22,8 @@ int main(int argc, char** argv) {
     input = malloc((3072 + 24) * 2);
     output = malloc(768);
     
+    initConstViterbi768();
+    
     initViterbi768(&vp, 768, 1);
     
     pFile = fopen ("input/dab/rtlsdr/viterbi_768/input" , "rb" );
