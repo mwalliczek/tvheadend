@@ -9,6 +9,8 @@ int main(int argc, char** argv) {
     
     memset(&sdr, 0, sizeof(sdr));
     
+    initConstViterbi768();
+
     initFicHandler(&sdr);
     
     pFile = fopen ("input/dab/rtlsdr/ficHandlerTest/ficInput" , "rb" );

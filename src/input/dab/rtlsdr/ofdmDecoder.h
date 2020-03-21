@@ -1,6 +1,7 @@
 #ifndef _OFDMDECODER_H
 #define _OFDMDECODER_H
 
+void initConstOfdmDecoder(void);
 void initOfdmDecoder(struct sdr_state_t *sdr);
 void destroyOfdmDecoder(struct sdr_state_t *sdr);
 void processBlock_0(struct sdr_state_t *sdr, const float _Complex* v);

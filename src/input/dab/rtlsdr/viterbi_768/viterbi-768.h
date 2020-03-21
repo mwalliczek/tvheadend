@@ -38,7 +38,6 @@ struct v {
 /* Pointers to path metrics, swapped on every bit */
 	metric_t *old_metrics,*new_metrics;
 	decision_t *decisions;   /* decisions */
-	COMPUTETYPE Branchtab[NUMSTATES / 2 * RATE] __attribute__((aligned(16)));
 	
 	uint8_t *data;
 	COMPUTETYPE *symbols;
@@ -46,6 +45,7 @@ struct v {
 	int spiral;
 };
 
+void	initConstViterbi768(void);
 void	initViterbi768	(struct v *vp, int16_t, int spiral);
 void	destroyViterbi768	(struct v *vp);
 void	deconvolve	(struct v * vp, int16_t *, uint8_t *);

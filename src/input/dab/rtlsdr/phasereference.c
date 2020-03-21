@@ -36,7 +36,7 @@ struct phasetableElement {
 	int32_t n;
 };
 
-static
+static const
 struct phasetableElement modeI_table[] = {
 	{ -768, -737, 0, 1 },
 { -736, -705, 1, 2 },
@@ -107,11 +107,11 @@ float _Complex refTable[T_u];
 
 float phaseDifferences[DIFF_LENGTH];
 
-int32_t		geth_table(int32_t i, int32_t j);
+int32_t	geth_table(int32_t i, int32_t j);
 
 float	get_Phi(int32_t k);
 
-int32_t		geth_table(int32_t i, int32_t j) {
+int32_t	geth_table(int32_t i, int32_t j) {
 	switch (i) {
 	case 0:
 		return h0[j];
@@ -140,7 +140,7 @@ float	get_Phi(int32_t k) {
 	return 0;
 }
 
-void initPhaseReference(struct sdr_state_t *sdr) {
+void initConstPhaseReference(void) {
 	int32_t	i;
 	float	Phi_k;
 	for (i = 1; i <= K / 2; i++) {
@@ -149,9 +149,6 @@ void initPhaseReference(struct sdr_state_t *sdr) {
 		Phi_k = get_Phi(-i);
 		refTable[T_u - i] = cosf(Phi_k) + sinf(Phi_k) * I;
 	}
-	sdr->phaseReference.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
-	memset(sdr->phaseReference.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
-	sdr->phaseReference.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->phaseReference.fftBuffer, (float(*)[2])sdr->phaseReference.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
 	//
 	//      prepare a table for the coarse frequency synchronization
 	for (i = 1; i <= DIFF_LENGTH; i++) {
@@ -159,6 +156,12 @@ void initPhaseReference(struct sdr_state_t *sdr) {
                                                     conjf (refTable [(T_u + i + 1) % T_u])));
                                                     		
 	}
+}
+
+void initPhaseReference(struct sdr_state_t *sdr) {
+	sdr->phaseReference.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
+	memset(sdr->phaseReference.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
+	sdr->phaseReference.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->phaseReference.fftBuffer, (float(*)[2])sdr->phaseReference.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
 }
 
 void destroyPhaseReference(struct sdr_state_t *sdr) {

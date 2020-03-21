@@ -46,24 +46,8 @@ static 	int16_t blockLength;
 
 uint8_t	bitFor		(int, int, int);
 
-void initViterbi768 (struct v * vp, int16_t blockLength_, int spiral) {
+void initConstViterbi768(void) {
 int	i, j;
-	blockLength	= blockLength_;
-
-	transCosts	= malloc(sizeof(int*) *(blockLength + 6 + 1));
-	history		= malloc(sizeof(int*) *(blockLength + 6 + 1));
-	stateSequence	= malloc(sizeof(int*) *(blockLength + 6 + 1));
-//
-	for (i = 0; i < blockLength + 6; i++) {
-	   transCosts [i]	= malloc(sizeof(int)*numofStates);
-	   history    [i]	= malloc(sizeof(int)*numofStates);
-	   stateSequence [i]	= 0;
-	   for (j = 0; j < numofStates; j ++) {
-	      transCosts [i][j] = 0;
-	      history    [i][j] = 0;
-	   }
-	}
-
 //  These tables give a mapping from (state * bit * Poly -> outputbit)
 	uint8_t poly1_table [2 * numofStates];
 	for (i = 0; i < 2; i ++)
@@ -98,6 +82,26 @@ int	i, j;
 	   predecessor_for_0 [i] = ((i << 1) + 00) & (numofStates - 1);
 	   predecessor_for_1 [i] = ((i << 1) + 01) & (numofStates - 1);
 	}
+}
+
+void initViterbi768 (struct v * vp, int16_t blockLength_, int spiral) {
+int	i, j;
+	blockLength	= blockLength_;
+
+	transCosts	= malloc(sizeof(int*) *(blockLength + 6 + 1));
+	history		= malloc(sizeof(int*) *(blockLength + 6 + 1));
+	stateSequence	= malloc(sizeof(int*) *(blockLength + 6 + 1));
+//
+	for (i = 0; i < blockLength + 6; i++) {
+	   transCosts [i]	= malloc(sizeof(int)*numofStates);
+	   history    [i]	= malloc(sizeof(int)*numofStates);
+	   stateSequence [i]	= 0;
+	   for (j = 0; j < numofStates; j ++) {
+	      transCosts [i][j] = 0;
+	      history    [i][j] = 0;
+	   }
+	}
+
 }
 
 void	destroyViterbi768 (struct v *vp) {

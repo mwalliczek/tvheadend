@@ -134,7 +134,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 			continue;
 		}
 		index_attempts = 0;
-		tvhtrace(LS_RTLSDR, "sync found!");
+		tvhtrace(LS_RTLSDR, "sync found!, coarseCorrector %f fineCorrector %f", coarseCorrector, fineCorrector);
 		sdr->isSynced = 1;
 		//	Once here, we are synchronized, we need to copy the data we
 		//	used for synchronization for block 0
