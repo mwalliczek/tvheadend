@@ -61,6 +61,7 @@
 #define SUBSHIFT 0
 #endif
 
+COMPUTETYPE Branchtab[NUMSTATES / 2 * RATE] __attribute__((aligned(16)));
 int	parity(int);
 void	init_viterbi(struct v *, int16_t);
 void	update_viterbi_blk_GENERIC(struct v *, COMPUTETYPE *,
@@ -110,6 +111,18 @@ int32_t	i;
 	      X[i] -= min;
       }
 }
+
+void initConstViterbi768(void) {
+int polys [RATE] = POLYS;
+int16_t	i, state;
+	for (state = 0; state < NUMSTATES / 2; state++) {
+	   for (i = 0; i < RATE; i++)
+	      Branchtab [i * NUMSTATES / 2 + state] =
+	                     (polys[i] < 0) ^
+	                        parity((2 * state) & abs (polys[i])) ? 255 : 0;
+	}
+}
+
 //
 //
 //	The main use of the viterbi decoder is in handling the FIC blocks
@@ -117,8 +130,6 @@ int32_t	i;
 //	There all have a predefined length. In that case we use the
 //	"fast" (i.e. spiral) code, otherwise we use the generic code
 void initViterbi768 (struct v *vp, int16_t wordlength, int spiral) {
-int polys [RATE] = POLYS;
-int16_t	i, state;
 #ifdef	__MINGW32__
 uint32_t	size;
 #endif
@@ -154,12 +165,6 @@ uint32_t	size;
 	}
 #endif
 
-	for (state = 0; state < NUMSTATES / 2; state++) {
-	   for (i = 0; i < RATE; i++)
-	      vp->Branchtab [i * NUMSTATES / 2 + state] =
-	                     (polys[i] < 0) ^
-	                        parity((2 * state) & abs (polys[i])) ? 255 : 0;
-	}
 //
 	init_viterbi (vp, 0);
 }
@@ -261,7 +266,7 @@ COMPUTETYPE metric,m0,m1,m2,m3;
 
 	metric =0;
 	for (j = 0; j < RATE;j++)
-	   metric += (vp->Branchtab [i + j * NUMSTATES/2] ^ syms[s*RATE+j]) >>
+	   metric += (Branchtab [i + j * NUMSTATES/2] ^ syms[s*RATE+j]) >>
 	                                                     METRICSHIFT ;
 	metric = metric >> PRECISIONSHIFT;
 	const COMPUTETYPE max =
@@ -340,7 +345,7 @@ int32_t s;
 	                 vp -> new_metrics -> t,
 	                 vp -> old_metrics -> t,
 	                 syms,
-	                 d -> t, vp->Branchtab);
+	                 d -> t, Branchtab);
 }
 
 //

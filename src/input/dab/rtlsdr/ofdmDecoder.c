@@ -44,16 +44,8 @@ int16_t myMapper[T_u];
 static void *run_thread_fn(void *arg);
 #endif
 
-void initOfdmDecoder(struct sdr_state_t *sdr) {
+void initConstOfdmDecoder(void) {
 	int16_t tmp[T_u];
-
-	sdr->mmi->tii_stats.snr = 0;
-
-	tvhdebug(LS_RTLSDR, "initOfdmDecoder");
-	sdr->ofdmDecoder.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
-	memset(sdr->ofdmDecoder.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
-	sdr->ofdmDecoder.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->ofdmDecoder.fftBuffer, (float(*)[2])sdr->ofdmDecoder.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
-
 	int16_t	index = 0;
 	int16_t	i;
 
@@ -71,6 +63,17 @@ void initOfdmDecoder(struct sdr_state_t *sdr) {
 		myMapper[index++] = tmp[i] - T_u / 2;
 		//	we now have a table with values from lwb - T_u / 2 .. lwb + T_u / 2
 	}
+}
+
+void initOfdmDecoder(struct sdr_state_t *sdr) {
+
+	sdr->mmi->tii_stats.snr = 0;
+
+	tvhdebug(LS_RTLSDR, "initOfdmDecoder");
+	sdr->ofdmDecoder.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
+	memset(sdr->ofdmDecoder.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
+	sdr->ofdmDecoder.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->ofdmDecoder.fftBuffer, (float(*)[2])sdr->ofdmDecoder.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
+
 #ifndef DAB_SINGLE_THREAD
 	tvh_pipe(0, &sdr->ofdmDecoder.pipe);
 	tvh_thread_create(&sdr->ofdmDecoder.thread, NULL,

@@ -26,7 +26,7 @@
 
 #include	<stdint.h>
 
-int8_t	*get_PCodes (int16_t);
+const int8_t *get_PCodes (const int16_t);
 
 #endif
 
