@@ -58,7 +58,7 @@ streaming_message_data_size(streaming_message_t *sm)
     th_pkt_t *pkt = sm->sm_data;
     if (pkt && pkt->pkt_payload)
       return pktbuf_len(pkt->pkt_payload);
-  } else if (sm->sm_type == SMT_MPEGTS || sm->sm_type == SMT_DAB) {
+  } else if (sm->sm_type == SMT_MPEGTS) {
     pktbuf_t *pkt_payload = sm->sm_data;
     if (pkt_payload)
       return pktbuf_len(pkt_payload);
@@ -310,7 +310,6 @@ streaming_msg_clone(streaming_message_t *src)
     break;
 
   case SMT_MPEGTS:
-  case SMT_DAB:
     pktbuf_ref_inc(src->sm_data);
     dst->sm_data = src->sm_data;
     break;
@@ -379,7 +378,6 @@ streaming_msg_free(streaming_message_t *sm)
     break;
 
   case SMT_MPEGTS:
-  case SMT_DAB:
     if(sm->sm_data)
       pktbuf_ref_dec(sm->sm_data);
     break;

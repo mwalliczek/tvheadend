@@ -70,6 +70,8 @@ struct sdr_dab_service_instance
 	int16_t		nextOut;
 	int16_t*	theData [20];
 	int16_t*	tempX;
+	
+	int64_t		dts;
 
         subChannel* 	subChannel;
         

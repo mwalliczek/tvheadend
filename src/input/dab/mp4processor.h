@@ -26,6 +26,15 @@
 
 #include "rtlsdr/reed-solomon.h"
 
+typedef struct {
+    int rfa;
+    int dacRate;
+    int sbrFlag;
+    int psFlag;
+    int aacChannelMode;
+    int mpegSurround;
+} stream_parms;
+
 typedef struct mp4processor mp4processor_t;
 
 struct mp4processor {
@@ -47,12 +56,12 @@ struct mp4processor {
 
     int16_t		frame_quality;
     int16_t		rs_quality;
-
+    
     void		*context;
-    void 		(*writeCb)(void*, uint8_t*, int16_t);
+    void 		(*writeCb)(uint8_t*, int16_t, stream_parms* stream_parms, void*);
 };
 
-mp4processor_t* init_mp4processor(int16_t bitRate, void* context, void (*writeCb)(void*, uint8_t*, int16_t));
+mp4processor_t* init_mp4processor(int16_t bitRate, void* context, void (*writeCb)(uint8_t*, int16_t, stream_parms* stream_parms, void*));
 void destroy_mp4processor(mp4processor_t* mp4processor);
 void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V);
 

@@ -3992,87 +3992,6 @@ static const char frametypearray[PKT_NTYPES] = {
   [PKT_B_FRAME] = 'B',
 };
 
-static void
-htsp_dab_stream_deliver(htsp_subscription_t *hs, streaming_message_t *sm)
-{
-  htsmsg_t *m;
-  htsp_msg_t *hm;
-  htsp_connection_t *htsp = hs->hs_htsp;
-  int64_t ts;
-  pktbuf_t *pb = sm->sm_data;
-  size_t payloadlen;
-
-  if (pb->pb_err)
-    hs->hs_data_errors += pb->pb_err;
-  if(pb->pb_size == 0) {
-    return;
-  }
-
-  m = htsmsg_create_map();
- 
-  htsmsg_add_str(m, "method", "muxpkt");
-  htsmsg_add_u32(m, "subscriptionId", hs->hs_sid);
-  htsmsg_add_u32(m, "stream", 1);
-
-  /**
-   * Since we will serialize directly we use 'binptr' which is a binary
-   * object that just points to data, thus avoiding a copy.
-   */
-  payloadlen = pktbuf_len(pb);
-  htsmsg_add_bin_ptr(m, "payload", pktbuf_ptr(pb), payloadlen);
-  htsp_send_subscription(htsp, m, pb, hs, payloadlen);
-  atomic_add(&hs->hs_s_bytes_out, payloadlen);
-
-  if(mono2sec(hs->hs_last_report) != mono2sec(mclk())) {
-
-    /* Send a queue and signal status report every second */
-
-    hs->hs_last_report = mclk();
-
-    m = htsmsg_create_map();
-    htsmsg_add_str(m, "method", "queueStatus");
-    htsmsg_add_u32(m, "subscriptionId", hs->hs_sid);
-    htsmsg_add_u32(m, "packets", hs->hs_q.hmq_length);
-    htsmsg_add_u32(m, "bytes", hs->hs_q.hmq_payload);
-    if (hs->hs_data_errors)
-      htsmsg_add_u32(m, "errors", hs->hs_data_errors);
-
-    /**
-     * Figure out real time queue delay 
-     */
-    
-    tvh_mutex_lock(&htsp->htsp_out_mutex);
-
-    int64_t min_dts = PTS_UNSET;
-    int64_t max_dts = PTS_UNSET;
-    TAILQ_FOREACH(hm, &hs->hs_q.hmq_q, hm_link) {
-      if(!hm->hm_msg)
-	continue;
-      if(htsmsg_get_s64(hm->hm_msg, "dts", &ts))
-	continue;
-      if(ts == PTS_UNSET)
-	continue;
-  
-      if(min_dts == PTS_UNSET)
-	min_dts = ts;
-      else
-	min_dts = MIN(ts, min_dts);
-
-      if(max_dts == PTS_UNSET)
-	max_dts = ts;
-      else
-	max_dts = MAX(ts, max_dts);
-    }
-
-    htsmsg_add_s64(m, "delay", max_dts - min_dts);
-
-    tvh_mutex_unlock(&htsp->htsp_out_mutex);
-    /* We use a special queue for queue status message so they're not
-       blocked by anything else */
-    htsp_send_message(hs->hs_htsp, m, &hs->hs_htsp->htsp_hmq_qstatus);
-  }
-}
-
 /**
  * Build a htsmsg from a th_pkt and enqueue it on our HTSP service
  */
@@ -4551,15 +4470,6 @@ htsp_streaming_input(void *opaque, streaming_message_t *sm)
       tvhdebug(LS_HTSP, "%s - first packet", hs->hs_htsp->htsp_logname);
     hs->hs_first = 1;
     htsp_stream_deliver(hs, sm->sm_data);
-    // reference is transfered
-    sm->sm_data = NULL;
-    break;
-
-  case SMT_DAB:
-    if (!hs->hs_first)
-      tvhdebug(LS_HTSP, "%s - first packet", hs->hs_htsp->htsp_logname);
-    hs->hs_first = 1;
-    htsp_dab_stream_deliver(hs, sm);
     // reference is transfered
     sm->sm_data = NULL;
     break;

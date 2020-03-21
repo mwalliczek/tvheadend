@@ -690,7 +690,7 @@ profile_input(void *opaque, streaming_message_t *sm)
     prch->prch_start_pending = 1;
     streaming_msg_free(sm);
     sm = NULL;
-  } else if (sm->sm_type == SMT_PACKET || sm->sm_type == SMT_MPEGTS || sm->sm_type == SMT_DAB) {
+  } else if (sm->sm_type == SMT_PACKET || sm->sm_type == SMT_MPEGTS) {
     streaming_msg_free(sm);
     return;
   }
@@ -814,7 +814,7 @@ profile_sharer_input(void *opaque, streaming_message_t *sm)
       run = prch;
       continue;
     }
-    if (sm->sm_type != SMT_PACKET && sm->sm_type != SMT_MPEGTS && sm->sm_type != SMT_DAB)
+    if (sm->sm_type != SMT_PACKET && sm->sm_type != SMT_MPEGTS)
       continue;
     if (prch->prch_stop)
       continue;
@@ -991,8 +991,7 @@ profile_sharer_destroy(profile_chain_t *prch)
         psm2 = TAILQ_NEXT(psm, psm_link);
         if (psm->psm_prch != prch) continue;
         if (psm->psm_sm->sm_type == SMT_PACKET ||
-            psm->psm_sm->sm_type == SMT_MPEGTS ||
-            psm->psm_sm->sm_type == SMT_DAB)
+            psm->psm_sm->sm_type == SMT_MPEGTS)
           streaming_msg_free(psm->psm_sm);
         else
           profile_input(psm->psm_prch, psm->psm_sm);

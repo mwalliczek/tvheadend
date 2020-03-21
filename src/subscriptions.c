@@ -552,7 +552,7 @@ subscription_input_direct(void *opauqe, streaming_message_t *sm)
     atomic_add(&s->ths_total_err, pkt->pkt_err);
     if (pkt->pkt_payload)
       subscription_add_bytes_in(s, pktbuf_len(pkt->pkt_payload));
-  } else if(sm->sm_type == SMT_MPEGTS || sm->sm_type == SMT_DAB) {
+  } else if(sm->sm_type == SMT_MPEGTS) {
     pktbuf_t *pb = sm->sm_data;
     atomic_add(&s->ths_total_err, pb->pb_err);
     subscription_add_bytes_in(s, pktbuf_len(pb));

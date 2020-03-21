@@ -56,16 +56,7 @@ int	check_crc_bytes(const uint8_t *msg, int32_t len) {
     return (crc ^ accumulator) == 0;
 }
 
-typedef struct {
-    int rfa;
-    int dacRate;
-    int sbrFlag;
-    int psFlag;
-    int aacChannelMode;
-    int mpegSurround;
-} stream_parms;
-
-mp4processor_t* init_mp4processor(int16_t bitRate, void *context, void(*writeCb)(void*,uint8_t*, int16_t)) {
+mp4processor_t* init_mp4processor(int16_t bitRate, void *context, void(*writeCb)(uint8_t*, int16_t, stream_parms* stream_parms, void*)) {
     mp4processor_t* res = calloc(1, sizeof(mp4processor_t));
 
     res->my_rsDecoder = init_reedSolomon(8, 0435, 0, 1, 10);
@@ -281,11 +272,12 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
             memcpy(&fileBuffer[7],
                 &mp4processor->outVector[mp4processor->au_start[i]],
                 aac_frame_length);
-            mp4processor->writeCb(mp4processor->context, fileBuffer, aac_frame_length + 7);
+            mp4processor->writeCb(fileBuffer, aac_frame_length + 7, &streamParameters, mp4processor->context);
 #ifdef TRACE_MP4
             exit(0);
 #endif
         } else {
+            mp4processor->writeCb(NULL, 0, &streamParameters, mp4processor->context);
             tvherror(LS_RTLSDR, "CRC failure with dab+ frame should not happen");
         }
     }
@@ -329,7 +321,7 @@ void	mp4Processor_buildHeader(int16_t framelen,
     fh.private_bit = 0;
     switch (sp->mpegSurround) {
     default:
-        fprintf(stderr, "Unrecognized mpeg_surround_config ignored\n");
+        tvherror(LS_RTLSDR, "Unrecognized mpeg_surround_config ignored");
         //	not nice, but deliberate: fall through
     case 0:
         if (sp->sbrFlag && !sp->aacChannelMode && sp->psFlag)

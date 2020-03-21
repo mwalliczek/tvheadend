@@ -20,7 +20,7 @@
 #include "dab.h"
 #include "tvheadend.h"
 
-void sdr_dab_service_instance_dataCallback(void* context, uint8_t* result, int16_t resultLength);
+void sdr_dab_service_instance_dataCallback(uint8_t* result, int16_t resultLength, stream_parms* stream_parms, void* context);
 
 sdr_dab_service_instance_t * 
 sdr_dab_service_instance_create(dab_service_t* service)
@@ -50,7 +50,7 @@ sdr_dab_service_instance_create(dab_service_t* service)
         res->protection = eep_protection_init(res->subChannel->BitRate,
             res->subChannel->protLevel);
 
-    res->mp4processor = init_mp4processor(res->subChannel->BitRate, service, sdr_dab_service_instance_dataCallback);
+    res->mp4processor = init_mp4processor(res->subChannel->BitRate, res, sdr_dab_service_instance_dataCallback);
 
     res->tempX = calloc(res->fragmentSize, sizeof(int16_t));
     res->nextIn = 0;
@@ -83,10 +83,6 @@ const	int16_t interleaveMap[] = { 0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15 };
 
 void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data);
 
-static void dab_flush(dab_service_t *t, sbuf_t *sb);
-
-#define DAB_BUFSIZE (6 * 1024)
-
 void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     int16_t i;
 
@@ -107,19 +103,6 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     protection_deconvolve(sds->protection, sds->tempX, sds->outV);
 
     mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
-    
-    if(sds->dai_service->s_tsbuf.sb_ptr > 0) {
-      dab_service_t* t = (dab_service_t*)sds->dai_service;
-      tvh_mutex_lock(&t->s_stream_mutex);
-      service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
-      t->s_streaming_live |= TSS_LIVE;
-      if (streaming_pad_probe_type(&t->s_streaming_pad, SMT_DAB)) {
-        dab_flush(t, &t->s_tsbuf);
-      } else {
-        sbuf_reset(&t->s_tsbuf, 2*DAB_BUFSIZE);
-      }
-      tvh_mutex_unlock(&t->s_stream_mutex);
-    }
 }
 
 void
@@ -129,39 +112,57 @@ sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int
     sds->nextIn = (sds->nextIn + 1) % 20;
 }
 
-void sdr_dab_service_instance_dataCallback(void* context, uint8_t* result, int16_t resultLength) {
-  dab_service_t *t = (dab_service_t *) context;
-  sbuf_t *sb = &t->s_tsbuf;
-
-  tvhtrace(LS_RTLSDR, "mp4 callback %d", resultLength);
-  if (sb->sb_data == NULL)
-    sbuf_init_fixed(sb, DAB_BUFSIZE);
-
-  sbuf_append(sb, result, resultLength);
-//  sb->sb_err += errors;
-}
-
-/**
- *
- */
-static void
-dab_flush(dab_service_t *t, sbuf_t *sb)
+static const int aac_sample_rates[4] =
 {
-  streaming_message_t sm;
-  pktbuf_t *pb;
+  32000, 16000, 48000, 24000
+};
 
-  t->s_tsbuf_last = mclk();
+void sdr_dab_service_instance_dataCallback(uint8_t* result, int16_t resultLength, stream_parms* sp, void* context) {
+  sdr_dab_service_instance_t *sds = (sdr_dab_service_instance_t *) context;
+  dab_service_t *t = sds->dai_service;
+  int sr = aac_sample_rates[sp->dacRate << 1 | sp->sbrFlag];
+  int duration = 90000 * 1024 / sr;
+  int sri = rate_to_sri(sr);
+  int channels;
+  switch (sp->mpegSurround) {
+  default:
+      tvhtrace(LS_RTLSDR, "Unrecognized mpeg_surround_config ignored");
+      //      not nice, but deliberate: fall through
+  case 0:
+      if (sp->sbrFlag && !sp->aacChannelMode && sp->psFlag)
+          channels = 2; /* Parametric stereo */
+      else
+          channels = 1 << sp->aacChannelMode;
+      break;
 
-  tvhtrace(LS_RTLSDR, "mp4 flush %d", sb->sb_ptr);
-  pb = pktbuf_alloc(sb->sb_data, sb->sb_ptr);
-  pb->pb_err = sb->sb_err;
+  case 1:
+      channels = 6;
+      break;
+  }
 
-  memset(&sm, 0, sizeof(sm));
-  sm.sm_type = SMT_DAB;
-  sm.sm_data = pb;
-  streaming_service_deliver((service_t *)t, streaming_msg_clone(&sm));
+  if (resultLength > 0) {
+    tvhtrace(LS_RTLSDR, "mp4 callback len %d (duration %d, channels %d)", resultLength, duration, channels);
 
-  pktbuf_ref_dec(pb);
+    tvh_mutex_lock(&t->s_stream_mutex);
+    service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
+    t->s_streaming_live |= TSS_LIVE;
+    if (streaming_pad_probe_type(&t->s_streaming_pad, SMT_PACKET)) {
+      th_pkt_t *pkt = pkt_alloc(SCT_MP4A, result, resultLength, sds->dts, sds->dts, sds->dts);
+      pkt->pkt_duration = duration;
+      pkt->a.pkt_keyframe = 1;
+      pkt->a.pkt_channels = channels;
+      pkt->a.pkt_sri = sri;
+  //    pkt->pkt_err = st->es_buf_a.sb_err;
+      pkt->pkt_componentindex = 1;
 
-  sbuf_reset(sb, 2*DAB_BUFSIZE);
+      /* Forward packet */
+      streaming_service_deliver((service_t *)t, streaming_msg_create_pkt(pkt));
+      
+
+      /* Decrease our own reference to the packet */
+      pkt_ref_dec(pkt);
+    }
+    tvh_mutex_unlock(&t->s_stream_mutex);
+  }
+  sds->dts += duration;
 }

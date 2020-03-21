@@ -422,9 +422,6 @@ satip_rtp_thread(void *aux)
         if (r) fatal = 1;
       }
       break;
-    case SMT_DAB:
-      // TODO MWL
-      break;
     case SMT_SIGNAL_STATUS:
       satip_rtp_signal_status(rtp, sm->sm_data);
       break;

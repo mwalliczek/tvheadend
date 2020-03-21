@@ -409,7 +409,7 @@ rtlsdr_frontend_clear
 
   /* Open FE */
   lfe->mi_display_name((dab_input_t*)lfe, buf1, sizeof(buf1));
-  tvhtrace(LS_RTLSDR, "%s - frontend clear", buf1);
+  tvhdebug(LS_RTLSDR, "%s - frontend clear", buf1);
 
   if (rtlsdr_frontend_open_fd(lfe))
     return SM_CODE_TUNING_FAILED;
@@ -443,7 +443,7 @@ rtlsdr_frontend_tune0
 	if (tvhtrace_enabled()) {
 //		char buf2[256];
 //		dvb_mux_conf_str(&lm->lm_tuning, buf2, sizeof(buf2));
-		tvhtrace(LS_RTLSDR, "tuner %s tuning freq %i", lm->mm_nicename, freq);
+		tvhdebug(LS_RTLSDR, "tuner %s tuning freq %i", lm->mm_nicename, freq);
 	}
 	r = rtlsdr_set_sample_rate(lfe->dev, 2048000);
 	if (r < 0)

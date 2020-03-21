@@ -107,8 +107,9 @@ uint32_t getSample(rtlsdr_frontend_t *lfe, float _Complex *v, float *abs, int32_
 
 void sdr_init(struct sdr_state_t *sdr)
 {
-	int i;
-
+  int i;
+  tvhdebug(LS_RTLSDR, "sdr_init %p", sdr);
+  
   // circular buffer init
   cbInit(&(sdr->fifo),(196608*2*4)); // 4 frames
 
@@ -129,6 +130,7 @@ void sdr_init(struct sdr_state_t *sdr)
 
 void sdr_destroy(struct sdr_state_t *sdr)
 {
+  tvhdebug(LS_RTLSDR, "sdr_destroy %p", sdr);
         destroyFicHandler(sdr);
         destroyPhaseReference(sdr);
         destroyOfdmDecoder(sdr);

@@ -329,15 +329,6 @@ gh_hold(globalheaders_t *gh, streaming_message_t *sm)
     }
     gh->gh_passthru = 1;
     break;
-    
-  case SMT_DAB:
-    sm = streaming_msg_create_data(SMT_START,
-				   streaming_start_copy(gh->gh_ss));
-    streaming_target_deliver2(gh->gh_output, sm);
-
-    gh->gh_passthru = 1;
-    break;
-
 
   case SMT_START:
     if (gh->gh_ss)
@@ -395,7 +386,6 @@ gh_pass(globalheaders_t *gh, streaming_message_t *sm)
   case SMT_NOSTART:
   case SMT_NOSTART_WARN:
   case SMT_MPEGTS:
-  case SMT_DAB:
   case SMT_SKIP:
   case SMT_SPEED:
   case SMT_TIMESHIFT_STATUS:
