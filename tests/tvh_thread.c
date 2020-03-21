@@ -10,6 +10,7 @@
 #include <signal.h>
 
 #include "settings.h"
+#include "tvhpoll.h"
 
 #ifdef PLATFORM_LINUX
 #include <sys/prctl.h>
@@ -65,7 +66,6 @@ tvh_thread_create
   pthread_attr_t _attr;
   if (attr == NULL) {
     pthread_attr_init(&_attr);
-    pthread_attr_setstacksize(&_attr, 2*1024*1024);
     attr = &_attr;
   }
   r = pthread_create(thread, attr, start_routine, arg);
@@ -131,7 +131,6 @@ tvh_cond_init
   r = 0;
 #else
   if (monotonic) {
-    r = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
     if (r) {
       fprintf(stderr, "Unable to set monotonic clocks for conditions! (%d)", r);
       abort();
@@ -213,5 +212,40 @@ tvh_mutex_not_held(const char *file, int line)
   tvherror(LS_THREAD, "Mutex not held at %s:%d", file, line);
   fprintf(stderr, "Mutex not held at %s:%d\n", file, line);
   abort();
+}
+
+struct tvhpoll
+{
+  tvh_mutex_t lock;
+  int fd;
+};
+
+tvhpoll_t *
+tvhpoll_create ( size_t n )
+{
+  int fd;
+  fd = -1;
+  tvhpoll_t *tp = calloc(1, sizeof(tvhpoll_t));
+  tvh_mutex_init(&tp->lock, NULL);
+  tp->fd = fd;
+  return tp;
+}
+
+void tvhpoll_destroy ( tvhpoll_t *tp )
+{
+  if (tp == NULL)
+    return;
+  tvh_mutex_destroy(&tp->lock);
+  free(tp);
+}
+
+int tvhpoll_add
+  ( tvhpoll_t *tp, tvhpoll_event_t *evs, size_t num )
+{
+  int r;
+
+  tvh_mutex_lock(&tp->lock);
+  tvh_mutex_unlock(&tp->lock);
+  return r;
 }
 

@@ -16,9 +16,9 @@ LIBS += -lgcov
 endif
 
 clean:
-		rm -f tests/*.o tests/viterbiTest tests/viterbiTest-neu tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test tests/input_sdrTest
+		rm -f tests/*.o tests/viterbiTest tests/viterbiTest-neu tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test tests/input_sdrTest tests/sdr_dab_basic_demodulationTest
 
-tests:		tests/viterbiTest tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test tests/input_sdrTest
+tests:		tests/viterbiTest tests/ficHandlerTest tests/mp4processorTest tests/firecheckTest tests/eep_protectionTest tests/sdr_dab_service_instance_Test tests/input_sdrTest tests/sdr_dab_basic_demodulationTest
 		cd tests && ./viterbiTest
 		cd tests && ./ficHandlerTest
 		cd tests && ./mp4processorTest
@@ -26,6 +26,7 @@ tests:		tests/viterbiTest tests/ficHandlerTest tests/mp4processorTest tests/fire
 		cd tests && ./eep_protectionTest
 		cd tests && ./sdr_dab_service_instance_Test
 		cd tests && ./input_sdrTest
+		cd tests && ./sdr_dab_basic_demodulationTest
 
 tests/utilities.o:	tests/utilities.c
 		gcc $(INC) $(CFLAGS) -c tests/utilities.c -o $@
@@ -155,3 +156,12 @@ tests/input_sdrTest.o:	tests/input/dab/rtlsdr/input_sdrTest.c
 
 tests/input_sdrTest:	tests/input_sdrTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processorMock.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o
 		gcc $(CFLAGS) tests/input_sdrTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processorMock.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o $(LIBS) -lm -lfftw3f -o $@
+
+tests/sdr_dab_basic_demodulation.o:	src/input/dab/rtlsdr/sdr_dab_basic_demodulation.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/sdr_dab_basic_demodulation.c -o $@
+
+tests/sdr_dab_basic_demodulationTest.o:	tests/input/dab/rtlsdr/sdr_dab_basic_demodulationTest.c
+		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/sdr_dab_basic_demodulationTest.c -o $@
+
+tests/sdr_dab_basic_demodulationTest:	tests/sdr_dab_basic_demodulation.o tests/sdr_dab_basic_demodulationTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processor.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o tests/tvh_thread.o tests/dab_service.o tests/charsets.o
+		gcc $(CFLAGS) tests/sdr_dab_basic_demodulation.o tests/sdr_dab_basic_demodulationTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processor.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o tests/tvh_thread.o tests/dab_service.o tests/charsets.o $(LIBS) -lm -lfftw3f -o $@
