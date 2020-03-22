@@ -58,10 +58,11 @@ struct mp4processor {
     int16_t		rs_quality;
     
     void		*context;
-    void 		(*writeCb)(uint8_t*, int16_t, stream_parms* stream_parms, void*);
+    void 		(*writeCb)(const uint8_t*, int16_t, const stream_parms* stream_parms, void*);
 };
 
-mp4processor_t* init_mp4processor(int16_t bitRate, void* context, void (*writeCb)(uint8_t*, int16_t, stream_parms* stream_parms, void*));
+mp4processor_t* init_mp4processor(int16_t bitRate, void* context, void (*writeCb)(const uint8_t*, int16_t, 
+        const stream_parms* stream_parms, void*));
 void destroy_mp4processor(mp4processor_t* mp4processor);
 void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V);
 

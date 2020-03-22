@@ -58,6 +58,8 @@ tests/viterbiTest:		tests/viterbiTest.o tests/viterbi-768.o tests/spiral-no-sse.
 tests/viterbiTest-neu:	tests/viterbiTest.o tests/viterbi-neu.o
 		gcc $(CFLAGS) tests/viterbiTest.o tests/viterbi-neu.o $(LIBS) -o $@
 
+tests/charsets.o:	src/input/dab/charsets.c
+		gcc $(INC) -Isrc/input/dab $(CFLAGS) -c src/input/dab/charsets.c -o $@
 
 tests/protection.o:	src/input/dab/rtlsdr/protection.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr $(CFLAGS) -c src/input/dab/rtlsdr/protection.c -o $@ 
@@ -74,11 +76,14 @@ tests/protTables.o:	src/input/dab/rtlsdr/protTables.c
 tests/ficHandlerTest.o:	tests/input/dab/rtlsdr/ficHandlerTest.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/ficHandlerTest.c -o $@
 
+tests/fib-processor.o: src/input/dab/fib-processor.c
+		gcc $(INC) -Isrc/input/dab $(CFLAGS) -c src/input/dab/fib-processor.c  -o $@
+
 tests/fib-processorMock.o:	tests/input/dab/rtlsdr/fib-processorMock.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/fib-processorMock.c -o $@
 
-tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o tests/fic_protection.o tests/protection.o
-		gcc $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processorMock.o tests/fic_protection.o tests/protection.o $(LIBS) -o $@
+tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processor.o tests/fic_protection.o tests/protection.o tests/dab_service.o tests/charsets.o
+		gcc $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processor.o tests/fic_protection.o tests/protection.o tests/dab_service.o tests/charsets.o $(LIBS) -o $@
 
 tests/firecheck.o:	src/input/dab/rtlsdr/firecheck.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/firecheck.c -o $@
@@ -136,6 +141,9 @@ tests/ofdmDecoder.o:	src/input/dab/rtlsdr/ofdmDecoder.c
 
 # tests/tvhpoll.o:	src/tvhpoll.c
 # 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/tvhpoll.c -o $@
+
+tests/dab_service.o:	tests/dab_service.c
+		gcc $(INC) $(CFLAGS) -c tests/dab_service.c -o $@
 
 tests/tvh_thread.o:	tests/tvh_thread.c
 		gcc $(INC) $(CFLAGS) -c tests/tvh_thread.c -o $@

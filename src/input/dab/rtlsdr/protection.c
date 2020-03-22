@@ -57,19 +57,21 @@ void protection_deconvolve(protection_t *protection, int16_t *v, uint8_t *outBuf
 int16_t	i;
 int16_t	inputCounter	= 0;
 
-	memset (protection->viterbiBlock, 0,
-	                        (protection->outSize * 4 + 24) * sizeof (int16_t)); 
+	memset (protection->viterbiBlock, 0, (protection->outSize * 4 + 24) * sizeof (int16_t)); 
 
 
-        for (i = 0; i < protection->outSize * 4 + 24; i ++)
-           if (protection->indexTable [i])
+        for (i = 0; i < protection->outSize * 4 + 24; i ++) {
+           if (protection->indexTable [i]) {
               protection->viterbiBlock [i] = v [inputCounter ++];
+           }
+        }
 
 ///     The actual deconvolution is done by the viterbi decoder
 	deconvolve (&protection->vp, protection->viterbiBlock, outBuffer);
 	
 //
 //      and the energy dispersal
-        for (i = 0; i < protection->outSize; i ++)
+        for (i = 0; i < protection->outSize; i ++) {
            outBuffer [i] ^= protection->disperseVector [i];
+        }
 }

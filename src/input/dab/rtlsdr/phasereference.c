@@ -31,14 +31,14 @@
 #include "dab.h"
 
 struct phasetableElement {
-	int32_t	kmin, kmax;
-	int32_t i;
-	int32_t n;
+    int32_t	kmin, kmax;
+    int32_t i;
+    int32_t n;
 };
 
 static const
 struct phasetableElement modeI_table[] = {
-	{ -768, -737, 0, 1 },
+    { -768, -737, 0, 1 },
 { -736, -705, 1, 2 },
 { -704, -673, 2, 0 },
 { -672, -641, 3, 1 },
@@ -112,119 +112,118 @@ int32_t	geth_table(int32_t i, int32_t j);
 float	get_Phi(int32_t k);
 
 int32_t	geth_table(int32_t i, int32_t j) {
-	switch (i) {
-	case 0:
-		return h0[j];
-	case 1:
-		return h1[j];
-	case 2:
-		return h2[j];
-	default:
-	case 3:
-		return h3[j];
-	}
+    switch (i) {
+    case 0:
+        return h0[j];
+    case 1:
+        return h1[j];
+    case 2:
+        return h2[j];
+    default:
+    case 3:
+        return h3[j];
+    }
 }
 
 float	get_Phi(int32_t k) {
-	int32_t k_prime, i, j, n = 0;
+    int32_t k_prime, i, j, n = 0;
 
-	for (j = 0; modeI_table[j].kmin != -1000; j++) {
-		if ((modeI_table[j].kmin <= k) && (k <= modeI_table[j].kmax)) {
-			k_prime = modeI_table[j].kmin;
-			i = modeI_table[j].i;
-			n = modeI_table[j].n;
-			return M_PI / 2 * (geth_table(i, k - k_prime) + n);
-		}
-	}
-	fprintf(stderr, "Help with %d\n", k);
-	return 0;
+    for (j = 0; modeI_table[j].kmin != -1000; j++) {
+        if ((modeI_table[j].kmin <= k) && (k <= modeI_table[j].kmax)) {
+            k_prime = modeI_table[j].kmin;
+            i = modeI_table[j].i;
+            n = modeI_table[j].n;
+            return M_PI / 2 * (geth_table(i, k - k_prime) + n);
+        }
+    }
+    fprintf(stderr, "Help with %d\n", k);
+    return 0;
 }
 
 void initConstPhaseReference(void) {
-	int32_t	i;
-	float	Phi_k;
-	for (i = 1; i <= K / 2; i++) {
-		Phi_k = get_Phi(i);
-		refTable[i] = cosf(Phi_k) + sinf(Phi_k) * I;
-		Phi_k = get_Phi(-i);
-		refTable[T_u - i] = cosf(Phi_k) + sinf(Phi_k) * I;
-	}
-	//
-	//      prepare a table for the coarse frequency synchronization
-	for (i = 1; i <= DIFF_LENGTH; i++) {
-		phaseDifferences [i - 1] = fabsf (cargf (refTable [(T_u + i) % T_u] *
-                                                    conjf (refTable [(T_u + i + 1) % T_u])));
-                                                    		
-	}
+    int32_t	i;
+    float	Phi_k;
+    for (i = 1; i <= K / 2; i++) {
+        Phi_k = get_Phi(i);
+        refTable[i] = cosf(Phi_k) + sinf(Phi_k) * I;
+        Phi_k = get_Phi(-i);
+        refTable[T_u - i] = cosf(Phi_k) + sinf(Phi_k) * I;
+    }
+    //
+    //      prepare a table for the coarse frequency synchronization
+    for (i = 1; i <= DIFF_LENGTH; i++) {
+        phaseDifferences[i - 1] = fabsf(cargf(refTable[(T_u + i) % T_u] *
+            conjf(refTable[(T_u + i + 1) % T_u])));
+
+    }
 }
 
 void initPhaseReference(struct sdr_state_t *sdr) {
-	sdr->phaseReference.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
-	memset(sdr->phaseReference.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
-	sdr->phaseReference.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->phaseReference.fftBuffer, (float(*)[2])sdr->phaseReference.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
+    sdr->phaseReference.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
+    memset(sdr->phaseReference.fftBuffer, 0, sizeof(fftwf_complex) * T_u);
+    sdr->phaseReference.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->phaseReference.fftBuffer, (float(*)[2])sdr->phaseReference.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
 }
 
 void destroyPhaseReference(struct sdr_state_t *sdr) {
-	fftwf_destroy_plan(sdr->phaseReference.plan);
-	fftwf_free(sdr->phaseReference.fftBuffer);
+    fftwf_destroy_plan(sdr->phaseReference.plan);
+    fftwf_free(sdr->phaseReference.fftBuffer);
 }
 
-int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, float _Complex* v) {
-	int32_t	i;
-	int32_t	maxIndex = -1;
-	float	sum = 0;
-	float	Max = -10000;
+int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, const float _Complex* v) {
+    int32_t	i;
+    int32_t	maxIndex = -1;
+    float	sum = 0;
+    float	Max = -10000;
 
-	memcpy(sdr->phaseReference.fftBuffer, v, T_u * sizeof(fftwf_complex));
-	fftwf_execute(sdr->phaseReference.plan);
-	for (i = 0; i < T_u; i++) {
-		sdr->phaseReference.fftBuffer[i] *= conjf(refTable[i]);
-		sdr->phaseReference.fftBuffer[i] = conjf(sdr->phaseReference.fftBuffer[i]);
-	}
-	fftwf_execute(sdr->phaseReference.plan);
-	/**
-	*	We compute the average signal value ...
-	*/
-	for (i = 0; i < T_u; i++) {
-		float absValue = cabsf(sdr->phaseReference.fftBuffer[i]);
-		sum += absValue;
-		if (absValue > Max) {
-			maxIndex = i;
-			Max = absValue;
-		}
-	}
-	/**
-	*	that gives us a basis for defining the threshold
-	*/
-	if (Max < 3 * sum / T_u) {
-		return  -fabsf(Max * T_u / sum) - 1;
-	}
-	else
-		return maxIndex;
+    memcpy(sdr->phaseReference.fftBuffer, v, T_u * sizeof(fftwf_complex));
+    fftwf_execute(sdr->phaseReference.plan);
+    for (i = 0; i < T_u; i++) {
+        sdr->phaseReference.fftBuffer[i] *= conjf(refTable[i]);
+        sdr->phaseReference.fftBuffer[i] = conjf(sdr->phaseReference.fftBuffer[i]);
+    }
+    fftwf_execute(sdr->phaseReference.plan);
+    /**
+    *	We compute the average signal value ...
+    */
+    for (i = 0; i < T_u; i++) {
+        float absValue = cabsf(sdr->phaseReference.fftBuffer[i]);
+        sum += absValue;
+        if (absValue > Max) {
+            maxIndex = i;
+            Max = absValue;
+        }
+    }
+    /**
+    *	that gives us a basis for defining the threshold
+    */
+    if (Max < 3 * sum / T_u) {
+        return  -fabsf(Max * T_u / sum) - 1;
+    } else
+        return maxIndex;
 }
 
 #define SEARCH_RANGE    (2 * 35)
-int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, float _Complex* v) {
-	int16_t i, j, index = 100;
-	float   computedDiffs[SEARCH_RANGE + DIFF_LENGTH + 1];
+int16_t phaseReferenceEstimateOffset(struct sdr_state_t *sdr, const float _Complex* v) {
+    int16_t i, j, index = 100;
+    float   computedDiffs[SEARCH_RANGE + DIFF_LENGTH + 1];
 
-	memcpy(sdr->phaseReference.fftBuffer, v, T_u * sizeof(fftwf_complex));
-	fftwf_execute(sdr->phaseReference.plan);
-	for (i = T_u - SEARCH_RANGE / 2;
-		i < T_u + SEARCH_RANGE / 2 + DIFF_LENGTH; i++) {
-		computedDiffs[i - (T_u - SEARCH_RANGE / 2)] =
-			fabsf(cargf(sdr->phaseReference.fftBuffer[i % T_u] * conjf(sdr->phaseReference.fftBuffer[(i + 1) % T_u])));
-	}
-	float   Mmin = 1000;
-	for (i = T_u - SEARCH_RANGE / 2; i < T_u + SEARCH_RANGE / 2; i++) {
-		float sum = 0;
-		for (j = 1; j < DIFF_LENGTH; j++)
-			if (phaseDifferences[j - 1] < 0.1)
-				sum += computedDiffs[i - (T_u - SEARCH_RANGE / 2) + j];
-		if (sum < Mmin) {
-			Mmin = sum;
-			index = i;
-		}
-	}
-	return index - T_u;
+    memcpy(sdr->phaseReference.fftBuffer, v, T_u * sizeof(fftwf_complex));
+    fftwf_execute(sdr->phaseReference.plan);
+    for (i = T_u - SEARCH_RANGE / 2;
+        i < T_u + SEARCH_RANGE / 2 + DIFF_LENGTH; i++) {
+        computedDiffs[i - (T_u - SEARCH_RANGE / 2)] =
+            fabsf(cargf(sdr->phaseReference.fftBuffer[i % T_u] * conjf(sdr->phaseReference.fftBuffer[(i + 1) % T_u])));
+    }
+    float   Mmin = 1000;
+    for (i = T_u - SEARCH_RANGE / 2; i < T_u + SEARCH_RANGE / 2; i++) {
+        float sum = 0;
+        for (j = 1; j < DIFF_LENGTH; j++)
+            if (phaseDifferences[j - 1] < 0.1)
+                sum += computedDiffs[i - (T_u - SEARCH_RANGE / 2) + j];
+        if (sum < Mmin) {
+            Mmin = sum;
+            index = i;
+        }
+    }
+    return index - T_u;
 }
