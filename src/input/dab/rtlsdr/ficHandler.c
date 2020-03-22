@@ -79,8 +79,8 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 	*	we keep track of the successrate
 	*	and show that per 100 fic blocks
 	*/
-	for (i = ficno * 3; i < ficno * 3 + 3; i++) {
-		uint8_t *p = &sdr->bitBuffer_out[(i % 3) * 256];
+	for (i = 0; i < 3; i++) {
+		uint8_t *p = &sdr->bitBuffer_out[i * 256];
 		if (sdr->fibCRCtotal < 100) {
 			sdr->fibCRCtotal++;
 		} else {
@@ -89,9 +89,10 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 			sdr->fibCRCtotal = 0;
 		}
 		if (!check_CRC_bits(p, 256)) {
+			tvhtrace(LS_RTLSDR, "ficHandler checkCRC failed %d %d", i, ficno);
 			continue;
 		}
-		tvhtrace(LS_RTLSDR, "ficHandler checkCRC success");
+		tvhtrace(LS_RTLSDR, "ficHandler checkCRC success %d %d", i, ficno);
 		process_FIB(sdr->mmi, p, ficno);
 		sdr->fibCRCsuccess++;
 #ifdef TRACE_FIC_HANDLER

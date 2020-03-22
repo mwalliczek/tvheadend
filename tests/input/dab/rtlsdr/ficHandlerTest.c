@@ -9,6 +9,10 @@ int main(int argc, char** argv) {
     
     memset(&sdr, 0, sizeof(sdr));
     
+    sdr.mmi = calloc(1, sizeof(dab_ensemble_instance_t));
+    sdr.mmi->mmi_ensemble = calloc(1, sizeof(dab_ensemble_t));
+    
+    initConstViterbi768();
     initFicHandler(&sdr);
     
     pFile = fopen ("input/dab/rtlsdr/ficHandlerTest/ficInput" , "rb" );
@@ -28,6 +32,8 @@ int main(int argc, char** argv) {
     printf("memcmp: %d\n", memcmp(output, &sdr.bitBuffer_out[512], 256));
     
     destroyFicHandler(&sdr);
+    free(sdr.mmi->mmi_ensemble);
+    free(sdr.mmi);
     free(output);
     
     exit(EXIT_SUCCESS);
