@@ -31,81 +31,80 @@
 void process_ficInput(struct sdr_state_t *sdr, int16_t ficno);
 
 void initFicHandler(struct sdr_state_t *sdr) {
-	sdr->index = 0;
-	sdr->BitsperBlock = 2 * 1536;
-	sdr->ficno = 0;
-	sdr->fibCRCsuccess = 0;
-	sdr->fibCRCtotal = 0;
-	sdr->protection = fic_protection_init();
+    sdr->index = 0;
+    sdr->BitsperBlock = 2 * 1536;
+    sdr->ficno = 0;
+    sdr->fibCRCsuccess = 0;
+    sdr->fibCRCtotal = 0;
+    sdr->protection = fic_protection_init();
 }
 
 void destroyFicHandler(struct sdr_state_t *sdr) {
-	protection_destroy(sdr->protection);
+    protection_destroy(sdr->protection);
 }
 
-void process_ficBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
-	int32_t	i;
+void process_ficBlock(struct sdr_state_t *sdr, const int16_t data[], int16_t blkno) {
+    int32_t	i;
 
-	if (blkno == 1) {
-		sdr->index = 0;
-		sdr->ficno = 0;
-	}
-	//
-	if ((1 <= blkno) && (blkno <= 3)) {
-		for (i = 0; i < sdr->BitsperBlock; i++) {
-			sdr->ofdm_input[sdr->index++] = data[i];
-			if (sdr->index >= 2304) {
-				process_ficInput(sdr, sdr->ficno);
-				sdr->index = 0;
-				sdr->ficno++;
-			}
-		}
-	}
-	else
-		fprintf(stderr, "You should not call ficBlock here\n");
-	//	we are pretty sure now that after block 4, we end up
-	//	with index = 0
+    if (blkno == 1) {
+        sdr->index = 0;
+        sdr->ficno = 0;
+    }
+    //
+    if ((1 <= blkno) && (blkno <= 3)) {
+        for (i = 0; i < sdr->BitsperBlock; i++) {
+            sdr->ofdm_input[sdr->index++] = data[i];
+            if (sdr->index >= 2304) {
+                process_ficInput(sdr, sdr->ficno);
+                sdr->index = 0;
+                sdr->ficno++;
+            }
+        }
+    } else
+        fprintf(stderr, "You should not call ficBlock here\n");
+    //	we are pretty sure now that after block 4, we end up
+    //	with index = 0
 }
 
 void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
-	int16_t	i;
+    int16_t	i;
 
-	tvhtrace(LS_RTLSDR, "process_ficInput started: %d", ficno);
-	protection_deconvolve(sdr->protection, sdr->ofdm_input, sdr->bitBuffer_out);
+    tvhtrace(LS_RTLSDR, "process_ficInput started: %d", ficno);
+    protection_deconvolve(sdr->protection, sdr->ofdm_input, sdr->bitBuffer_out);
 
-	/**
-	*	each of the fib blocks is protected by a crc
-	*	(we know that there are three fib blocks each time we are here
-	*	we keep track of the successrate
-	*	and show that per 100 fic blocks
-	*/
-	for (i = 0; i < 3; i++) {
-		uint8_t *p = &sdr->bitBuffer_out[i * 256];
-		if (sdr->fibCRCtotal < 100) {
-			sdr->fibCRCtotal++;
-		} else {
-			tvhdebug(LS_RTLSDR, "ficHandler crc rate %d", sdr->fibCRCsuccess - 1);
-			sdr->fibCRCsuccess = 0;
-			sdr->fibCRCtotal = 0;
-		}
-		if (!check_CRC_bits(p, 256)) {
-			tvhtrace(LS_RTLSDR, "ficHandler checkCRC failed %d %d", i, ficno);
-			continue;
-		}
-		tvhtrace(LS_RTLSDR, "ficHandler checkCRC success %d %d", i, ficno);
-		process_FIB(sdr->mmi, p, ficno);
-		sdr->fibCRCsuccess++;
+    /**
+    *	each of the fib blocks is protected by a crc
+    *	(we know that there are three fib blocks each time we are here
+    *	we keep track of the successrate
+    *	and show that per 100 fic blocks
+    */
+    for (i = 0; i < 3; i++) {
+        uint8_t *p = &sdr->bitBuffer_out[i * 256];
+        if (sdr->fibCRCtotal < 100) {
+            sdr->fibCRCtotal++;
+        } else {
+            tvhdebug(LS_RTLSDR, "ficHandler crc rate %d", sdr->fibCRCsuccess - 1);
+            sdr->fibCRCsuccess = 0;
+            sdr->fibCRCtotal = 0;
+        }
+        if (!check_CRC_bits(p, 256)) {
+            tvhtrace(LS_RTLSDR, "ficHandler checkCRC failed %d %d", i, ficno);
+            continue;
+        }
+        tvhtrace(LS_RTLSDR, "ficHandler checkCRC success %d %d", i, ficno);
+        process_FIB(sdr->mmi, p, ficno);
+        sdr->fibCRCsuccess++;
 #ifdef TRACE_FIC_HANDLER
-	        printf("i: %d\n", i);
-	        FILE *pFileIn = fopen ("/tmp/ficInput", "wb");
-	        fwrite (sdr->ofdm_input, 2, 2304, pFileIn);
-	        fclose (pFileIn);
+        printf("i: %d\n", i);
+        FILE *pFileIn = fopen("/tmp/ficInput", "wb");
+        fwrite(sdr->ofdm_input, 2, 2304, pFileIn);
+        fclose(pFileIn);
 #endif
 #if defined TRACE_FIC_HANDLER || defined TRACE_RTLSDR_DEMOD
-	        FILE *pFileOut = fopen ("/tmp/ficOutput", "wb");
-	        fwrite (p, 1, 256, pFileOut);
-	        fclose (pFileOut);
-	        exit(0);
+        FILE *pFileOut = fopen("/tmp/ficOutput", "wb");
+        fwrite(p, 1, 256, pFileOut);
+        fclose(pFileOut);
+        exit(0);
 #endif
-	}
+    }
 }

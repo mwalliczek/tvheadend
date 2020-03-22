@@ -20,7 +20,7 @@
 #include "dab.h"
 #include "tvheadend.h"
 
-void sdr_dab_service_instance_dataCallback(uint8_t* result, int16_t resultLength, stream_parms* stream_parms, void* context);
+void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context);
 
 sdr_dab_service_instance_t * 
 sdr_dab_service_instance_create(dab_service_t* service)
@@ -117,7 +117,7 @@ static const int aac_sample_rates[4] =
   32000, 16000, 48000, 24000
 };
 
-void sdr_dab_service_instance_dataCallback(uint8_t* result, int16_t resultLength, stream_parms* sp, void* context) {
+void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* sp, void* context) {
   sdr_dab_service_instance_t *sds = (sdr_dab_service_instance_t *) context;
   dab_service_t *t = sds->dai_service;
   int sr = aac_sample_rates[sp->dacRate << 1 | sp->sbrFlag];

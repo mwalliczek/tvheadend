@@ -56,7 +56,8 @@ int	check_crc_bytes(const uint8_t *msg, int32_t len) {
     return (crc ^ accumulator) == 0;
 }
 
-mp4processor_t* init_mp4processor(int16_t bitRate, void *context, void(*writeCb)(uint8_t*, int16_t, stream_parms* stream_parms, void*)) {
+mp4processor_t* init_mp4processor(int16_t bitRate, void *context, void(*writeCb)(const uint8_t*, int16_t, 
+        const stream_parms* stream_parms, void*)) {
     mp4processor_t* res = calloc(1, sizeof(mp4processor_t));
 
     res->my_rsDecoder = init_reedSolomon(8, 0435, 0, 1, 10);
