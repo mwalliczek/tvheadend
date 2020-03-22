@@ -5,6 +5,9 @@
 #include "tvheadend.h"
 #include "tvhlog.h"
 #include "sbuf.h"
+#include "idnode.h"
+
+tvh_mutex_t global_lock;
 
 int tvh_thread_debug;
 
@@ -39,6 +42,18 @@ int tvh__mutex_unlock(tvh_mutex_t *mutex) {
 
 int tvh__mutex_lock(tvh_mutex_t *mutex, const char *filename, int lineno) {
   return 0;
+}
+
+void
+tvh_str_set(char **strp, const char *src)
+{
+  free(*strp);
+  *strp = src ? strdup(src) : NULL;
+}
+
+void
+idnode_changed( idnode_t *self )
+{
 }
 
 /*

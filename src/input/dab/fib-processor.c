@@ -22,8 +22,8 @@
  * 	fib and fig processor
  */
 #include "dab_constants.h"
-#include	"fib-processor.h"
-#include	"charsets.h"
+#include "fib-processor.h"
+#include "charsets.h"
 #include "tvheadend.h"
 #include "dab_private.h"
 
@@ -105,44 +105,44 @@
    void            bind_packetService(dab_ensemble_instance_t *dei, int8_t,
 	   uint32_t, int16_t,
 	   int16_t, int16_t, int16_t);
-   void		process_FIG0(dab_ensemble_instance_t *dei, uint8_t *);
-   void		process_FIG1(dab_ensemble_instance_t *dei, uint8_t *);
-   void		FIG0Extension0(uint8_t *);
-   void		FIG0Extension1(dab_ensemble_instance_t *dei, uint8_t *);
-   void		FIG0Extension2(dab_ensemble_instance_t *dei, uint8_t *);
-   void		FIG0Extension3(dab_ensemble_instance_t *dei, uint8_t *);
-   void		FIG0Extension4(uint8_t *);
-   void		FIG0Extension5(dab_ensemble_instance_t *dei, uint8_t *);
-   void		FIG0Extension6(uint8_t *);
-   void            FIG0Extension7(uint8_t *);
-   void            FIG0Extension8(uint8_t *);
-   void            FIG0Extension11(uint8_t *);
-   void            FIG0Extension12(uint8_t *);
-   void            FIG0Extension13(dab_ensemble_instance_t *dei, uint8_t *);
-   void            FIG0Extension14(dab_ensemble_instance_t *dei, uint8_t *);
-   void            FIG0Extension17(dab_ensemble_instance_t *dei, uint8_t *);
-   void            FIG0Extension18(uint8_t *);
-   void            FIG0Extension19(uint8_t *);
-   void            FIG0Extension20(uint8_t *);
-   void            FIG0Extension21(uint8_t *);
-   void            FIG0Extension22(uint8_t *);
-   void            FIG0Extension23(uint8_t *);
-   void            FIG0Extension24(uint8_t *);
-   void            FIG0Extension25(uint8_t *);
-   void            FIG0Extension26(uint8_t *);
+   void		process_FIG0(dab_ensemble_instance_t *dei, const uint8_t *);
+   void		process_FIG1(dab_ensemble_instance_t *dei, const uint8_t *);
+   void		FIG0Extension0(const uint8_t *);
+   void		FIG0Extension1(dab_ensemble_instance_t *dei, const uint8_t *);
+   void		FIG0Extension2(dab_ensemble_instance_t *dei, const uint8_t *);
+   void		FIG0Extension3(dab_ensemble_instance_t *dei, const uint8_t *);
+   void		FIG0Extension4(const uint8_t *);
+   void		FIG0Extension5(dab_ensemble_instance_t *dei, const uint8_t *);
+   void		FIG0Extension6(const uint8_t *);
+   void            FIG0Extension7(const uint8_t *);
+   void            FIG0Extension8(const uint8_t *);
+   void            FIG0Extension11(const uint8_t *);
+   void            FIG0Extension12(const uint8_t *);
+   void            FIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *);
+   void            FIG0Extension14(dab_ensemble_instance_t *dei, const uint8_t *);
+   void            FIG0Extension17(dab_ensemble_instance_t *dei, const uint8_t *);
+   void            FIG0Extension18(const uint8_t *);
+   void            FIG0Extension19(const uint8_t *);
+   void            FIG0Extension20(const uint8_t *);
+   void            FIG0Extension21(const uint8_t *);
+   void            FIG0Extension22(const uint8_t *);
+   void            FIG0Extension23(const uint8_t *);
+   void            FIG0Extension24(const uint8_t *);
+   void            FIG0Extension25(const uint8_t *);
+   void            FIG0Extension26(const uint8_t *);
 
-   int16_t		HandleFIG0Extension1(dab_ensemble_instance_t *dei, uint8_t *,
+   int16_t		HandleFIG0Extension1(dab_ensemble_instance_t *dei, const uint8_t *,
 	   int16_t, uint8_t);
-   int16_t		HandleFIG0Extension2(dab_ensemble_instance_t *dei, uint8_t *,
+   int16_t		HandleFIG0Extension2(dab_ensemble_instance_t *dei, const uint8_t *,
 	   int16_t, uint8_t, uint8_t);
-   int16_t		HandleFIG0Extension3(dab_ensemble_instance_t *dei, uint8_t *, int16_t);
-   int16_t		HandleFIG0Extension5(dab_ensemble_instance_t *dei, uint8_t *, int16_t);
-   int16_t		HandleFIG0Extension8(uint8_t *,
+   int16_t		HandleFIG0Extension3(dab_ensemble_instance_t *dei, const uint8_t *, int16_t);
+   int16_t		HandleFIG0Extension5(dab_ensemble_instance_t *dei, const uint8_t *, int16_t);
+   int16_t		HandleFIG0Extension8(const uint8_t *,
 	   int16_t, uint8_t);
-//   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, uint8_t *,
+//   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *,
 //	   int16_t, uint8_t);
-   int16_t		HandleFIG0Extension22(uint8_t *, int16_t);
-   void    nameofEnsemble  (dab_ensemble_instance_t *dei, int id, char *s);
+   int16_t		HandleFIG0Extension22(const uint8_t *, int16_t);
+   void    nameofEnsemble  (dab_ensemble_instance_t *dei, int id, const char *s);
 
 
 //
@@ -151,15 +151,19 @@
 //	FIB's are segments of 256 bits. When here, they already
 //	passed the crc and we start unpacking into FIGs
 //	This is merely a dispatcher
-void	process_FIB (dab_ensemble_instance_t *dei, uint8_t *p, uint16_t fib) {
+void	process_FIB (dab_ensemble_instance_t *dei, const uint8_t *p, uint16_t fib) {
 uint8_t	FIGtype;
 int8_t	processedBytes	= 0;
-uint8_t	*d		= p;
+const uint8_t	*d		= p;
 
 	(void)fib;
 	tvh_mutex_lock(&dei->mmi_ensemble->mm_tables_lock);
 	while (processedBytes  < 30) {
 	   FIGtype 		= getBits_3 (d, 0);
+	   uint8_t FIGlength    = getBits_5 (d, 3);
+	   tvhtrace(LS_RTLSDR, "FIGtype %d, FIGlength %d", FIGtype, FIGlength);
+           if ((FIGtype == 0x07) && (FIGlength == 0x3F))
+              return;
 	   switch (FIGtype) {
 	      case 0:
 	         process_FIG0 (dei, d);	
@@ -188,7 +192,7 @@ uint8_t	*d		= p;
 //
 //	Handle ensemble is all through FIG0
 //
-void	process_FIG0 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	process_FIG0 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 uint8_t	extension	= getBits_5 (d, 8 + 3);
 //uint8_t	CN	= getBits_1 (d, 8 + 0);
 
@@ -295,7 +299,7 @@ uint8_t	extension	= getBits_5 (d, 8 + 3);
 //	FIG0/0 indicated a change in channel organization
 //	we are not equipped for that, so we just return
 //	control to the init
-void	FIG0Extension0 (uint8_t *d) {
+void	FIG0Extension0 (const uint8_t *d) {
 uint16_t	EId;
 uint8_t		changeflag;
 uint16_t	highpart, lowpart;
@@ -338,18 +342,18 @@ uint8_t	CN	= getBits_1 (d, 8 + 0);
 //	FIG0 extension 1 creates a mapping between the
 //	sub channel identifications and the positions in the
 //	relevant CIF.
-void	FIG0Extension1 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	FIG0Extension1 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 //uint8_t	CN	= getBits_1 (d, 8 + 0);
 
-	while (used < Length - 1)
+	while (used < Length)
 	   used = HandleFIG0Extension1 (dei, d, used, PD_bit);
 }
 //
 //	defining the channels 
-int16_t	HandleFIG0Extension1 (dab_ensemble_instance_t *dei, uint8_t *d,
+int16_t	HandleFIG0Extension1 (dab_ensemble_instance_t *dei, const uint8_t *d,
 	                                     int16_t offset,
 	                                     uint8_t pd) {
 dab_ensemble_t *mm = dei->mmi_ensemble;
@@ -360,6 +364,8 @@ int16_t	tabelIndex;
 int16_t	option, protLevel, subChanSize;
 	(void)pd;		// not used right now, maybe later
 	mm->subChannels [SubChId]. StartAddr = StartAdr;
+	tvhdebug(LS_RTLSDR, "SubChId %d", SubChId);
+                
 	mm->subChannels [SubChId]. inUse	 = 1;
 	if (getBits_1 (d, bitOffset + 16) == 0) {	// short form
 	   tabelIndex = getBits_6 (d, bitOffset + 18);
@@ -412,7 +418,7 @@ int16_t	option, protLevel, subChanSize;
 //
 //	Service organization, 6.3.1
 //	bind channels to serviceIds
-void	FIG0Extension2 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	FIG0Extension2 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
@@ -424,7 +430,7 @@ uint8_t	CN	= getBits_1 (d, 8 + 0);
 }
 //
 //	Note Offset is in bytes
-int16_t	HandleFIG0Extension2 (dab_ensemble_instance_t *dei, uint8_t *d,
+int16_t	HandleFIG0Extension2 (dab_ensemble_instance_t *dei, const uint8_t *d,
 	                                     int16_t offset,
 	                                     uint8_t cn,
 	                                     uint8_t pd) {
@@ -478,7 +484,7 @@ int16_t		numberofComponents;
 //      additional information about the service component
 //      description in packet mode.
 //      manual: page 55
-void	FIG0Extension3 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	FIG0Extension3 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	used	= 2;
 int16_t	Length	= getBits_5 (d, 3);
 
@@ -488,7 +494,7 @@ int16_t	Length	= getBits_5 (d, 3);
 
 //
 //      DSCTy   DataService Component Type
-int16_t HandleFIG0Extension3 (dab_ensemble_instance_t *dei, uint8_t *d, int16_t used) {
+int16_t HandleFIG0Extension3 (dab_ensemble_instance_t *dei, const uint8_t *d, int16_t used) {
 int16_t	SCId            = getBits (d, used * 8, 12);
 int16_t CAOrgflag       = getBits_1 (d, used * 8 + 15);
 int16_t DGflag          = getBits_1 (d, used * 8 + 16);
@@ -542,7 +548,7 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
 }
 //
 //      Service component with CA in stream mode 6.3.3
-void    FIG0Extension4 (uint8_t *d) {
+void    FIG0Extension4 (const uint8_t *d) {
 int16_t used    = 3;            // offset in bytes
 int16_t Rfa     = getBits_1 (d, 0);
 int16_t Rfu     = getBits_1 (d, 0 + 1);
@@ -554,7 +560,7 @@ int32_t CAOrg = getBits (d, 2 + 6, 16);
 }
 //
 //	Service component language
-void	FIG0Extension5 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	FIG0Extension5 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 
@@ -563,7 +569,7 @@ int16_t	Length	= getBits_5 (d, 3);
 	}
 }
 
-int16_t	HandleFIG0Extension5 (dab_ensemble_instance_t *dei, uint8_t* d, int16_t offset) {
+int16_t	HandleFIG0Extension5 (dab_ensemble_instance_t *dei, const uint8_t* d, int16_t offset) {
 int16_t	loffset	= offset * 8;
 uint8_t	lsFlag	= getBits_1 (d, loffset);
 int16_t	subChId, serviceComp, language;
@@ -587,14 +593,14 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
 }
 
 // FIG0/6: Service linking information 8.1.15, not implemented
-void    FIG0Extension6 (uint8_t *d) {
+void    FIG0Extension6 (const uint8_t *d) {
 }
 
 // FIG0/7: Configuration linking information 6.4.2, not implemented
-void    FIG0Extension7 (uint8_t *d) {
+void    FIG0Extension7 (const uint8_t *d) {
 }
 
-void	FIG0Extension8 (uint8_t *d) {
+void	FIG0Extension8 (const uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
@@ -604,7 +610,7 @@ uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 	}
 }
 
-int16_t	HandleFIG0Extension8 (uint8_t *d, int16_t used,
+int16_t	HandleFIG0Extension8 (const uint8_t *d, int16_t used,
 	                                     uint8_t pdBit) {
 int16_t	lOffset	= used * 8;
 uint32_t	SId	= getLBits (d, lOffset, pdBit == 1 ? 32 : 16);
@@ -644,17 +650,17 @@ uint8_t		extensionFlag;
 }
 //
 //
-void    FIG0Extension11 (uint8_t *d) {
+void    FIG0Extension11 (const uint8_t *d) {
         (void)d;
 }
 //
 //
-void    FIG0Extension12 (uint8_t *d) {
+void    FIG0Extension12 (const uint8_t *d) {
         (void)d;
 }
 //
 //
-void	FIG0Extension13 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	FIG0Extension13 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 //int16_t	used	= 2;		// offset in bytes
 //int16_t	Length	= getBits_5 (d, 3);
 //uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
@@ -692,7 +698,7 @@ int16_t		appType;
 }*/
 //
 //      FEC sub-channel organization 6.2.2
-void	FIG0Extension14 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	FIG0Extension14 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	Length	= getBits_5 (d, 3);	// in Bytes
 int16_t	used	= 2;			// in Bytes
 int16_t	i;
@@ -712,7 +718,7 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
 
 //
 //      Programme Type (PTy) 8.1.5
-void	FIG0Extension17 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	FIG0Extension17 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	length	= getBits_5 (d, 3);
 int16_t	offset	= 16;
 dab_service_t	*s;
@@ -743,7 +749,7 @@ dab_service_t	*s;
 }
 //
 //      Announcement support 8.1.6.1
-void	FIG0Extension18 (uint8_t *d) {
+void	FIG0Extension18 (const uint8_t *d) {
 int16_t	offset	= 16;		// bits
 uint16_t	SId, AsuFlags;
 int16_t		Length	= getBits_5 (d, 3);
@@ -761,7 +767,7 @@ int16_t		Length	= getBits_5 (d, 3);
 }
 //
 //      Announcement switching 8.1.6.2
-void	FIG0Extension19 (uint8_t *d) {
+void	FIG0Extension19 (const uint8_t *d) {
 int16_t		offset	= 16;		// bits
 uint16_t	AswFlags;
 int16_t		Length	= getBits_5 (d, 3);
@@ -797,18 +803,18 @@ uint8_t		region_Id_Lower;
 }
 //
 //      Service component information 8.1.4
-void    FIG0Extension20 (uint8_t *d) {
+void    FIG0Extension20 (const uint8_t *d) {
         (void)d;
 }
 //
 //	Frequency information (FI) 8.1.8
-void	FIG0Extension21 (uint8_t *d) {
+void	FIG0Extension21 (const uint8_t *d) {
 //	fprintf (stderr, "Frequency information\n");
 	(void)d;
 }
 //
 //      Obsolete in ETSI EN 300 401 V2.1.1 (2017-01)
-void	FIG0Extension22 (uint8_t *d) {
+void	FIG0Extension22 (const uint8_t *d) {
 int16_t	Length	= getBits_5 (d, 3);
 int16_t	offset	= 16;		// on bits
 int16_t	used	= 2;
@@ -818,7 +824,7 @@ int16_t	used	= 2;
 	(void)offset;
 }
 
-int16_t	HandleFIG0Extension22 (uint8_t *d, int16_t used) {
+int16_t	HandleFIG0Extension22 (const uint8_t *d, int16_t used) {
 uint8_t MS;
 int16_t	mainId;
 int16_t	noSubfields;
@@ -841,28 +847,28 @@ int	i;
 }
 //
 //
-void    FIG0Extension23 (uint8_t *d) {
+void    FIG0Extension23 (const uint8_t *d) {
         (void)d;
 }
 //
 //      OE Services
-void    FIG0Extension24 (uint8_t *d) {
+void    FIG0Extension24 (const uint8_t *d) {
         (void)d;
 }
 //
 //      OE Announcement support
-void    FIG0Extension25 (uint8_t *d) {
+void    FIG0Extension25 (const uint8_t *d) {
         (void)d;
 }
 //
 //      OE Announcement Switching
-void    FIG0Extension26 (uint8_t *d) {
+void    FIG0Extension26 (const uint8_t *d) {
         (void)d;
 }
 
 //      FIG 1 - Cover the different possible labels, section 5.2
 //
-void	process_FIG1 (dab_ensemble_instance_t *dei, uint8_t *d) {
+void	process_FIG1 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 uint8_t		charSet, extension;
 uint32_t	SId	= 0;
 uint8_t		Rfu;
@@ -1045,11 +1051,12 @@ dab_service_t *s;
 	
 	s = dab_service_find(mm, SId, 1, 0);
 	if (!s ->s_dab_svcname || s->s_verified || !mm->subChannels [SubChId]. inUse) {
+	   tvhdebug(LS_RTLSDR, "bind_audioService (SId %d, SubChId %d) name %s verified %d in use %d", SId, SubChId, s ->s_dab_svcname, s->s_verified, mm->subChannels [SubChId]. inUse);
 	   tvh_mutex_unlock(&global_lock);
 	   return;
 	}
 
-	tvhtrace(LS_RTLSDR, "add to ensemble (%d) %s", service_id16(s), s->s_dab_svcname);
+	tvhdebug(LS_RTLSDR, "add to ensemble (%d) %s", service_id16(s), s->s_dab_svcname);
 
 	s->s_verified = 1;
 
@@ -1120,7 +1127,7 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
 	memset (mm->subChannels, 0, sizeof (mm->subChannels));
 }
 
-void	nameofEnsemble  (dab_ensemble_instance_t *dei, int id, char *s) {
+void	nameofEnsemble  (dab_ensemble_instance_t *dei, int id, const char *s) {
 	tvhtrace(LS_RTLSDR, "name of ensemble (%d) %s", id, s);
 
 	tvh_mutex_lock(&global_lock);
