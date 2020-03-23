@@ -2,7 +2,7 @@ sudo: required
 dist: trusty
 language: c
 before_install:
-  - sudo apt-get -qqy update && sudo apt-get install fakeroot cppcheck -qqy
+  - sudo apt-get -qqy update && sudo apt-get install fakeroot cppcheck check libsubunit-dev -qqy
   - sudo ./Autobuild.sh -t raspbianstretch-armhf -o deps
 script:
   - ./Autobuild.sh -t raspbianstretch-armhf

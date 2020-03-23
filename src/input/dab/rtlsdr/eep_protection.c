@@ -68,10 +68,8 @@ protection_t* eep_protection_init (int16_t bitRate, int16_t protLevel) {
 	         PI2	= get_PCodes (2 - 1);
 	         break;
 	   }
-	}
-	else
-	if ((protLevel & (1 << 2)) != 0) {		// B series
-	   switch ((protLevel & 03)) {
+	} else {		// B series
+	   switch (protLevel & 03) {
 	      case 3:					// actually level 4
 	         L1	= 24 * bitRate / 32 - 3;
 	         L2	= 3;

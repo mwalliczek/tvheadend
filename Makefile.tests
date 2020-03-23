@@ -8,6 +8,8 @@ CFLAGS  += -Wall -Wwrite-strings -Wno-deprecated-declarations
 CFLAGS  += -Wmissing-prototypes
 CFLAGS  += -fms-extensions -funsigned-char -fno-strict-aliasing
 
+LIBS += -lcheck_pic  -pthread  -lrt -lm -lsubunit
+
 ifdef COVERAGE
 CFLAGS += --coverage
 LIBS += -lgcov

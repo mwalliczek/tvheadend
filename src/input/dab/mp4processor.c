@@ -182,8 +182,10 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
             rsIn[k] = frameBytes[(base + j + k * mp4processor->RSDims) % (mp4processor->RSDims * 120)];
         //
         ler = reedSolomon_dec(mp4processor->my_rsDecoder, rsIn, rsOut, 135);
-        if (ler < 0)
+        if (ler < 0) {
+            tvhdebug(LS_RTLSDR, "reedSolomon_dec %d < 0", ler);
             return 0;
+        }
         for (k = 0; k < 110; k++)
             mp4processor->outVector[j + k * mp4processor->RSDims] = rsOut[k];
     }
@@ -245,13 +247,15 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
         int16_t	aac_frame_length;
         //
         if (mp4processor->au_start[i + 1] < mp4processor->au_start[i]) {
-            //	      fprintf (stderr, "%d %d\n", mp4processor->au_start [i + 1], mp4processor->au_start [i]);
+            tvhdebug(LS_RTLSDR, "invalid start sequence %d < %d", mp4processor->au_start [i + 1], mp4processor->au_start [i]);
+            
             return 0;
         }
 
         aac_frame_length = mp4processor->au_start[i + 1] - mp4processor->au_start[i] - 2;
         // sanity check
         if ((aac_frame_length >= 960) || (aac_frame_length < 0)) {
+            tvhdebug(LS_RTLSDR, "invalid aac_frame_length %d", aac_frame_length);
             return 0;
         }
 
