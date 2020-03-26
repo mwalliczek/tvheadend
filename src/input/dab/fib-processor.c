@@ -161,7 +161,6 @@ const uint8_t	*d		= p;
 	while (processedBytes  < 30) {
 	   FIGtype 		= getBits_3 (d, 0);
 	   uint8_t FIGlength    = getBits_5 (d, 3);
-	   tvhtrace(LS_RTLSDR, "FIGtype %d, FIGlength %d", FIGtype, FIGlength);
            if ((FIGtype == 0x07) && (FIGlength == 0x3F))
               return;
 	   switch (FIGtype) {
@@ -364,7 +363,6 @@ int16_t	tabelIndex;
 int16_t	option, protLevel, subChanSize;
 	(void)pd;		// not used right now, maybe later
 	mm->subChannels [SubChId]. StartAddr = StartAdr;
-	tvhdebug(LS_RTLSDR, "SubChId %d", SubChId);
                 
 	mm->subChannels [SubChId]. inUse	 = 1;
 	if (getBits_1 (d, bitOffset + 16) == 0) {	// short form
@@ -1051,7 +1049,6 @@ dab_service_t *s;
 	
 	s = dab_service_find(mm, SId, 1, 0);
 	if (!s ->s_dab_svcname || s->s_verified || !mm->subChannels [SubChId]. inUse) {
-	   tvhdebug(LS_RTLSDR, "bind_audioService (SId %d, SubChId %d) name %s verified %d in use %d", SId, SubChId, s ->s_dab_svcname, s->s_verified, mm->subChannels [SubChId]. inUse);
 	   tvh_mutex_unlock(&global_lock);
 	   return;
 	}
