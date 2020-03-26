@@ -165,7 +165,7 @@ static void decodeBlockInt(struct sdr_state_t *sdr, const float _Complex* v, int
 	int i;
 	float _Complex r1;
 	
-	doFft(sdr, v);
+	doFft(sdr, &v[T_g]);
 	
 	/**
 	*	Note that from here on, we are only interested in the
