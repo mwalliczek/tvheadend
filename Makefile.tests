@@ -85,8 +85,8 @@ tests/fib-processor.o: src/input/dab/fib-processor.c
 tests/fib-processorMock.o:	tests/input/dab/rtlsdr/fib-processorMock.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/fib-processorMock.c -o $@
 
-tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processor.o tests/fic_protection.o tests/protection.o tests/dab_service.o tests/charsets.o
-		gcc $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processor.o tests/fic_protection.o tests/protection.o tests/dab_service.o tests/charsets.o $(LIBS) -o $@
+tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processor.o tests/fic_protection.o tests/protection.o tests/dab_serviceMock.o tests/charsets.o tests/tvh_thread.o
+		gcc $(CFLAGS) tests/ficHandlerTest.o tests/ficHandler.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/protTables.o tests/utilities.o tests/fib-processor.o tests/fic_protection.o tests/protection.o tests/dab_serviceMock.o tests/charsets.o tests/tvh_thread.o $(LIBS) -o $@
 
 tests/firecheck.o:	src/input/dab/rtlsdr/firecheck.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/firecheck.c -o $@
@@ -127,8 +127,8 @@ tests/sdr_dab_service_instance.o:	src/input/dab/rtlsdr/sdr_dab_service_instance.
 tests/sdr_dab_service_instance_Test.o:	tests/input/dab/rtlsdr/sdr_dab_service_instance_Test.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/sdr_dab_service_instance_Test.c -o $@
 
-tests/sdr_dab_service_instance_Test:	tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o tests/services.o tests/packet.o tests/streaming.o tests/tvh_thread.o
-		gcc $(CFLAGS) tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o tests/services.o tests/packet.o tests/streaming.o tests/tvh_thread.o $(LIBS) -lpthread -o $@
+tests/sdr_dab_service_instance_Test:	tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o tests/services.o tests/packet.o tests/streaming.o tests/tvh_thread.o tests/dab_serviceMock.o
+		gcc $(CFLAGS) tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o tests/protection.o tests/eep_protection.o tests/uep_protection.o tests/protTables.o tests/utilities.o tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o tests/services.o tests/packet.o tests/streaming.o tests/tvh_thread.o tests/dab_serviceMock.o $(LIBS) -lpthread -o $@
 
 tests/phasereference.o:	src/input/dab/rtlsdr/phasereference.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/input/dab/rtlsdr/phasereference.c -o $@
@@ -145,8 +145,8 @@ tests/ofdmDecoder.o:	src/input/dab/rtlsdr/ofdmDecoder.c
 # tests/tvhpoll.o:	src/tvhpoll.c
 # 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c src/tvhpoll.c -o $@
 
-tests/dab_service.o:	tests/dab_service.c
-		gcc $(INC) $(CFLAGS) -c tests/dab_service.c -o $@
+tests/dab_serviceMock.o:	tests/dab_serviceMock.c
+		gcc $(INC) $(CFLAGS) -c tests/dab_serviceMock.c -o $@
 
 tests/tvh_thread.o:	tests/tvh_thread.c
 		gcc $(INC) $(CFLAGS) -c tests/tvh_thread.c -o $@
@@ -163,5 +163,5 @@ tests/sdr_dab_basic_demodulation.o:	src/input/dab/rtlsdr/sdr_dab_basic_demodulat
 tests/sdr_dab_basic_demodulationTest.o:	tests/input/dab/rtlsdr/sdr_dab_basic_demodulationTest.c
 		gcc $(INC) -Isrc/input/dab/rtlsdr/ $(CFLAGS) -c tests/input/dab/rtlsdr/sdr_dab_basic_demodulationTest.c -o $@
 
-tests/sdr_dab_basic_demodulationTest:	tests/sdr_dab_basic_demodulation.o tests/sdr_dab_basic_demodulationTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processor.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o tests/tvh_thread.o tests/dab_service.o tests/charsets.o
-		gcc $(CFLAGS) tests/sdr_dab_basic_demodulation.o tests/sdr_dab_basic_demodulationTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processor.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o tests/tvh_thread.o tests/dab_service.o tests/charsets.o $(LIBS) -lm -lfftw3f -o $@
+tests/sdr_dab_basic_demodulationTest:	tests/sdr_dab_basic_demodulation.o tests/sdr_dab_basic_demodulationTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processor.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o tests/tvh_thread.o tests/dab_serviceMock.o tests/charsets.o
+		gcc $(CFLAGS) tests/sdr_dab_basic_demodulation.o tests/sdr_dab_basic_demodulationTest.o tests/input_sdr.o tests/ficHandler.o tests/utilities.o tests/protection.o tests/viterbi-768.o tests/phasereference.o tests/sdr_fifo.o tests/fib-processor.o tests/spiral-neon.o tests/spiral-no-sse.o tests/fic_protection.o tests/ofdmDecoder.o tests/protTables.o tests/tvh_thread.o tests/dab_serviceMock.o tests/charsets.o $(LIBS) -lm -lfftw3f -o $@

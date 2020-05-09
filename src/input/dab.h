@@ -31,6 +31,7 @@ typedef struct dab_ensemble      dab_ensemble_t;
 typedef struct dab_ensemble_instance      dab_ensemble_instance_t;
 typedef struct dab_input         dab_input_t;
 typedef struct dab_network_link  dab_network_link_t;
+typedef struct dab_packetdata_stream	dab_packetdata_stream_t;
 
 /* Lists */
 typedef LIST_HEAD (,dab_network)             dab_network_list_t;
@@ -109,7 +110,7 @@ struct dab_network
   dab_ensemble_t*     (*mn_create_ensemble)
     (dab_network_t*, void *origin, uint32_t onid, void *conf, int force);
   dab_service_t* (*mn_create_service)
-    (dab_ensemble_t*, uint16_t sid);
+    (dab_ensemble_t*, uint32_t sid);
   const idclass_t*  (*mn_ensemble_class)   (dab_network_t*);
   dab_ensemble_t *    (*mn_ensemble_create2) (dab_network_t *mn, htsmsg_t *conf);
   void              (*mn_scan)        (dab_network_t*);
@@ -125,27 +126,6 @@ struct dab_network
 };
 
 typedef struct subchannelmap subChannel;
-
-//      The service component describes the actual service
-//      It really should be a union
-struct servicecomponents {
-                int         inUse;          // just administration
-   int32_t       TMid;           // the transport mode
-   int32_t      componentNr;    // component
-
-   int32_t      ASCTy;          // used for audio
-   int32_t      PS_flag;        // use for both audio and packet
-   int32_t      subchannelId;   // used in both audio and packet
-   uint32_t     SCId;           // used in packet
-   uint32_t     CAflag;         // used in packet (or not at all)
-   int32_t      DSCTy;          // used in packet
-   uint32_t	DGflag;		// used for TDC
-   int32_t      packetAddress;  // used in packet
-   int32_t	appType;	// used in packet
-   int		is_madePublic;
-};
-
-typedef struct servicecomponents serviceComponent;
 
 struct subchannelmap {
    int		inUse;
@@ -217,7 +197,6 @@ struct dab_ensemble
          */
         tvh_mutex_t                 mm_tables_lock;
         subChannel	subChannels[64];
-        serviceComponent	ServiceComps[64];
 
         /*
          * Functions
@@ -237,6 +216,25 @@ struct dab_ensemble
         int      mm_enabled;
 };
 
+struct dab_packetdata_stream
+{
+        TAILQ_ENTRY(dab_packetdata_stream) dab_packetdata_link;
+
+        int16_t SCId;
+        int16_t SCIdS;
+        int16_t hasSCIdS;
+        int16_t ps_flag;
+        int16_t CAflag;
+        int16_t CAOrgflag;
+        int16_t DGflag;
+        int16_t DSCTy;
+        int16_t SubChId;
+        int16_t packetAddress;
+        int16_t	appType;
+        uint8_t *appData;
+        int16_t appDataLength;
+};
+
 struct dab_service
 {
 	service_t; // Parent
@@ -244,6 +242,7 @@ struct dab_service
 	int      s_dab_subscription_flags;
 	int      s_dab_subscription_weight;
 
+	uint32_t SId;
 	char    *s_dab_svcname;
 	char    *s_dab_provider;
 	time_t   s_dab_created;
@@ -264,14 +263,12 @@ struct dab_service
 	sbuf_t s_tsbuf;
 	int64_t s_tsbuf_last;
 
-        int32_t       TMid;           // the transport mode
-	int32_t      ASCTy;          // used for audio
-	int32_t      PS_flag;        // use for both audio and packet
-        int32_t      subChId;
-        int32_t      hasLanguage;
+        int32_t hasLanguage;
         int32_t language;
         int32_t programType;
         int32_t FEC_scheme;
+        
+        TAILQ_HEAD(, dab_packetdata_stream) dab_packetdata_streams;
 };
 
 /* **************************************************************************
@@ -450,7 +447,7 @@ const void *dab_input_class_active_get   ( void *o );
 
 dab_service_t *dab_service_create0
   ( dab_service_t *ms, const idclass_t *class, const char *uuid,
-    dab_ensemble_t *mm, uint16_t sid, htsmsg_t *conf );
+    dab_ensemble_t *mm, uint32_t sid, htsmsg_t *conf );
 
 #define dab_service_create(t, u, m, s, c)\
   (struct t*)dab_service_create0(calloc(1, sizeof(struct t)),\
@@ -462,13 +459,13 @@ dab_service_t *dab_service_create0
 
 dab_service_t *dab_service_create_raw(dab_ensemble_t *mm);
 
-void dab_service_set_subchannel(dab_service_t *s, int16_t SubChId);
+int dab_service_add_stream(dab_service_t *s, int16_t SubChId, streaming_component_type_t hts_stream_type);
 
 void dab_service_unref ( service_t *s );
 
 void dab_service_delete ( service_t *s, int delconf );
 
-dab_service_t *dab_service_find(dab_ensemble_t *mm, uint16_t sid, int create, int *save );
+dab_service_t *dab_service_find(dab_ensemble_t *mm, uint32_t sid, int create, int *save );
 
 void dab_network_init ( void );
 void dab_network_done ( void );
@@ -501,7 +498,7 @@ dab_ensemble_t *dab_network_find_ensemble
   (dab_network_t *mn, uint32_t onid, uint32_t tsid, int check);
 
 dab_service_t *dab_network_find_active_service
-  (dab_network_t *mn, uint16_t sid, dab_ensemble_t **rmm);
+  (dab_network_t *mn, uint32_t sid, dab_ensemble_t **rmm);
 
 void dab_network_class_delete ( const idclass_t *idc, int delconf );
 
@@ -577,7 +574,7 @@ dab_ensemble_instance_t *dab_ensemble_instance_create0
   ( dab_ensemble_instance_t *mmi, const idclass_t *class, const char *uuid,
     dab_input_t *mi, dab_ensemble_t *mm );
 
-dab_service_t *dab_ensemble_find_service(dab_ensemble_t *ms, uint16_t sid);
+dab_service_t *dab_ensemble_find_service(dab_ensemble_t *ms, uint32_t sid);
 
 #define dab_ensemble_instance_create(type, uuid, mi, mm)\
   (struct type*)dab_ensemble_instance_create0(calloc(1, sizeof(struct type)),\

@@ -104,12 +104,12 @@ const idclass_t dab_service_class =
       .get      = dab_service_class_get_ensemble_uuid,
     },
     {
-      .type     = PT_U16,
+      .type     = PT_U32,
       .id       = "sid",
       .name     = N_("Service ID"),
       .desc     = N_("The service ID as set by the provider."),
       .opts     = PO_RDONLY | PO_ADVANCED,
-      .off      = offsetof(dab_service_t, s_components.set_service_id),
+      .off      = offsetof(dab_service_t, SId),
     },
     {
       .type     = PT_STR,
@@ -142,38 +142,6 @@ const idclass_t dab_service_class =
       .desc     = N_("When the service was last seen during a ensemble scan."),
       .off      = offsetof(dab_service_t, s_dab_last_seen),
       .opts     = PO_ADVANCED | PO_RDONLY,
-    },
-    {
-      .type     = PT_INT,
-      .id       = "TMid",
-      .name     = N_("Transport Mechanism Identifier"),
-      .desc     = N_("The transport mode."),
-      .opts     = PO_RDONLY | PO_ADVANCED,
-      .off      = offsetof(dab_service_t, TMid),
-    },
-    {
-      .type     = PT_INT,
-      .id       = "ASCTy",
-      .name     = N_("Audio Service Component Type"),
-      .desc     = N_("The type of the audio service component."),
-      .opts     = PO_RDONLY | PO_ADVANCED,
-      .off      = offsetof(dab_service_t, ASCTy),
-    },
-    {
-      .type     = PT_INT,
-      .id       = "PS_flag",
-      .name     = N_("Primary/Secondary"),
-      .desc     = N_("Indicate whether the service component is the primary one."),
-      .opts     = PO_RDONLY | PO_ADVANCED,
-      .off      = offsetof(dab_service_t, PS_flag),
-    },
-    {
-      .type     = PT_INT,
-      .id       = "subChId",
-      .name     = N_("Sub-channel Identifier"),
-      .desc     = N_("The sub-channel in which the service component is carried."),
-      .opts     = PO_RDONLY | PO_ADVANCED,
-      .off      = offsetof(dab_service_t, subChId),
     },
     {
       .type     = PT_INT,
@@ -220,46 +188,55 @@ dab_service_config_save ( service_t *t, char *filename, size_t fsize )
   if (filename == NULL) {
     htsmsg_t *e = htsmsg_create_map();
     service_save(t, e);
+    
+    htsmsg_t *list = htsmsg_create_list();
+    dab_packetdata_stream_t *dps;
+    dab_service_t *s = (dab_service_t*) t;
+    TAILQ_FOREACH(dps, &s->dab_packetdata_streams, dab_packetdata_link) {
+      htsmsg_t *sub = htsmsg_create_map();
+
+      htsmsg_add_u32(sub, "SCId", dps->SCId);
+      if (dps->hasSCIdS) {
+        htsmsg_add_u32(sub, "SCIdS", dps->SCIdS);
+      }
+      htsmsg_add_u32(sub, "ps_flag", dps->ps_flag);
+      htsmsg_add_u32(sub, "CAflag", dps->CAflag);
+      htsmsg_add_u32(sub, "CAOrgflag", dps->CAOrgflag);
+      htsmsg_add_u32(sub, "DGflag", dps->DGflag);
+      htsmsg_add_u32(sub, "DSCTy", dps->DSCTy);
+      htsmsg_add_u32(sub, "SubChId", dps->SubChId);
+      htsmsg_add_u32(sub, "packetAddress", dps->packetAddress);
+      htsmsg_add_u32(sub, "appType", dps->appType);
+      char* appData = calloc(BASE64_SIZE(dps->appDataLength), 1);
+      base64_encode(appData, BASE64_SIZE(dps->appDataLength), dps->appData, dps->appDataLength);
+      htsmsg_add_str(sub, "appData", appData);
+      free(appData);
+      
+      htsmsg_add_msg(list, NULL, sub);
+    }
+    htsmsg_add_msg(e, "packetdata_stream", list);
+    
     return e;
   }
   idnode_changed(&((dab_service_t *)t)->s_dab_ensemble->mm_id);
   return NULL;
 }
 
-void dab_service_set_subchannel(dab_service_t *s, int16_t SubChId)
+int dab_service_add_stream(dab_service_t *s, int16_t SubChId, streaming_component_type_t hts_stream_type)
 {
   elementary_set_t *set = &s->s_components;
-  streaming_component_type_t hts_stream_type;
-  elementary_stream_t *st, *next;
-  
-  s->subChId = SubChId;
-  
-  /* Mark all streams for deletion */
-  TAILQ_FOREACH(st, &set->set_all, es_link) {
-    st->es_delete_me = 1;
-  }
-  
-  hts_stream_type = SCT_AAC;
+  elementary_stream_t *st;
   
   st = elementary_stream_find(set, SubChId);
-  if (st == NULL || st->es_type != hts_stream_type) {
+  if (st == NULL) {
     st = elementary_stream_create(set, SubChId, hts_stream_type);
-  }
-
-  if (st->es_type != hts_stream_type) {
+  } else if (st->es_type != hts_stream_type) {
     st->es_type = hts_stream_type;
+  } else {
+    return 0;
   }
-
-  st->es_delete_me = 0;
-  
-  /* Scan again to see if any streams should be deleted */
-  for(st = TAILQ_FIRST(&set->set_all); st != NULL; st = next) {
-    next = TAILQ_NEXT(st, es_link);
-
-    if(st->es_delete_me) {
-      elementary_set_stream_destroy(set, st);
-    }
-  }
+  idnode_changed(&s->s_id);
+  return 1;
 }
 
 /*
@@ -506,6 +483,7 @@ dab_service_delete ( service_t *t, int delconf )
 {
   dab_service_t *ms = (dab_service_t*)t;
   dab_ensemble_t     *mm = t->s_type == STYPE_STD ? ms->s_dab_ensemble : NULL;
+  dab_packetdata_stream_t *dps;
 
   if (mm)
     idnode_changed(&mm->mm_id);
@@ -514,6 +492,11 @@ dab_service_delete ( service_t *t, int delconf )
   if (t->s_type == STYPE_STD)
     LIST_REMOVE(ms, s_dab_ensemble_link);
   sbuf_free(&ms->s_tsbuf);
+
+  TAILQ_FOREACH(dps, &ms->dab_packetdata_streams, dab_packetdata_link) {
+    TAILQ_REMOVE(&ms->dab_packetdata_streams, dps, dab_packetdata_link);
+    free(dps);
+  }
 
   // Note: the ultimate deletion and removal from the idnode list
   //       is done in service_destroy
@@ -548,14 +531,16 @@ dab_service_unseen( service_t *t, const char *type, time_t before )
 dab_service_t *
 dab_service_create0
   ( dab_service_t *s, const idclass_t *class, const char *uuid,
-    dab_ensemble_t *mm, uint16_t sid, htsmsg_t *conf )
+    dab_ensemble_t *mm, uint32_t sid, htsmsg_t *conf )
 {
+  htsmsg_field_t *f;
+  htsmsg_t *e;
   time_t dispatch_clock = gclk();
 
   /* defaults for older version */
   s->s_dab_created = dispatch_clock;
   if (!conf) {
-    if (sid)     s->s_components.set_service_id = sid;
+    if (sid)     s->SId = sid;
   }
 
   if (service_create0((service_t*)s, STYPE_STD, class, uuid,
@@ -564,6 +549,7 @@ dab_service_create0
 
   /* Create */
   sbuf_init(&s->s_tsbuf);
+
   if (conf) {
     if (s->s_dab_last_seen > gclk()) /* sanity check */
       s->s_dab_last_seen = gclk();
@@ -588,13 +574,57 @@ dab_service_create0
   s->s_channel_icon   = dab_service_channel_icon;
   s->s_memoryinfo     = dab_service_memoryinfo;
   s->s_unseen         = dab_service_unseen;
+  
+  TAILQ_INIT(&s->dab_packetdata_streams);
 
   tvh_mutex_lock(&s->s_stream_mutex);
   service_make_nicename((service_t*)s);
   tvh_mutex_unlock(&s->s_stream_mutex);
 
-  tvhdebug(LS_RTLSDR, "%s - add service %04X %s",
-           mm->mm_nicename, service_id16(s), s->s_dab_svcname);
+  if (conf) {
+    htsmsg_t *c = htsmsg_get_list(conf, "packetdata_stream");
+    if (c) {
+      HTSMSG_FOREACH(f, c) {
+        uint32_t u32;
+        if (!(e = htsmsg_get_map_by_field(f))) continue;
+        dab_packetdata_stream_t *dps = calloc(1, sizeof(*dps));
+        htsmsg_get_u32(e, "SCId", &u32);
+        dps->SCId = u32;
+        if (!htsmsg_get_u32(e, "SCIdS", &u32)) {
+          dps->SCIdS = u32;        
+        }
+        htsmsg_get_u32(e, "ps_flag", &u32);
+        dps->ps_flag = u32;
+        htsmsg_get_u32(e, "CAflag", &u32);
+        dps->CAflag = u32;
+        htsmsg_get_u32(e, "CAOrgflag", &u32);
+        dps->CAOrgflag = u32;
+        htsmsg_get_u32(e, "DGflag", &u32);
+        dps->DGflag = u32;
+        htsmsg_get_u32(e, "DSCTy", &u32);
+        dps->DSCTy = u32;
+        htsmsg_get_u32(e, "SubChId", &u32);
+        dps->SubChId = u32;
+        htsmsg_get_u32(e, "packetAddress", &u32);
+        dps->packetAddress = u32;
+        htsmsg_get_u32(e, "appType", &u32);
+        dps->appType = u32;
+        const char *appData = htsmsg_get_str(e, "appData");
+        if (appData) {
+          uint8_t *out = calloc(strlen(appData), 1);
+          dps->appDataLength = base64_decode(out, appData, strlen(appData));
+          dps->appData = calloc(dps->appDataLength,  1);
+          memcpy(dps->appData, out, dps->appDataLength);
+          free(out);
+        }
+            
+        TAILQ_INSERT_TAIL(&s->dab_packetdata_streams, dps, dab_packetdata_link);
+      }
+    }
+  }
+
+  tvhdebug(LS_RTLSDR, "%s - add service %u %s",
+           mm->mm_nicename, s->SId, s->s_dab_svcname);
 
   /* Notification */
   idnode_notify_changed(&mm->mm_id);
@@ -612,7 +642,7 @@ dab_service_create0
  */
 dab_service_t *
 dab_service_find
-  (dab_ensemble_t *mm, uint16_t sid, int create, int *save )
+  (dab_ensemble_t *mm, uint32_t sid, int create, int *save )
 {
   dab_service_t *s;
 
@@ -621,7 +651,7 @@ dab_service_find
 
   /* Find existing service */
   LIST_FOREACH(s, &mm->mm_services, s_dab_ensemble_link) {
-    if (service_id16(s) == sid) {
+    if (s->SId == sid) {
       if (create) {
         if ((save && *save) || s->s_dab_last_seen + 3600 < gclk()) {
           s->s_dab_last_seen = gclk();
@@ -634,7 +664,7 @@ dab_service_find
 
   /* Create */
   if (create) {
-    s = mm->mm_network->mn_create_service(mm, sid);
+    s = dab_service_create1(NULL, mm, sid, NULL);
     s->s_dab_created = s->s_dab_last_seen = gclk();
     if (save) *save = 1;
   }

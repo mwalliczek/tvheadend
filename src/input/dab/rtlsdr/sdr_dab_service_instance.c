@@ -29,7 +29,8 @@ sdr_dab_service_instance_create(dab_service_t* service)
     sdr_dab_service_instance_t* res = calloc(1, sizeof(sdr_dab_service_instance_t));
     memset(res, 0, sizeof(sdr_dab_service_instance_t));
     res->dai_service = service;
-    res->subChannel = &service->s_dab_ensemble->subChannels[service->subChId];
+    int subChId = TAILQ_FIRST(&service->s_components.set_all)->es_pid;
+    res->subChannel = &service->s_dab_ensemble->subChannels[subChId];
 
     res->outV = calloc(24 * res->subChannel->BitRate, sizeof(uint8_t));
 
