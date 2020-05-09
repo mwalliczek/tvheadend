@@ -310,13 +310,6 @@ dab_network_create_ensemble
   return NULL;
 }
 
-static dab_service_t *
-dab_network_create_service
- ( dab_ensemble_t *mm, uint16_t sid)
-{
-  return dab_service_create1(NULL, mm, sid, NULL);
-}
-
 static const idclass_t *
 dab_network_ensemble_class
   ( dab_network_t *mn )
@@ -507,7 +500,6 @@ dab_network_create0
   mn->mn_display_name   = dab_network_display_name;
   mn->mn_config_save    = dab_network_config_save;
   mn->mn_create_ensemble     = dab_network_create_ensemble;
-  mn->mn_create_service = dab_network_create_service;
   mn->mn_ensemble_class      = dab_network_ensemble_class;
   mn->mn_ensemble_create2    = dab_network_ensemble_create2;
   mn->mn_scan           = dab_network_scan;

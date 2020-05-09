@@ -829,7 +829,7 @@ dab_ensemble_scan_done ( dab_ensemble_t *mm, const char *buf, int res )
   /* Log */
   tvh_mutex_lock(&mm->mm_tables_lock);
   LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link)
-    if (ms->s_dab_svcname && ms->subChId) {
+    if (ms->s_dab_svcname && ms->s_verified) {
       complete++;
     } else {
       incomplete++;
@@ -878,7 +878,7 @@ dab_ensemble_scan_timeout ( void *aux )
   /* Check tables */
   tvh_mutex_lock(&mm->mm_tables_lock);
   LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link)
-    if (ms->s_dab_svcname && ms->subChId) {
+    if (ms->s_dab_svcname && ms->s_verified) {
       complete++;
     } else {
       incomplete++;
@@ -959,21 +959,6 @@ dab_ensemble_t *dab_ensemble_create0
   /* No config */
   if (!conf) return mm;
 
-  c = htsmsg_get_map(conf, "serviceComponents");
-  if (c) {
-    HTSMSG_FOREACH(f, c) {
-      if (!(e = htsmsg_get_map_by_field(f))) continue;
-      i = atoi(htsmsg_field_name(f));
-      mm->ServiceComps [i].inUse = 1;
-      htsmsg_get_s32(e, "TMid", &mm->ServiceComps [i].TMid);
-      htsmsg_get_s32(e, "componentNr", &mm->ServiceComps [i].componentNr);
-      htsmsg_get_s32(e, "ASCTy", &mm->ServiceComps [i].ASCTy);
-      htsmsg_get_s32(e, "PS_flag", &mm->ServiceComps [i].PS_flag);
-      htsmsg_get_s32(e, "subchannelId", &mm->ServiceComps [i].subchannelId);
-      
-    }
-  }
-
   c = htsmsg_get_map(conf, "subchannels");
   if (c) {
     HTSMSG_FOREACH(f, c) {
@@ -1043,7 +1028,6 @@ dab_ensemble_save ( dab_ensemble_t *mm, htsmsg_t *c, int refs )
   htsmsg_t *root = !refs ? htsmsg_create_map() : c;
   htsmsg_t *services = !refs ? htsmsg_create_map() : htsmsg_create_list();
   htsmsg_t *subchannels = htsmsg_create_map();
-  htsmsg_t *serviceComponents = htsmsg_create_map();
   htsmsg_t *e;
   char ubuf[UUID_HEX_SIZE];
   int i;
@@ -1055,23 +1039,37 @@ dab_ensemble_save ( dab_ensemble_t *mm, htsmsg_t *c, int refs )
     } else {
       e = htsmsg_create_map();
       service_save((service_t *)ms, e);
+
+      htsmsg_t *list = htsmsg_create_list();
+      dab_packetdata_stream_t *dps;
+      TAILQ_FOREACH(dps, &ms->dab_packetdata_streams, dab_packetdata_link) {
+        htsmsg_t *sub = htsmsg_create_map();
+
+        htsmsg_add_u32(sub, "SCId", dps->SCId);
+        if (dps->hasSCIdS) {
+          htsmsg_add_u32(sub, "SCIdS", dps->SCIdS);
+        }
+        htsmsg_add_u32(sub, "ps_flag", dps->ps_flag);
+        htsmsg_add_u32(sub, "CAflag", dps->CAflag);
+        htsmsg_add_u32(sub, "CAOrgflag", dps->CAOrgflag);
+        htsmsg_add_u32(sub, "DGflag", dps->DGflag);
+        htsmsg_add_u32(sub, "DSCTy", dps->DSCTy);
+        htsmsg_add_u32(sub, "SubChId", dps->SubChId);
+        htsmsg_add_u32(sub, "packetAddress", dps->packetAddress);
+        htsmsg_add_u32(sub, "appType", dps->appType);
+        char* appData = calloc(BASE64_SIZE(dps->appDataLength), 1);
+        base64_encode(appData, BASE64_SIZE(dps->appDataLength), dps->appData, dps->appDataLength);
+        htsmsg_add_str(sub, "appData", appData);
+        free(appData);
+        
+        htsmsg_add_msg(list, NULL, sub);
+      }
+      htsmsg_add_msg(e, "packetdata_stream", list);
+
       htsmsg_add_msg(services, idnode_uuid_as_str(&ms->s_id, ubuf), e);
     }
   }
   htsmsg_add_msg(root, "services", services);
-  for (i = 0; i < 64; i ++) {
-    if (!mm->ServiceComps [i]. inUse)
-      continue;
-    e = htsmsg_create_map();
-    htsmsg_add_u32(e, "TMid", mm->ServiceComps [i].TMid);
-    htsmsg_add_u32(e, "componentNr", mm->ServiceComps [i].componentNr);
-    htsmsg_add_u32(e, "ASCTy", mm->ServiceComps [i].ASCTy);
-    htsmsg_add_u32(e, "PS_flag", mm->ServiceComps [i].PS_flag);
-    htsmsg_add_u32(e, "subchannelId", mm->ServiceComps [i].subchannelId);
-    snprintf(ubuf, UUID_HEX_SIZE, "%d", i);
-    htsmsg_add_msg(serviceComponents, ubuf, e);
-  }
-  htsmsg_add_msg(root, "serviceComponents", serviceComponents);
   for (i = 0; i < 64; i ++) {
     if (!mm->subChannels [i]. inUse)
       continue;
@@ -1192,11 +1190,11 @@ dab_ensemble_unsubscribe_by_name
  * *************************************************************************/
 
 dab_service_t *
-dab_ensemble_find_service ( dab_ensemble_t *mm, uint16_t sid )
+dab_ensemble_find_service ( dab_ensemble_t *mm, uint32_t sid )
 {
   dab_service_t *ms;
   LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link)
-    if (service_id16(ms) == sid && ms->s_enabled)
+    if (ms->SId == sid && ms->s_enabled)
       break;
   return ms;
 }

@@ -172,6 +172,16 @@ tvheadend.dab.show_service_streams = function(data) {
 
     }
 
+    function dheader() {
+        html += '<table style="font-size:8pt;font-family:monospace;padding:2px"';
+        html += '<tr>';
+        html += '<th style="width:120px;font-weight:bold">' + _('PID') + '</th>';
+        html += '<th style="width:100px;font-weight:bold">' + _('AppType') + '</th>';
+        html += '<th style="width:100px;font-weight:bold">' + _('DSCTy') + '</th>';
+        html += '</tr>';
+
+    }
+
     function footer() {
         html += '</table>';
     }
@@ -202,6 +212,17 @@ tvheadend.dab.show_service_streams = function(data) {
         html += '</tr>';
     }
 
+    function dstream(s) {
+        var d = '&nbsp;';
+        var p = '0x' + hexstr(s.pid) + '&nbsp;/&nbsp;' + fixstr(s.pid);
+
+        html += '<tr>';
+        html += '<td>' + p + '</td>';
+        html += '<td>' + s.appType + '</td>';
+        html += '<td>' + s.DSCTy + '</td>';
+        html += '</tr>';
+    }
+
     header();
     if (data.streams.length) {
         for (i = 0; i < data.streams.length; i++)
@@ -210,42 +231,15 @@ tvheadend.dab.show_service_streams = function(data) {
         single(_('None'));
     footer();
 
-    single('<h3>' + _('After filtering and reordering (without PCR and PMT)') + '</h3>');
+    single('<h3>' + _('Data Streams') + '</h3>');
 
-    header();
-    if (data.fstreams.length)
-        for (i = 0; i < data.fstreams.length; i++)
-            stream(data.fstreams[i]);
+    dheader();
+    if (data.dstreams.length)
+        for (i = 0; i < data.dstreams.length; i++)
+            dstream(data.dstreams[i]);
     else
         single(_('None'));
     footer();
-
-    if (data.hbbtv) {
-        html += '<h3>' + _('HbbTv') + '</h3>';
-        html += '<table style="font-size:8pt;font-family:monospace;padding:2px"';
-        html += '<tr>';
-        html += '<th style="width:50px;font-weight:bold">' + _('Section') + '</th>';
-        html += '<th style="width:50px;font-weight:bold">' + _('Language') + '</th>';
-        html += '<th style="width:200px;font-weight:bold">' + _('Name') + '</th>';
-        html += '<th style="width:310px;font-weight:bold">' + _('Link') + '</th>';
-        html += '</tr>';
-        for (var sect in data.hbbtv) {
-            for (var appidx in data.hbbtv[sect]) {
-                var app = data.hbbtv[sect][appidx];
-                if (!app.title) continue;
-                for (var titleidx = 0; titleidx < app.title.length; titleidx++) {
-                    var title = app.title[titleidx];
-                    html += '<tr>';
-                    html += '<td>' + sect + '</td>';
-                    html += '<td>' + title.lang + '</td>';
-                    html += '<td>' + title.name + '</td>';
-                    html += '<td><a href="' + app.url + '" target="_blank">' + app.url + '</td>';
-                    html += '</tr>';
-                }
-            }
-        }
-        html += '</table>';
-    }
 
     var win = new Ext.Window({
         title: _('Service details for') + ' ' + data.name,

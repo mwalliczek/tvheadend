@@ -26,6 +26,7 @@
 #include "access.h"
 #include "api.h"
 #include "notify.h"
+#include "input.h"
 
 static int
 api_mapper_stop
@@ -106,6 +107,21 @@ api_service_streams_get_one ( elementary_stream_t *es, int use_filter )
   return e;
 }
 
+static htsmsg_t *
+api_service_dstreams(service_t *s) {
+  htsmsg_t *st = htsmsg_create_list();
+  dab_service_t *ds = (dab_service_t *) s;
+  dab_packetdata_stream_t *dps;
+  TAILQ_FOREACH(dps, &ds->dab_packetdata_streams, dab_packetdata_link) {
+    htsmsg_t *e = htsmsg_create_map();
+    htsmsg_add_u32(e, "pid", dps->SubChId);
+    htsmsg_add_u32(e, "appType", dps->appType);
+    htsmsg_add_u32(e, "DSCTy", dps->DSCTy);
+    htsmsg_add_msg(st, NULL, e);
+  }
+  return st;
+}
+
 static int
 api_service_streams
   ( access_t *perm, void *opaque, const char *op, htsmsg_t *args, htsmsg_t **resp )
@@ -161,6 +177,11 @@ api_service_streams
 
   htsmsg_add_msg(*resp, "streams", st);
   htsmsg_add_msg(*resp, "fstreams", stf);
+#if ENABLE_RTLSDR
+  if (s->s_source_type == S_DAB) {
+    htsmsg_add_msg(*resp, "dstreams", api_service_dstreams(s));
+  }
+#endif
   if (hbbtv)
     htsmsg_add_msg(*resp, "hbbtv", hbbtv);
 

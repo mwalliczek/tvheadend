@@ -97,8 +97,7 @@
                                    {416,1,384}};
 
    void		*userData;
-   serviceComponent *find_packetComponent(dab_ensemble_instance_t *dei, int16_t);
-//   serviceComponent *find_serviceComponent(dab_ensemble_instance_t *dei, int32_t SId, int16_t SCId);
+   dab_packetdata_stream_t *find_packetComponent(dab_ensemble_instance_t *dei, int16_t SCIdS, dab_service_t **s_ref);
    void            bind_audioService(dab_ensemble_instance_t *dei, int8_t,
 	   uint32_t, int16_t,
 	   int16_t, int16_t, int16_t);
@@ -115,7 +114,7 @@
    void		FIG0Extension5(dab_ensemble_instance_t *dei, const uint8_t *);
    void		FIG0Extension6(const uint8_t *);
    void            FIG0Extension7(const uint8_t *);
-   void            FIG0Extension8(const uint8_t *);
+   void            FIG0Extension8(dab_ensemble_instance_t *dei, const uint8_t *);
    void            FIG0Extension11(const uint8_t *);
    void            FIG0Extension12(const uint8_t *);
    void            FIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *);
@@ -137,13 +136,33 @@
 	   int16_t, uint8_t, uint8_t);
    int16_t		HandleFIG0Extension3(dab_ensemble_instance_t *dei, const uint8_t *, int16_t);
    int16_t		HandleFIG0Extension5(dab_ensemble_instance_t *dei, const uint8_t *, int16_t);
-   int16_t		HandleFIG0Extension8(const uint8_t *,
+   int16_t		HandleFIG0Extension8(dab_ensemble_instance_t *dei, const uint8_t *,
 	   int16_t, uint8_t);
-//   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *,
-//	   int16_t, uint8_t);
+   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *,
+	   int16_t, uint8_t);
    int16_t		HandleFIG0Extension22(const uint8_t *, int16_t);
    void    nameofEnsemble  (dab_ensemble_instance_t *dei, int id, const char *s);
 
+
+dab_packetdata_stream_t *find_packetComponent(dab_ensemble_instance_t *dei, int16_t SCId, dab_service_t **s_ref) {
+  /* Find existing service */
+  dab_service_t *s;
+
+  /* Validate */
+  lock_assert(&global_lock);
+  
+  LIST_FOREACH(s, &dei->mmi_ensemble->mm_services, s_dab_ensemble_link) {
+    dab_packetdata_stream_t *dps;
+    TAILQ_FOREACH(dps, &s->dab_packetdata_streams, dab_packetdata_link) {
+    	if (dps->SCId == SCId) {
+    		tvhtrace(LS_RTLSDR, "found packetComponent with SCId %d in (%u) %s", SCId, s->SId, s->s_dab_svcname);
+    		*s_ref = s;
+    		return dps;
+	}
+    }
+  }
+  return NULL;
+}
 
 //
 
@@ -229,7 +248,7 @@ uint8_t	extension	= getBits_5 (d, 8 + 3);
 	      break;
 
 	   case 8:
-	      FIG0Extension8 (d);
+	      FIG0Extension8 (dei, d);
 	      break;
 
 	   case 11:
@@ -362,6 +381,12 @@ int16_t StartAdr	= getBits (d, bitOffset + 6, 10);
 int16_t	tabelIndex;
 int16_t	option, protLevel, subChanSize;
 	(void)pd;		// not used right now, maybe later
+	
+	subChannel old;
+	memcpy(&old, &mm->subChannels [SubChId], sizeof(old));
+	
+	tvh_mutex_lock(&global_lock);
+
 	mm->subChannels [SubChId]. StartAddr = StartAdr;
                 
 	mm->subChannels [SubChId]. inUse	 = 1;
@@ -411,6 +436,10 @@ int16_t	option, protLevel, subChanSize;
 
 	   bitOffset += 32;
 	}
+	if (memcmp(&old, &mm->subChannels [SubChId], sizeof(old))) {
+		idnode_changed(&mm->mm_id);
+	}
+	tvh_mutex_unlock(&global_lock);
 	return bitOffset / 8;	// we return bytes
 }
 //
@@ -471,7 +500,9 @@ int16_t		numberofComponents;
 	      bind_packetService (dei, TMid, SId, i, SCId, PS_flag, CA_flag);
            }
 	   else
-	      {;}		// for now
+	   {
+		   tvhtrace(LS_RTLSDR, "FIG0Extension2 SId: %u, TMid: %d", SId, TMid);
+	   }		// for now
 	   lOffset += 16;
 	}
 	return lOffset / 8;		// in Bytes
@@ -500,10 +531,15 @@ int16_t DSCTy           = getBits_6 (d, used * 8 + 18);
 int16_t SubChId         = getBits_6 (d, used * 8 + 24);
 int16_t packetAddress   = getBits (d, used * 8 + 30, 10);
 uint16_t CAOrg;
+dab_service_t *s;
 
-serviceComponent *packetComp = find_packetComponent (dei, SCId);
-dab_ensemble_t *mm = dei->mmi_ensemble;
-//serviceId	 *service;
+	tvhtrace(LS_RTLSDR, "FIG0Extension3 SCId: %d, SubChId: %d, DSCTy: %d, packetAddress: %d", SCId, SubChId, DSCTy, packetAddress);
+	tvh_mutex_lock(&global_lock);
+
+	dab_packetdata_stream_t *packetComp = find_packetComponent(dei, SCId, &s);
+
+
+	dab_ensemble_t *mm = dei->mmi_ensemble;
 
 	if (CAOrgflag == 1) {
 	   CAOrg = getBits (d, used * 8 + 40, 16);
@@ -511,37 +547,38 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
         }
         used += 40 / 8;
 	(void)CAOrg;
-        if (packetComp == NULL)		// no serviceComponent yet
+        if (packetComp == NULL)	{	// no serviceComponent yet
+	   tvh_mutex_unlock(&global_lock);
            return used;
+        }
 
 //      We want to have the subchannel OK
-	if (!mm->subChannels [SubChId]. inUse)
+	if (!mm->subChannels [SubChId]. inUse) {
+	   tvh_mutex_unlock(&global_lock);
 	   return used;
-
-//      If the component exists, we first look whether is
-//      was already handled
-        if (packetComp -> is_madePublic)
-           return used;
-//
-//      We want to have the subchannel OK
-        if (!mm->subChannels [SubChId]. inUse)
-           return used;
+	}
 
 //      if the  Data Service Component Type == 0, we do not deal
 //      with it
-        if (DSCTy == 0)
+        if (DSCTy == 0) {
+	   tvh_mutex_unlock(&global_lock);
            return used;
+        }
 
 /*	service = packetComp -> service;
         char * serviceName = service -> serviceLabel. label;
         if (packetComp -> componentNr == 0)     // otherwise sub component
            addtoEnsemble (mm, serviceName, service);*/
 
-        packetComp      -> is_madePublic = 1;
-        packetComp      -> subchannelId = SubChId;
-        packetComp      -> DSCTy        = DSCTy;
-	packetComp	-> DGflag	= DGflag;
-        packetComp      -> packetAddress        = packetAddress;
+        if (packetComp->SubChId != SubChId || packetComp->DSCTy != DSCTy || packetComp->DGflag != DGflag 
+        	|| packetComp->packetAddress != packetAddress) {
+	  packetComp      -> SubChId = SubChId;
+	  packetComp      -> DSCTy        = DSCTy;
+	  packetComp	-> DGflag	= DGflag;
+          packetComp      -> packetAddress        = packetAddress;
+          idnode_changed(&s->s_id);
+        }
+	tvh_mutex_unlock(&global_lock);
         return used;
 }
 //
@@ -598,22 +635,22 @@ void    FIG0Extension6 (const uint8_t *d) {
 void    FIG0Extension7 (const uint8_t *d) {
 }
 
-void	FIG0Extension8 (const uint8_t *d) {
+void	FIG0Extension8 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 
 	while (used < Length) {
-	   used = HandleFIG0Extension8 (d, used, PD_bit);
+	   used = HandleFIG0Extension8 (dei, d, used, PD_bit);
 	}
 }
 
-int16_t	HandleFIG0Extension8 (const uint8_t *d, int16_t used,
+int16_t	HandleFIG0Extension8 (dab_ensemble_instance_t *dei, const uint8_t *d, int16_t used,
 	                                     uint8_t pdBit) {
 int16_t	lOffset	= used * 8;
 uint32_t	SId	= getLBits (d, lOffset, pdBit == 1 ? 32 : 16);
 uint8_t		lsFlag;
-uint16_t	SCIds;
+uint16_t	SCIdS;
 int16_t		SCid;
 int16_t		MSCflag;
 int16_t		SubChId;
@@ -621,26 +658,35 @@ uint8_t		extensionFlag;
 
 	lOffset += pdBit == 1 ? 32 : 16;
         extensionFlag   = getBits_1 (d, lOffset);
-        SCIds   = getBits_4 (d, lOffset + 4);
+        SCIdS   = getBits_4 (d, lOffset + 4);
         lOffset += 8;
 
         lsFlag  = getBits_1 (d, lOffset);
         if (lsFlag == 1) {
            SCid = getBits (d, lOffset + 4, 12);
            lOffset += 16;
-//           if (find_packetComponent ((SCIds << 4) | SCid) != NULL) {
-//              fprintf (stderr, "packet component bestaat !!\n");
-//           }
+           tvhtrace(LS_RTLSDR, "FIG0Extension8 SId: %u, SCIds: %d, SCid: %d", SId, SCIdS, SCid);
+
+           tvh_mutex_lock(&global_lock);
+           dab_service_t *s;
+           dab_packetdata_stream_t *packetComp = find_packetComponent(dei, SCid, &s);
+           if (packetComp != NULL && ((!packetComp->hasSCIdS) || packetComp->SCIdS != SCIdS)) {
+           	packetComp->SCIdS = SCIdS;
+           	packetComp->hasSCIdS = 1;
+           	idnode_changed(&s->s_id);
+           }
+           tvh_mutex_unlock(&global_lock);
         }
 	else {
 	   MSCflag	= getBits_1 (d, lOffset + 1);
 	   SubChId	= getBits_6 (d, lOffset + 2);
 	   lOffset += 8;
+           tvhtrace(LS_RTLSDR, "FIG0Extension8 SId: %u, SCIdS: %d, SubChId: %d", SId, SCIdS, SubChId);
 	}
 	if (extensionFlag)
 	   lOffset += 8;	// skip Rfa
 	(void)SId;
-	(void)SCIds;
+	(void)SCIdS;
 	(void)SCid;
 	(void)SubChId;
 	(void)MSCflag;
@@ -659,15 +705,15 @@ void    FIG0Extension12 (const uint8_t *d) {
 //
 //
 void	FIG0Extension13 (dab_ensemble_instance_t *dei, const uint8_t *d) {
-//int16_t	used	= 2;		// offset in bytes
-//int16_t	Length	= getBits_5 (d, 3);
-//uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
+int16_t	used	= 2;		// offset in bytes
+int16_t	Length	= getBits_5 (d, 3);
+uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 
-//	while (used < Length) 
-//	   used = HandleFIG0Extension13 (dei, d, used, PD_bit);
+	while (used < Length) 
+	   used = HandleFIG0Extension13 (dei, d, used, PD_bit);
 }
 
-/*int16_t	HandleFIG0Extension13 (dab_ensemble_instance_t *dei, uint8_t *d,
+int16_t	HandleFIG0Extension13 (dab_ensemble_instance_t *dei, const uint8_t *d,
 	                                     int16_t used,
 	                                     uint8_t pdBit) {
 int16_t	lOffset		= used * 8;
@@ -682,18 +728,33 @@ int16_t		appType;
 	NoApplications	= getBits_4 (d, lOffset + 4);
 	lOffset += 8;
 
+	tvh_mutex_lock(&global_lock);
 	for (i = 0; i < NoApplications; i ++) {
 	   appType		= getBits (d, lOffset, 11);
 	   int16_t length	= getBits_5 (d, lOffset + 11);
+	   tvhtrace(LS_RTLSDR, "FIG0Extension13 SId: %u, SCIdS: %u, AppType: %d length %d", SId, SCIdS, appType, length);
+	   dab_service_t* s = dab_service_find(dei->mmi_ensemble, SId, 1, 0);
+	    dab_packetdata_stream_t *dps;
+	    TAILQ_FOREACH(dps, &s->dab_packetdata_streams, dab_packetdata_link) {
+		if (dps->hasSCIdS && dps->SCIdS == SCIdS) {
+			tvhtrace(LS_RTLSDR, "found packetComponent with SCIdS %d in (%u) %s", SCIdS, s->SId, s->s_dab_svcname);
+			if (dps->appType != appType || dps->appDataLength != length || memcmp(dps->appData, &d[lOffset / 8 + 2], length)) {
+				dps->appType = appType;
+				dps->appData = calloc(length, sizeof(uint8_t));
+				dps->appDataLength = length;
+				memcpy(dps->appData, &d[lOffset / 8 + 2], length);
+				idnode_changed(&s->s_id);
+			}
+		}
+	    }
+	   
 	   lOffset += (11 + 5 + 8 * length);
-	   serviceComponent *packetComp        =
-	                         find_serviceComponent (dei, SId, SCIdS);
-	   if (packetComp != NULL) 
-	      packetComp      -> appType       = appType;
 	}
+	tvh_mutex_unlock(&global_lock);
+	
 
 	return lOffset / 8;
-}*/
+}
 //
 //      FEC sub-channel organization 6.2.2
 void	FIG0Extension14 (dab_ensemble_instance_t *dei, const uint8_t *d) {
@@ -969,8 +1030,23 @@ char		label [17];
 	   case 5:	 // Data service label - 32 bits 8.1.14.2
 	      SId	= getLBits (d, 16, 32);
 	      offset	= 48;
-	      for (i = 0; i < 16; i ++) 
-                 label [i] = getBits_8 (d, offset + 8 * i);
+	      tvh_mutex_lock(&global_lock);
+	      myIndex	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
+	      if ((!myIndex->s_dab_svcname) && (charSet <= 16)) {
+	         for (i = 0; i < 16; i ++) {
+	            label [i] = getBits_8 (d, offset + 8 * i);
+	         }
+	         
+	         tvh_str_set(&myIndex->s_dab_svcname, toStringUsingCharset (
+                                        (const char *) label,
+                                        (CharacterSet) charSet,
+                                                                -1));
+		 idnode_changed(&myIndex->s_id);
+		 service_refresh_channel((service_t*)myIndex);
+			 
+		 tvhtrace(LS_RTLSDR, "FIG1/1: SId = %4x\t%s", SId, label);
+	      }
+	      tvh_mutex_unlock(&global_lock);
               break;
 	   case 6:	// XPAD label - 8.1.14.4
 	      pd_flag	= getLBits (d, 16, 1);
@@ -1000,21 +1076,6 @@ char		label [17];
 	(void)SCidS;
 	(void)XPAD_aid;
 	(void)flagfield;
-}
-
-serviceComponent *find_packetComponent (dab_ensemble_instance_t *dei, int16_t SCId) {
-int16_t i;
-dab_ensemble_t *mm = dei->mmi_ensemble;
-
-        for (i = 0; i < 64; i ++) {
-           if (!mm->ServiceComps [i]. inUse)
-              continue;
-           if (mm->ServiceComps [i]. TMid != 03)
-              continue;
-           if (mm->ServiceComps [i]. SCId == SCId)
-              return &mm->ServiceComps [i];
-        }
-        return NULL;
 }
 
 /*serviceComponent *find_serviceComponent (dab_ensemble_instance_t *dei, int32_t SId,
@@ -1048,24 +1109,18 @@ dab_service_t *s;
 	tvh_mutex_lock(&global_lock);
 	
 	s = dab_service_find(mm, SId, 1, 0);
-	if (!s ->s_dab_svcname || s->s_verified || !mm->subChannels [SubChId]. inUse) {
+	if (!s ->s_dab_svcname || !mm->subChannels [SubChId]. inUse) {
 	   tvh_mutex_unlock(&global_lock);
 	   return;
 	}
-
-	tvhdebug(LS_RTLSDR, "add to ensemble (%d) %s", service_id16(s), s->s_dab_svcname);
-
+	
 	s->s_verified = 1;
 
-	s->TMid		= TMid;
-	s->PS_flag	= ps_flag;
-	s->ASCTy	= ASCTy;
+	if (dab_service_add_stream(s, SubChId, SCT_AAC)) {
+		service_refresh_channel((service_t*)s);
+		tvhdebug(LS_RTLSDR, "add to ensemble (%u) %s audio", SId, s->s_dab_svcname);
+	}
 	
-	dab_service_set_subchannel(s, SubChId);
-	
-	idnode_changed(&s->s_id);
-
-	service_refresh_channel((service_t*)s);
 
 	tvh_mutex_unlock(&global_lock);
 }
@@ -1080,47 +1135,50 @@ void    bind_packetService (dab_ensemble_instance_t *dei, int8_t TMid,
                                            int16_t ps_flag,
                                            int16_t CAflag) {
 dab_ensemble_t *mm = dei->mmi_ensemble;
-int16_t i;
-int16_t	firstFree	= -1;
+dab_service_t *s;
 
-//	if (!s -> serviceLabel. hasName)        // wait until we have a name
-//           return;
-
-	for (i = 0; i < 64; i ++) {
-	   if ((mm->ServiceComps [i]. inUse) &&
-	                      (mm->ServiceComps [i]. SCId == SCId))
-	      return;
-
-	   if (!mm->ServiceComps [i]. inUse) {
-	      if (firstFree == -1)
-	         firstFree = i;
-	      continue;
-	   }
+	tvh_mutex_lock(&global_lock);
+	
+	s = dab_service_find(mm, SId, 1, 0);
+	if (!s ->s_dab_svcname) {
+	   tvh_mutex_unlock(&global_lock);
+	   return;
 	}
+	
+	dab_packetdata_stream_t *dps;
+	TAILQ_FOREACH(dps, &s->dab_packetdata_streams, dab_packetdata_link) {
+	    if (dps->SCId == SCId) {
+	    	tvh_mutex_unlock(&global_lock);
+		return;
+	    }
+	}
+	
+	dps = calloc(1, sizeof(*dps));
 
-	mm->ServiceComps [firstFree]. inUse  = 1;
-	mm->ServiceComps [firstFree]. TMid   = TMid;
-//	mm->ServiceComps [firstFree]. service = s;
-	mm->ServiceComps [firstFree]. componentNr = compnr;
-	mm->ServiceComps [firstFree]. SCId   = SCId;
-	mm->ServiceComps [firstFree]. PS_flag = ps_flag;
-	mm->ServiceComps [firstFree]. CAflag = CAflag;
-	mm->ServiceComps [firstFree]. is_madePublic = 0;
+	tvhdebug(LS_RTLSDR, "add to ensemble (%u) %s data", SId, s->s_dab_svcname);
+
+	s->s_verified = 1;
+
+	dps->ps_flag	= ps_flag;
+	dps->SCId	= SCId;
+	dps->CAflag	= CAflag;
+
+	TAILQ_INSERT_TAIL(&s->dab_packetdata_streams, dps, dab_packetdata_link);
+
+	idnode_changed(&s->s_id);
+
+	service_refresh_channel((service_t*)s);
+
+	tvh_mutex_unlock(&global_lock);
 }
 
 void	setupforNewFrame (dab_ensemble_instance_t *dei) {
-int16_t	i;
-dab_ensemble_t *mm = dei->mmi_ensemble;
 	tvhinfo(LS_RTLSDR, "FIC out of sync");
-	for (i = 0; i < 64; i ++)
-	   mm->ServiceComps [i]. inUse = 0;
-	
 }
 
 void	clearEnsemble (dab_ensemble_instance_t *dei) {
 dab_ensemble_t *mm = dei->mmi_ensemble;
 	setupforNewFrame (dei);
-	memset (mm->ServiceComps, 0, sizeof (mm->ServiceComps));
 	memset (mm->subChannels, 0, sizeof (mm->subChannels));
 }
 
