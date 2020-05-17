@@ -34,12 +34,14 @@ typedef struct epggrab_module_ota_scraper   epggrab_module_ota_scraper_t;
 typedef struct epggrab_ota_mux      epggrab_ota_mux_t;
 typedef struct epggrab_ota_mux_eit_plist    epggrab_ota_mux_eit_plist_t;
 typedef struct epggrab_ota_map      epggrab_ota_map_t;
+typedef struct epggrab_dab_ota_map  epggrab_dab_ota_map_t;
 typedef struct epggrab_ota_svc_link epggrab_ota_svc_link_t;
 
 LIST_HEAD(epggrab_module_list, epggrab_module);
 typedef struct epggrab_module_list epggrab_module_list_t;
 
 struct mpegts_mux;
+struct dab_ensemble;
 struct channel;
 
 /* **************************************************************************
@@ -291,6 +293,22 @@ struct epggrab_module_ota
   void (*handlers) (epggrab_ota_map_t *map, struct mpegts_mux *mm );
   int  (*tune)  ( epggrab_ota_map_t *map, epggrab_ota_mux_t *om,
                   struct mpegts_mux *mm );
+  void  *opaque;
+};
+
+/*
+ * DAB Over the air grabber
+ */
+struct epggrab_module_dab_ota
+{
+  epggrab_module_t               ;      ///< Parent object
+
+  /* Transponder tuning */
+  int  (*start) ( epggrab_dab_ota_map_t *map, struct dab_ensemble *mm );
+  int  (*stop)  ( epggrab_dab_ota_map_t *map, struct dab_ensemble *mm );
+  void (*handlers) (epggrab_dab_ota_map_t *map, struct dab_ensemble *mm );
+  int  (*tune)  ( epggrab_dab_ota_map_t *map, epggrab_dab_ota_mux_t *om,
+                  struct dab_ensemble *mm );
   void  *opaque;
 };
 
