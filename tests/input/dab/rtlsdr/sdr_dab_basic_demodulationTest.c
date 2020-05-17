@@ -28,6 +28,10 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 
 int main(int argc, char** argv) {
     pFile = fopen("input/dab/rtlsdr/rtlsdr_raw", "rb");
+    if (pFile == NULL) {
+        printf("input/dab/rtlsdr/rtlsdr_raw not found!\n");
+        exit(EXIT_SUCCESS);
+    }
 
     initConstPhaseReference();
     initConstViterbi768();
