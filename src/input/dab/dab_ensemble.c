@@ -405,7 +405,7 @@ const idclass_t dab_ensemble_class =
 static void
 dab_ensemble_display_name ( dab_ensemble_t *mm, char *buf, size_t len )
 {
-  snprintf(buf, len, "Ensemble [onid:%04X]", mm->mm_onid);
+  snprintf(buf, len, "%dKHz", mm->mm_freq / 1000);
 }
 
 void
