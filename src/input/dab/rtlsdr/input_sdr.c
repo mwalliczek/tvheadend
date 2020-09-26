@@ -29,7 +29,7 @@ david.may.muc@googlemail.com
 #include "ficHandler.h"
 #include "input_sdr_async.h"
 
-float _Complex oscillatorTable[INPUT_RATE];
+static float _Complex oscillatorTable[INPUT_RATE];
 
 float jan_abs(float _Complex z) {
     float re = crealf(z);
@@ -103,10 +103,16 @@ uint32_t getSample(rtlsdr_frontend_t *lfe, float _Complex *v, float *abs, int32_
     return 1;
 }
 
-void sdr_init(struct sdr_state_t *sdr) {
+void sdr_init_const(void) {
     int i;
-    tvhdebug(LS_RTLSDR, "sdr_init %p", sdr);
+    for (i = 0; i < INPUT_RATE; i++) {
+        oscillatorTable[i] = cosf(2.0 * M_PI * i / INPUT_RATE) + sinf(2.0 * M_PI * i / INPUT_RATE) * I;
+    }
+}
 
+void sdr_init(struct sdr_state_t *sdr) {
+    tvhdebug(LS_RTLSDR, "sdr_init %p", sdr);
+    
     // circular buffer init
     cbInit(&(sdr->fifo), (196608 * 2 * 4)); // 4 frames
 
@@ -117,9 +123,8 @@ void sdr_init(struct sdr_state_t *sdr) {
     sdr->sLevel = 0;
     sdr->localPhase = 0;
 
-    for (i = 0; i < INPUT_RATE; i++) {
-        oscillatorTable[i] = cosf(2.0 * M_PI * i / INPUT_RATE) + sinf(2.0 * M_PI * i / INPUT_RATE) * I;
-    }
+    sdr->mmi->fibProcessorIsSynced = 0;
+
 #ifdef TRACE_RTLSDR_RAW
     sdr->traceFile = fopen("/tmp/rtlsdr_raw", "wb");
 #endif

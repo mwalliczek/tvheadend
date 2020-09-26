@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <rtl-sdr.h>
@@ -222,6 +221,7 @@ void rtlsdr_init() {
 		rtlsdr_adapter_add(i);
 	}
 	
+	sdr_init_const();
 	initConstPhaseReference();
 	initConstViterbi768();
 	initConstOfdmDecoder();

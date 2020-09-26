@@ -61,7 +61,7 @@
 #define SUBSHIFT 0
 #endif
 
-COMPUTETYPE Branchtab[NUMSTATES / 2 * RATE] __attribute__((aligned(16)));
+static COMPUTETYPE Branchtab[NUMSTATES / 2 * RATE] __attribute__((aligned(16)));
 int	parity(int);
 void	init_viterbi(struct v *, int16_t);
 void	update_viterbi_blk_GENERIC(struct v *, COMPUTETYPE *,

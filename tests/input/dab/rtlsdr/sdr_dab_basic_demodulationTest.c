@@ -33,6 +33,7 @@ int main(int argc, char** argv) {
         exit(EXIT_SUCCESS);
     }
 
+    sdr_init_const();
     initConstPhaseReference();
     initConstViterbi768();
     initConstOfdmDecoder();

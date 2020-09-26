@@ -158,6 +158,8 @@ sdr_dab_service_instance_t* sdr_dab_service_instance_create(dab_service_t* servi
 
 void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds);
 
+void sdr_init_const(void);
+
 void sdr_init(struct sdr_state_t *sdr);
 
 void sdr_destroy(struct sdr_state_t *sdr);

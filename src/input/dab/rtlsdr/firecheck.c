@@ -32,7 +32,7 @@
 
 uint16_t run8 (uint8_t regs[]);
 
-uint16_t tab[256];
+static uint16_t tab[256];
 const uint8_t g[16]={1,1,1,1,0,1,0,0,0,0,0,1,1,1,1,0};
 
 void firecheck_init() {

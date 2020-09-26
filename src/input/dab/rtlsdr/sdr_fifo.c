@@ -10,7 +10,7 @@ void cbInit(CircularBuffer *cb, uint32_t size) {
     cb->size  = size;
     cb->start = 0;
     cb->count = 0;
-    cb->elems = (uint8_t *)calloc(cb->size, sizeof(uint8_t));
+    cb->elems = calloc(cb->size, sizeof(uint8_t));
 }
 void cbFree(CircularBuffer *cb) {
     free(cb->elems);

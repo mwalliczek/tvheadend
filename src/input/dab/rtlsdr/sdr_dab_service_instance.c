@@ -31,6 +31,7 @@ sdr_dab_service_instance_create(dab_service_t* service)
     res->dai_service = service;
     res->subChannel = &service->s_dab_ensemble->subChannels[service->subChId];
 
+    assert(res->subChannel->BitRate > 0);
     res->outV = calloc(24 * res->subChannel->BitRate, sizeof(uint8_t));
 
     res->fragmentSize = res->subChannel->Length * CUSize;

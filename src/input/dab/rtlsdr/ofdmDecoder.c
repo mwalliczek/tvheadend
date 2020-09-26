@@ -38,7 +38,7 @@ void decodeFICblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t bl
 void decodeMscblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno);
 void processBlock_0_int(struct sdr_state_t *sdr, const float _Complex* v);
 
-int16_t myMapper[T_u];
+static int16_t myMapper[T_u];
 
 #ifndef DAB_SINGLE_THREAD
 static void *run_thread_fn(void *arg);
