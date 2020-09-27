@@ -1,5 +1,7 @@
 #include "ficHandler.h"
 
+struct service_queue service_all;
+
 void process_ficInput(struct sdr_state_t *sdr, int16_t ficno);
 
 int main(int argc, char** argv) {
@@ -8,6 +10,7 @@ int main(int argc, char** argv) {
     uint8_t *output;
     
     memset(&sdr, 0, sizeof(sdr));
+    TAILQ_INIT(&service_all);
     
     sdr.mmi = calloc(1, sizeof(dab_ensemble_instance_t));
     sdr.mmi->mmi_ensemble = calloc(1, sizeof(dab_ensemble_t));

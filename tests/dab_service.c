@@ -7,6 +7,7 @@ dab_service_find
   (dab_ensemble_t *mm, uint16_t sid, int create, int *save )
 {
     dab_service_t* res = calloc(1, sizeof(dab_service_t));
+    TAILQ_INSERT_TAIL(&service_all, res, s_all_link);
     return res;
 }
 

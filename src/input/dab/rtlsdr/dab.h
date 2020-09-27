@@ -105,6 +105,7 @@ struct sdr_state_t {
 
 	int			fibCRCtotal;
 	int			fibCRCsuccess;
+	int			fibCRCrate;
 	
 	tvh_mutex_t	active_service_mutex;
 	
