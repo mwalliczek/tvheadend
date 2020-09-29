@@ -1134,8 +1134,13 @@ http_stream_service(http_connection_t *hc, service_t *service, int weight)
   if ((str = http_arg_get(&hc->hc_req_args, "emm")))
     if (strcmp(str, "1") == 0)
       eflags |= SUBSCRIPTION_EMM;
+      
+  flags = eflags;
+  if (service->s_source_type == S_DAB)
+    flags |= SUBSCRIPTION_DAB;
+  else
+    flags |= SUBSCRIPTION_MPEGTS;
 
-  flags = SUBSCRIPTION_MPEGTS | eflags;
   if ((eflags & SUBSCRIPTION_NODESCR) == 0)
     flags |= SUBSCRIPTION_PACKET;
   if(!(pro = profile_find_by_list(hc->hc_access->aa_profiles,
@@ -1275,14 +1280,24 @@ http_stream_channel(http_connection_t *hc, channel_t *ch, int weight)
   const char *name;
   void *tcp_id;
   int res = HTTP_STATUS_SERVICE;
+  int flags = SUBSCRIPTION_PACKET;
+  idnode_list_mapping_t *ilm;
+  service_t *t;
 
   if (http_access_verify_channel(hc, ACCESS_STREAMING, ch))
     return http_noaccess_code(hc);
-
+    
+  LIST_FOREACH(ilm, &ch->ch_services, ilm_in2_link) {
+    t = (service_t *)ilm->ilm_in1;
+    if (t->s_source_type == S_DAB)
+      flags |= SUBSCRIPTION_DAB;
+    else
+      flags |= SUBSCRIPTION_MPEGTS;
+  }
+    
   if(!(pro = profile_find_by_list(hc->hc_access->aa_profiles,
                                   http_arg_get(&hc->hc_req_args, "profile"),
-                                  "channel",
-                                  SUBSCRIPTION_PACKET | SUBSCRIPTION_MPEGTS)))
+                                  "channel", flags)))
     return HTTP_STATUS_NOT_ALLOWED;
 
   if((tcp_id = http_stream_preop(hc)) == NULL)
