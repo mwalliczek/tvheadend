@@ -131,9 +131,8 @@ int16_t	i;
 }
 
 protection_t* uep_protection_init (int16_t bitRate, int16_t protLevel) {
-	protection_t* res = protection_init(bitRate, 0);
-	int16_t index, i, j;
-	int16_t viterbiCounter  = 0;
+	protection_t* res = protection_init(bitRate);
+	int16_t index;
 	int16_t         L1;
 	int16_t         L2;
 	int16_t         L3;
@@ -142,7 +141,6 @@ protection_t* uep_protection_init (int16_t bitRate, int16_t protLevel) {
 	const int8_t    *PI2;
 	const int8_t    *PI3;
 	const int8_t    *PI4;
-	const int8_t    *PI_X;
 
 
 	index	= findIndex (bitRate, protLevel);
@@ -163,54 +161,7 @@ protection_t* uep_protection_init (int16_t bitRate, int16_t protLevel) {
 	else
 	   PI4	= NULL;
 
-	PI_X	= get_PCodes (8 - 1);
+    protection_createIndexTable(res, L1, PI1, L2, PI2, L3, PI3, L4, PI4);
 
-	memset (res->indexTable, 0,
-	                 (24 * bitRate * 4 + 24) * sizeof (uint8_t));
-
-//	We prepare a mapping table with the given punctures
-	for (i = 0; i < L1; i ++) {
-	   for (j = 0; j < 128; j ++) {
-	      if (PI1 [j % 32] != 0) 
-	         res->indexTable [viterbiCounter] = 1;
-	      viterbiCounter ++;
-	   }
-	}
-
-	for (i = 0; i < L2; i ++) {
-	   for (j = 0; j < 128; j ++) {
-	      if (PI2 [j % 32] != 0) 
-	         res->indexTable [viterbiCounter] = 1;
-	      viterbiCounter ++;
-	   }
-	}
-
-	for (i = 0; i < L3; i ++) {
-	   for (j = 0; j < 128; j ++) {
-	      if (PI3 [j % 32] != 0) 
-	         res->indexTable [viterbiCounter] = 1;
-	      viterbiCounter ++;	
-	   }
-	}
-
-	if (PI4 != NULL)
-	   for (i = 0; i < L4; i ++) {
-	      for (j = 0; j < 128; j ++) {
-	         if (PI4 [j % 32] != 0) 
-	            res->indexTable [viterbiCounter] = 1;
-	         viterbiCounter ++;	
-	      }
-	   }
-
-/**
-  *	we have a final block of 24 bits  with puncturing according to PI_X
-  *	This block constitues the 6 * 4 bits of the register itself.
-  */
-	for (i = 0; i < 24; i ++) {
-	   if (PI_X [i] != 0)  
-	      res->indexTable [viterbiCounter] = 1;
-	   viterbiCounter ++;
-	}
-	
 	return res;
 }

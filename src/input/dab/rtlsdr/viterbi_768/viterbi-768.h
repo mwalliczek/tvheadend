@@ -42,11 +42,10 @@ struct v {
 	uint8_t *data;
 	COMPUTETYPE *symbols;
 	int16_t	frameBits;
-	int spiral;
 };
 
 void	initConstViterbi768(void);
-void	initViterbi768	(struct v *vp, int16_t, int spiral);
+void	initViterbi768	(struct v *vp, int16_t);
 void	destroyViterbi768	(struct v *vp);
 void	deconvolve	(struct v * vp, int16_t *, uint8_t *);
 

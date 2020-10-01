@@ -29,13 +29,16 @@ typedef struct protection protection_t;
 struct protection
 {
     int		outSize;
+    int     indexTableSize;
     struct v	vp;
     int16_t*	viterbiBlock;
     uint8_t*	indexTable;
     uint8_t*    disperseVector;
 };
 
-protection_t* protection_init(int16_t bitRate, int spiral);
+protection_t* protection_init(int16_t bitRate);
+void protection_createIndexTable(protection_t* protection, int16_t L1, const int8_t *PI1, int16_t L2, const int8_t *PI2,
+    int16_t L3, const int8_t *PI3, int16_t L4, const int8_t *PI4);
 protection_t* uep_protection_init(int16_t bitRate, int16_t protLevel);
 protection_t* eep_protection_init(int16_t bitRate, int16_t protLevel);
 protection_t* fic_protection_init (void);

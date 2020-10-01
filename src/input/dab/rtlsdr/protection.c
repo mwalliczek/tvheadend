@@ -20,17 +20,26 @@
 */
 
 #include "tvheadend.h"
+#include "protTables.h"
 #include "protection.h"
 
-protection_t* protection_init(int16_t bitRate, int spiral) {
+protection_t* protection_init(int16_t bitRate) {
     uint8_t     shiftRegister [9];
-    int i, j;
+    int i;
+    int j;
     
     protection_t* res = calloc(1, sizeof(protection_t));
+    
     res->outSize = 24 * bitRate;
-    initViterbi768(&res->vp, res->outSize, spiral);
-    res->indexTable = calloc(res->outSize * 4 + 24, sizeof(uint8_t));
-    res->viterbiBlock = calloc(res->outSize * 4 + 24, sizeof(int16_t));
+    
+    res->indexTableSize = res->outSize * 4 + 24;
+    
+    initViterbi768(&res->vp, res->outSize);
+    
+    res->indexTable = calloc(res->indexTableSize, sizeof(uint8_t));
+    memset(res->indexTable, 0, res->indexTableSize * sizeof(uint8_t));
+
+    res->viterbiBlock = calloc(res->indexTableSize, sizeof(int16_t));
     res->disperseVector = calloc(res->outSize, sizeof (uint8_t));
 
     memset (shiftRegister, 1, 9);
@@ -45,6 +54,63 @@ protection_t* protection_init(int16_t bitRate, int spiral) {
     return res;
 }
 
+void protection_createIndexTable(protection_t* protection, int16_t L1, const int8_t *PI1, int16_t L2, const int8_t *PI2,
+    int16_t L3, const int8_t *PI3, int16_t L4, const int8_t *PI4) {
+    int16_t i, j;
+    int16_t viterbiCounter = 0;
+    const int8_t  *PI_X;
+
+    //
+    //	according to the standard we process the logical frame
+    //	with a pair of tuples
+    //	(L1, PI1), (L2, PI2)
+    //
+    for (i = 0; i < L1; i++) {
+        for (j = 0; j < 128; j++) {
+            if (PI1[j % 32] != 0)
+                protection->indexTable[viterbiCounter] = 1;
+            viterbiCounter++;
+        }
+    }
+
+    for (i = 0; i < L2; i++) {
+        for (j = 0; j < 128; j++) {
+            if (PI2[j % 32] != 0)
+                protection->indexTable[viterbiCounter] = 1;
+            viterbiCounter++;
+        }
+    }
+
+    if (PI3!= NULL)
+        for (i = 0; i < L3; i++) {
+            for (j = 0; j < 128; j++) {
+                if (PI3[j % 32] != 0)
+                    protection->indexTable[viterbiCounter] = 1;
+                viterbiCounter++;
+            }
+        }
+
+    if (PI4 != NULL)
+        for (i = 0; i < L4; i++) {
+            for (j = 0; j < 128; j++) {
+                if (PI4[j % 32] != 0)
+                    protection->indexTable[viterbiCounter] = 1;
+                viterbiCounter++;
+            }
+        }
+
+
+    PI_X = get_PCodes(8 - 1);
+
+    //	we had a final block of 24 bits  with puncturing according to PI_X
+    //	This block constitues the 6 * 4 bits of the register itself.
+    for (i = 0; i < 24; i++) {
+        if (PI_X[i] != 0)
+            protection->indexTable[viterbiCounter] = 1;
+        viterbiCounter++;
+    }
+}
+
 void protection_destroy(protection_t* protection) {
     free(protection->disperseVector);
     free(protection->viterbiBlock);
@@ -57,10 +123,10 @@ void protection_deconvolve(protection_t *protection, int16_t *v, uint8_t *outBuf
 int16_t	i;
 int16_t	inputCounter	= 0;
 
-	memset (protection->viterbiBlock, 0, (protection->outSize * 4 + 24) * sizeof (int16_t)); 
+	memset (protection->viterbiBlock, 0, protection->indexTableSize * sizeof (int16_t)); 
 
 
-        for (i = 0; i < protection->outSize * 4 + 24; i ++) {
+        for (i = 0; i < protection->indexTableSize; i ++) {
            if (protection->indexTable [i]) {
               protection->viterbiBlock [i] = v [inputCounter ++];
            }

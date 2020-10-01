@@ -64,14 +64,9 @@
 static COMPUTETYPE Branchtab[NUMSTATES / 2 * RATE] __attribute__((aligned(16)));
 int	parity(int);
 void	init_viterbi(struct v *, int16_t);
-void	update_viterbi_blk_GENERIC(struct v *, COMPUTETYPE *,
-	int16_t);
 void	update_viterbi_blk_SPIRAL(struct v *, COMPUTETYPE *,
 	int16_t);
 void	chainback_viterbi(struct v *, int16_t, uint16_t);
-void	BFLY(int32_t, int, COMPUTETYPE *,
-	struct v *, decision_t *);
-
 
 static uint8_t Partab [] = 
 { 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
@@ -129,13 +124,12 @@ int16_t	i, state;
 //	There are (in mode 1) 3 ofdm blocks, giving 4 FIC blocks
 //	There all have a predefined length. In that case we use the
 //	"fast" (i.e. spiral) code, otherwise we use the generic code
-void initViterbi768 (struct v *vp, int16_t wordlength, int spiral) {
+void initViterbi768 (struct v *vp, int16_t wordlength) {
 #ifdef	__MINGW32__
 uint32_t	size;
 #endif
 
 	vp->frameBits		= wordlength;
-	vp->spiral		= spiral;
 
 // B I G N O T E	The spiral code uses (wordLength + (VITERBI_K - 1) * sizeof ...
 // However, the application then crashes, so something is not OK
@@ -234,11 +228,7 @@ uint32_t	i;
 	   if (temp > 255) temp = 255;
 	   vp->symbols [i] = temp;
 	}
-	if (vp->spiral) {
-		update_viterbi_blk_SPIRAL (vp, vp->symbols, vp->frameBits + (VITERBI_K - 1));
-	} else {
-		update_viterbi_blk_GENERIC(vp, vp->symbols, vp->frameBits + (VITERBI_K - 1));
-	}
+	update_viterbi_blk_SPIRAL (vp, vp->symbols, vp->frameBits + (VITERBI_K - 1));
 
 	chainback_viterbi (vp, vp->frameBits, 0);
 
@@ -256,61 +246,6 @@ uint32_t	i;
         fclose (pFile);
         free(filename);
 #endif
-}
-
-/* C-language butterfly */
-void	BFLY (int i, int s, COMPUTETYPE * syms,
-	                   struct v * vp, decision_t * d) {
-int32_t j, decision0, decision1;
-COMPUTETYPE metric,m0,m1,m2,m3;
-
-	metric =0;
-	for (j = 0; j < RATE;j++)
-	   metric += (Branchtab [i + j * NUMSTATES/2] ^ syms[s*RATE+j]) >>
-	                                                     METRICSHIFT ;
-	metric = metric >> PRECISIONSHIFT;
-	const COMPUTETYPE max =
-	        ((RATE * ((256 - 1) >> METRICSHIFT)) >> PRECISIONSHIFT);
-	  
-	m0 = vp->old_metrics->t [i] + metric;
-	m1 = vp->old_metrics->t [i + NUMSTATES / 2] + (max - metric);
-	m2 = vp->old_metrics->t [i] + (max - metric);
-	m3 = vp->old_metrics->t [i + NUMSTATES / 2] + metric;
-	  
-	decision0 = ((int32_t)(m0 - m1)) > 0;
-	decision1 = ((int32_t)(m2 - m3)) > 0;
-	  
-	vp -> new_metrics-> t[2 * i] = decision0 ? m1 : m0;
-	vp -> new_metrics-> t[2 * i + 1] =  decision1 ? m3 : m2;
-	  
-	d -> w[i/(sizeof(uint32_t)*8/2)+s*(sizeof(decision_t)/sizeof(uint32_t))] |= 
-		    (decision0|decision1<<1) << ((2*i)&(sizeof(uint32_t)*8-1));
-}
-
-/* Update decoder with a block of demodulated symbols
- * Note that nbits is the number of decoded data bits, not the number
- * of symbols!
- */
-void	update_viterbi_blk_GENERIC (struct v *vp,
-					         COMPUTETYPE *syms,
-	                                         int16_t nbits){
-decision_t *d = (decision_t *)vp -> decisions;
-int32_t  s, i;
-
-	for (s = 0; s < nbits; s++)
-	   memset (&d [s], 0, sizeof (decision_t));
-
-	for (s = 0; s < nbits; s++){
-	   void *tmp;
-	   for (i = 0; i < NUMSTATES / 2; i++)
-	      BFLY (i, s, syms, vp, vp -> decisions);
-
-	   renormalize (vp -> new_metrics -> t, RENORMALIZE_THRESHOLD);
-//     Swap pointers to old and new metrics
-	   tmp = vp -> old_metrics;
-	   vp -> old_metrics = vp -> new_metrics;
-	   vp -> new_metrics = (metric_t *)tmp;
-	}
 }
 
 #if defined(SSE_AVAILABLE)

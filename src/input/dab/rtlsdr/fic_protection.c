@@ -23,49 +23,10 @@
 #include "protTables.h"
 #include "protection.h"
 
-protection_t* fic_protection_init (void) {
-        protection_t* res = protection_init(32, 1);
-        int16_t i, k;
-        int16_t local = 0;
-        
-        /**
-        *       a block of 2304 bits is considered to be a codeword
-        *       In the first step we have 21 blocks with puncturing according to PI_16
-        *       each 128 bit block contains 4 subblocks of 32 bits
-        *       on which the given puncturing is applied
-        */
-        memset(res->indexTable, 0, (3072 + 24) * sizeof(uint8_t));
+protection_t* fic_protection_init(void) {
+    protection_t* res = protection_init(32);
 
-        for (i = 0; i < 21; i++) {
-                for (k = 0; k < 32 * 4; k++) {
-                        if (get_PCodes(16 - 1)[k % 32] == 1)
-                                res->indexTable[local] = 1;
-                        local++;
-                }
-        }
-        /**
-        *       In the second step
-        *       we have 3 blocks with puncturing according to PI_15
-        *       each 128 bit block contains 4 subblocks of 32 bits
-        *       on which the given puncturing is applied
-        */
-        for (i = 0; i < 3; i++) {
-                for (k = 0; k < 32 * 4; k++) {
-                        if (get_PCodes(15 - 1)[k % 32] == 1)
-                                res->indexTable[local] = 1;
-                        local++;
-                }
-        }
+    protection_createIndexTable(res, 21, get_PCodes(16 - 1), 3, get_PCodes(15 - 1), 0, NULL, 0, NULL);
 
-        /**
-        *       we have a final block of 24 bits  with puncturing according to PI_X
-        *       This block constitues the 6 * 4 bits of the register itself.
-        */
-        for (k = 0; k < 24; k++) {
-                if (get_PCodes(8 - 1)[k] == 1)
-                        res->indexTable[local] = 1;
-                local++;
-        }
-        
-        return res;
+    return res;
 }

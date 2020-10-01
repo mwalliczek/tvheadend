@@ -24,11 +24,9 @@
 #include "protection.h"
 
 protection_t* eep_protection_init (int16_t bitRate, int16_t protLevel) {
-	protection_t* res = protection_init(bitRate, 0);
-	int16_t i, j;
-	int16_t viterbiCounter  = 0;
+	protection_t* res = protection_init(bitRate);
 	int16_t L1, L2;
-	const int8_t  *PI1, *PI2, *PI_X;
+	const int8_t  *PI1, *PI2;
 
 	tvhdebug(LS_RTLSDR, "eep_protection_init with bitrate %d and protLevel %d", bitRate, protLevel);
 	if ((protLevel & (1 << 2)) == 0) {	// set A profiles
@@ -99,37 +97,8 @@ protection_t* eep_protection_init (int16_t bitRate, int16_t protLevel) {
 	         break;
 	   }
 	}
-	PI_X	= get_PCodes (8 - 1);
 
-	memset (res->indexTable, 0,
-	                 (res->outSize * 4 + 24) * sizeof (uint8_t)); 
-//
-//	according to the standard we process the logical frame
-//	with a pair of tuples
-//	(L1, PI1), (L2, PI2)
-//
-	for (i = 0; i < L1; i ++) {
-	   for (j = 0; j < 128; j ++) {
-	      if (PI1 [j % 32] != 0) 
-	         res->indexTable [viterbiCounter] = 1;
-	      viterbiCounter ++;	
-	   }
-	}
-
-	for (i = 0; i < L2; i ++) {
-	   for (j = 0; j < 128; j ++) {
-	      if (PI2 [j % 32] != 0) 
-	         res->indexTable [viterbiCounter] = 1;
-	      viterbiCounter ++;	
-	   }
-	}
-//	we had a final block of 24 bits  with puncturing according to PI_X
-//	This block constitues the 6 * 4 bits of the register itself.
-	for (i = 0; i < 24; i ++) {
-	   if (PI_X [i] != 0) 
-	      res->indexTable [viterbiCounter] = 1;
-	   viterbiCounter ++;
-	}
+    protection_createIndexTable(res, L1, PI1, L2, PI2, 0, NULL, 0, NULL);
 	
 	return res;
 }
