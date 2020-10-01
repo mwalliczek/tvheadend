@@ -94,9 +94,9 @@ void destroy_mp4processor(mp4processor_t* mp4processor) {
 int mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t frameBytes[],
     int16_t base);
 
-void mp4Processor_buildHeader(int16_t framelen,
+int16_t mp4Processor_writeFrame(int16_t framelen,
     const stream_parms *sp,
-    uint8_t *header);
+    uint8_t *output, uint8_t *data);
 
 #ifdef TRACE_MP4
 int counter = 0;
@@ -199,6 +199,18 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
     streamParameters.psFlag = (mp4processor->outVector[2] >> 3) & 01;	// bit 20
     streamParameters.mpegSurround = (mp4processor->outVector[2] & 07);	// bits 21 .. 23
 
+//
+//      added for the aac file writer
+    streamParameters. CoreSrIndex   =
+                  streamParameters. dacRate ?
+                                (streamParameters. sbrFlag ? 6 : 3) :
+                                (streamParameters. sbrFlag ? 8 : 5);
+    streamParameters. CoreChConfig  =
+                  streamParameters. aacChannelMode ? 2 : 1;
+
+    streamParameters. ExtensionSrIndex =
+                  streamParameters. dacRate ? 3 : 5;
+
     switch (2 * streamParameters.dacRate + streamParameters.sbrFlag) {
     default:		// cannot happen
     case 0:
@@ -273,11 +285,9 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
                 //                 my_padHandler. processPAD (buffer, count - 3, L1, L0);
             }
             uint8_t fileBuffer[1024];
-            mp4Processor_buildHeader(aac_frame_length, &streamParameters, fileBuffer);
-            memcpy(&fileBuffer[7],
-                &mp4processor->outVector[mp4processor->au_start[i]],
-                aac_frame_length);
-            mp4processor->writeCb(fileBuffer, aac_frame_length + 7, &streamParameters, mp4processor->context);
+            memset(fileBuffer, 0, 1024);
+            int size = mp4Processor_writeFrame(aac_frame_length, &streamParameters, fileBuffer, &mp4processor->outVector[mp4processor->au_start[i]]);
+            mp4processor->writeCb(fileBuffer, size, &streamParameters, mp4processor->context);
 #ifdef TRACE_MP4
             exit(0);
 #endif
@@ -289,84 +299,78 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
     return 1;
 }
 
-void	mp4Processor_buildHeader(int16_t framelen,
-    const stream_parms *sp,
-    uint8_t *header) {
-    struct adts_fixed_header {
-        unsigned : 4;
-        unsigned home : 1;
-        unsigned orig : 1;
-        unsigned channel_config : 3;
-        unsigned private_bit : 1;
-        unsigned sampling_freq_index : 4;
-        unsigned profile : 2;
-        unsigned protection_absent : 1;
-        unsigned layer : 2;
-        unsigned id : 1;
-        unsigned syncword : 12;
-    } fh;
-    struct adts_variable_header {
-        unsigned : 4;
-        unsigned num_raw_data_blks_in_frame : 2;
-        unsigned adts_buffer_fullness : 11;
-        unsigned frame_length : 13;
-        unsigned copyright_id_start : 1;
-        unsigned copyright_id_bit : 1;
-    } vh;
-    /* 32k 16k 48k 24k */
-    const unsigned short samptab[] = { 0x5, 0x8, 0x3, 0x6 };
+static void AddBits (int data_new, size_t count, size_t *byte_bits, uint8_t **output) {
+	while (count > 0) {
+//	add new byte, if needed
+	   if (*byte_bits == 0)
+	      (*output)++;
 
-    fh.syncword = 0xfff;
-    fh.id = 0;
-    fh.layer = 0;
-    fh.protection_absent = 1;
-    fh.profile = 0;
-    fh.sampling_freq_index = samptab[sp->dacRate << 1 | sp->sbrFlag];
+	   size_t copy_bits = (count < (8 - *byte_bits)) ? count : (8 - *byte_bits);
+	   uint8_t copy_data =
+	       (data_new >> (count - copy_bits)) & (0xFF >> (8 - copy_bits));
+	   (**output) |= copy_data << (8 - *byte_bits - copy_bits);
 
-    fh.private_bit = 0;
-    switch (sp->mpegSurround) {
-    default:
-        tvherror(LS_RTLSDR, "Unrecognized mpeg_surround_config ignored");
-        //	not nice, but deliberate: fall through
-    case 0:
-        if (sp->sbrFlag && !sp->aacChannelMode && sp->psFlag)
-            fh.channel_config = 2; /* Parametric stereo */
-        else
-            fh.channel_config = 1 << sp->aacChannelMode;
-        break;
-
-    case 1:
-        fh.channel_config = 6;
-        break;
-    }
-
-    fh.orig = 0;
-    fh.home = 0;
-    vh.copyright_id_bit = 0;
-    vh.copyright_id_start = 0;
-    vh.frame_length = framelen + 7;  /* Includes header length */
-    vh.adts_buffer_fullness = 1999;
-    vh.num_raw_data_blks_in_frame = 0;
-    header[0] = fh.syncword >> 4;
-    header[1] = (fh.syncword & 0xf) << 4;
-    header[1] |= fh.id << 3;
-    header[1] |= fh.layer << 1;
-    header[1] |= fh.protection_absent;
-    header[2] = fh.profile << 6;
-    header[2] |= fh.sampling_freq_index << 2;
-    header[2] |= fh.private_bit << 1;
-    header[2] |= (fh.channel_config & 0x4);
-    header[3] = (fh.channel_config & 0x3) << 6;
-    header[3] |= fh.orig << 5;
-    header[3] |= fh.home << 4;
-    header[3] |= vh.copyright_id_bit << 3;
-    header[3] |= vh.copyright_id_start << 2;
-    header[3] |= (vh.frame_length >> 11) & 0x3;
-    header[4] = (vh.frame_length >> 3) & 0xff;
-    header[5] = (vh.frame_length & 0x7) << 5;
-    header[5] |= vh.adts_buffer_fullness >> 6;
-    header[6] = (vh.adts_buffer_fullness & 0x3f) << 2;
-    header[6] |= vh.num_raw_data_blks_in_frame;
+	   *byte_bits = (*byte_bits + copy_bits) % 8;
+	   count -= copy_bits;
+	}
 }
 
+static void	AddBytes (const uint8_t *data, size_t len, size_t *byte_bits, uint8_t **output) {
+	for(size_t i = 0; i < len; i++)
+	   AddBits (data[i], 8, byte_bits, output);
+}
 
+int16_t	mp4Processor_writeFrame(int16_t framelen,
+    const stream_parms *sp,
+    uint8_t *output, uint8_t *data) {
+    
+    size_t byte_bits = 0;
+    uint8_t *pointer = output;
+    
+    memcpy(pointer, "\x56\xE0\x00\x20\x00", 5);
+    pointer += 5-1;
+    
+/*        AddBits (0x2B7, 11, &byte_bits, &pointer);	// syncword
+	AddBits (    0, 13, &byte_bits, &pointer);	// audioMuxLengthBytes - written later
+//	AudioMuxElement(1)
+
+	AddBits (    0, 1, &byte_bits, &pointer);	// useSameStreamMux
+//	StreamMuxConfig()
+
+	AddBits (    0, 1, &byte_bits, &pointer);	// audioMuxVersion
+	AddBits (    1, 1, &byte_bits, &pointer);	// allStreamsSameTimeFraming
+	AddBits (    0, 6, &byte_bits, &pointer);	// numSubFrames
+	AddBits (    0, 4, &byte_bits, &pointer);	// numProgram
+	AddBits (    0, 3, &byte_bits, &pointer);	// numLayer
+*/
+	if (sp  -> sbrFlag) {
+	   AddBits (0b00101, 5, &byte_bits, &pointer); // SBR
+	   AddBits (sp -> CoreSrIndex, 4, &byte_bits, &pointer); // samplingFrequencyIndex
+	   AddBits (sp -> CoreChConfig, 4, &byte_bits, &pointer); // channelConfiguration
+	   AddBits (sp -> ExtensionSrIndex, 4, &byte_bits, &pointer);	// extensionSamplingFrequencyIndex
+	   AddBits (0b00010, 5, &byte_bits, &pointer);		// AAC LC
+	   AddBits (0b100, 3, &byte_bits, &pointer);							// GASpecificConfig() with 960 transform
+	} else {
+	   AddBits (0b00010, 5, &byte_bits, &pointer); // AAC LC
+	   AddBits (sp -> CoreSrIndex, 4, &byte_bits, &pointer); // samplingFrequencyIndex
+	   AddBits (sp -> CoreChConfig, 4, &byte_bits, &pointer); // channelConfiguration
+	   AddBits (0b100, 3, &byte_bits, &pointer);							// GASpecificConfig() with 960 transform
+	}
+
+	AddBits (0b000, 3, &byte_bits, &pointer);	// frameLengthType
+	AddBits (0xFF, 8, &byte_bits, &pointer);	// latmBufferFullness
+	AddBits (   0, 1, &byte_bits, &pointer);	// otherDataPresent
+	AddBits (   0, 1, &byte_bits, &pointer);	// crcCheckPresent
+
+//	PayloadLengthInfo()
+	for (int i = 0; i < framelen / 255; i++)
+	   AddBits (0xFF, 8, &byte_bits, &pointer);
+	AddBits (framelen % 255, 8, &byte_bits, &pointer);
+	tvhtrace(LS_RTLSDR, "mp4 byte_bits %d", byte_bits);
+
+	AddBytes (data, framelen, &byte_bits, &pointer);
+	size_t len = (pointer-output) + 1 - 3;
+	output [1] |= (len >> 8) & 0x1F;
+	output [2] = len & 0xFF;
+	return len + 3;
+}

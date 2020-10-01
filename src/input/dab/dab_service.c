@@ -239,7 +239,7 @@ void dab_service_set_subchannel(dab_service_t *s, int16_t SubChId)
     st->es_delete_me = 1;
   }
   
-  hts_stream_type = SCT_AAC;
+  hts_stream_type = SCT_MP4A;
   
   st = elementary_stream_find(set, SubChId);
   if (st == NULL || st->es_type != hts_stream_type) {

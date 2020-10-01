@@ -30,7 +30,7 @@ START_TEST(mp4processorTest) {
     }
     free(input);
     ck_assert_ptr_ne(myResult, NULL);
-    ck_assert_int_eq(myResultLength, 356);
+    ck_assert_int_eq(myResultLength, 361);
     ck_assert_int_eq(memcmpResult, 0);
     printf("myResult %p, myResultLength %d\n", myResult, myResultLength);
     
@@ -40,14 +40,14 @@ START_TEST(mp4processorTest) {
 void callback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context) {
     if (NULL == myResult && resultLength > 0) {
         FILE *pFile;
-        uint8_t *output = calloc(356, sizeof(uint8_t));
+        uint8_t *output = calloc(361, sizeof(uint8_t));
         printf("result %p, resultLength %d\n", result, resultLength);
         myResult = result;
         myResultLength = resultLength;
-        pFile = fopen ("input/dab/mp4out" , "rb" );
-        fread (output, 1, 356, pFile);
+        pFile = fopen ("input/dab/mp4out", "rb");
+        fread (output, 1, 361, pFile);
         fclose(pFile);
-        memcmpResult = memcmp(output, myResult, 356);
+        memcmpResult = memcmp(output, myResult, 361);
 
         printf("memcmp: %d\n", memcmpResult);
         free(output);

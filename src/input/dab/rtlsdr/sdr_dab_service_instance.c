@@ -113,17 +113,31 @@ sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int
     sds->nextIn = (sds->nextIn + 1) % 20;
 }
 
-static const int aac_sample_rates[4] =
+static const int aac_sample_rates[16] =
 {
-  32000, 16000, 48000, 24000
+  96000,
+  88200,
+  64000,
+  48000,
+  44100,
+  32000,
+  24000,
+  22050,
+  16000,
+  12000,
+  11025,
+  8000,
+  7350,
+  0,
+  0,
+  0
 };
 
 void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* sp, void* context) {
   sdr_dab_service_instance_t *sds = (sdr_dab_service_instance_t *) context;
   dab_service_t *t = sds->dai_service;
-  int sr = aac_sample_rates[sp->dacRate << 1 | sp->sbrFlag];
+  int sr = aac_sample_rates[sp->CoreSrIndex];
   int duration = 90000 * 1024 / sr;
-  int sri = rate_to_sri(sr);
   int channels;
   switch (sp->mpegSurround) {
   default:
@@ -142,7 +156,7 @@ void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t result
   }
 
   if (resultLength > 0) {
-    tvhtrace(LS_RTLSDR, "mp4 callback len %d (duration %d, channels %d)", resultLength, duration, channels);
+    tvhtrace(LS_RTLSDR, "mp4 callback len %d (duration %d, sr %d, sri %d, ext_sri %d, channels %d)", resultLength, duration, sr, sp->CoreSrIndex, sp->ExtensionSrIndex, channels);
 
     tvh_mutex_lock(&t->s_stream_mutex);
     service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
@@ -152,7 +166,10 @@ void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t result
       pkt->pkt_duration = duration;
       pkt->a.pkt_keyframe = 1;
       pkt->a.pkt_channels = channels;
-      pkt->a.pkt_sri = sri;
+      pkt->a.pkt_sri = sp->CoreSrIndex;
+      if (sp->sbrFlag) {
+        pkt->a.pkt_ext_sri = sp->ExtensionSrIndex;
+      }
   //    pkt->pkt_err = st->es_buf_a.sb_err;
       pkt->pkt_componentindex = 1;
 

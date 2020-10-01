@@ -4155,7 +4155,7 @@ htsp_subscription_start(htsp_subscription_t *hs, const streaming_start_t *ss)
     c = htsmsg_create_map();
     htsmsg_add_u32(c, "index", ssc->es_index);
     if (ssc->es_type == SCT_MP4A)
-      type = "AAC"; /* override */
+      type = "aac_latm"; /* override */
     else
       type = streaming_component_type2txt(ssc->es_type);
     htsmsg_add_str(c, "type", type);

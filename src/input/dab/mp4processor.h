@@ -33,6 +33,9 @@ typedef struct {
     int psFlag;
     int aacChannelMode;
     int mpegSurround;
+    int     CoreChConfig;
+    int     CoreSrIndex;
+    int     ExtensionSrIndex;
 } stream_parms;
 
 typedef struct mp4processor mp4processor_t;
