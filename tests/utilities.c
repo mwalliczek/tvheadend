@@ -44,6 +44,10 @@ int tvh__mutex_lock(tvh_mutex_t *mutex, const char *filename, int lineno) {
   return 0;
 }
 
+int tvh__mutex_trylock(tvh_mutex_t *mutex, const char *filename, int lineno) {
+  return 0;
+}
+
 void
 tvh_str_set(char **strp, const char *src)
 {

@@ -77,6 +77,8 @@ uint16_t i;
 			   strcat(s, utf8_encoded_EBU_Latin [buffer[i] & 0xff]);
 	      break;
 	}
+	for (i = length-1; s[i] == ' '; i--)
+		s[i] = '\0';
 
 	return s;
 }

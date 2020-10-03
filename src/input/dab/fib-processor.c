@@ -727,18 +727,19 @@ dab_service_t	*s;
 	   int	CC_flag	= getBits_1 (d, offset + 19);
 	   int16_t type;
 	   int16_t Language = 0x00;	// init with unknown language
-	   tvh_mutex_lock(&global_lock);
-	   s	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
-	   tvh_mutex_unlock(&global_lock);
-	   if (L_flag) {		// language field present
-	      Language = getBits_8 (d, offset + 24);
-	      s -> language = Language;
-	      s -> hasLanguage = 1;
-	      offset += 8;
-	   }
+	   if (!tvh_mutex_trylock(&global_lock)) {
+		   s	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
+		   tvh_mutex_unlock(&global_lock);
+		   if (L_flag) {		// language field present
+		      Language = getBits_8 (d, offset + 24);
+		      s -> language = Language;
+		      s -> hasLanguage = 1;
+		      offset += 8;
+		   }
 
-	   type	= getBits_5 (d, offset + 27);
-	   s	-> programType	= type;
+		   type	= getBits_5 (d, offset + 27);
+		   s	-> programType	= type;
+	   }
 	   if (CC_flag)			// cc flag
 	      offset += 40;
 	   else
@@ -916,23 +917,24 @@ char		label [17];
 	   case 1:	// 16 bit Identifier field for service label 8.1.14.1
 	      SId	= getBits (d, 16, 16);
 	      offset	= 32;
-	      tvh_mutex_lock(&global_lock);
-	      myIndex	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
-	      if ((!myIndex->s_dab_svcname) && (charSet <= 16)) {
-	         for (i = 0; i < 16; i ++) {
-	            label [i] = getBits_8 (d, offset + 8 * i);
-	         }
-	         
-	         tvh_str_set(&myIndex->s_dab_svcname, toStringUsingCharset (
-                                        (const char *) label,
-                                        (CharacterSet) charSet,
-                                                                -1));
-		 idnode_changed(&myIndex->s_id);
-		 service_refresh_channel((service_t*)myIndex);
+	      if (!tvh_mutex_trylock(&global_lock)) {
+		      myIndex	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
+		      if ((!myIndex->s_dab_svcname) && (charSet <= 16)) {
+			 for (i = 0; i < 16; i ++) {
+			    label [i] = getBits_8 (d, offset + 8 * i);
+			 }
 			 
-		 tvhtrace(LS_RTLSDR, "FIG1/1: SId = %4x\t%s", SId, label);
+			 tvh_str_set(&myIndex->s_dab_svcname, toStringUsingCharset (
+						(const char *) label,
+						(CharacterSet) charSet,
+									-1));
+			 idnode_changed(&myIndex->s_id);
+			 service_refresh_channel((service_t*)myIndex);
+				 
+			 tvhtrace(LS_RTLSDR, "FIG1/1: SId = %4x\t%s", SId, label);
+		      }
+		      tvh_mutex_unlock(&global_lock);
 	      }
-	      tvh_mutex_unlock(&global_lock);
 	      break;
 
 	   case 3:
@@ -1045,29 +1047,30 @@ void	bind_audioService (dab_ensemble_instance_t *dei, int8_t TMid,
 dab_ensemble_t *mm = dei->mmi_ensemble;
 dab_service_t *s;
 
-	tvh_mutex_lock(&global_lock);
-	
-	s = dab_service_find(mm, SId, 1, 0);
-	if (!s ->s_dab_svcname || s->s_verified || !mm->subChannels [SubChId]. inUse) {
-	   tvh_mutex_unlock(&global_lock);
-	   return;
+	if (!tvh_mutex_trylock(&global_lock)) {
+		
+		s = dab_service_find(mm, SId, 1, 0);
+		if (!s ->s_dab_svcname || s->s_verified || !mm->subChannels [SubChId]. inUse) {
+		   tvh_mutex_unlock(&global_lock);
+		   return;
+		}
+
+		tvhdebug(LS_RTLSDR, "add to ensemble (%d) %s", service_id16(s), s->s_dab_svcname);
+
+		s->s_verified = 1;
+
+		s->TMid		= TMid;
+		s->PS_flag	= ps_flag;
+		s->ASCTy	= ASCTy;
+		
+		dab_service_set_subchannel(s, SubChId);
+		
+		idnode_changed(&s->s_id);
+
+		service_refresh_channel((service_t*)s);
+
+		tvh_mutex_unlock(&global_lock);
 	}
-
-	tvhdebug(LS_RTLSDR, "add to ensemble (%d) %s", service_id16(s), s->s_dab_svcname);
-
-	s->s_verified = 1;
-
-	s->TMid		= TMid;
-	s->PS_flag	= ps_flag;
-	s->ASCTy	= ASCTy;
-	
-	dab_service_set_subchannel(s, SubChId);
-	
-	idnode_changed(&s->s_id);
-
-	service_refresh_channel((service_t*)s);
-
-	tvh_mutex_unlock(&global_lock);
 }
 
 //      bind_packetService is the main processor for - what the name suggests -
@@ -1127,13 +1130,14 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
 void	nameofEnsemble  (dab_ensemble_instance_t *dei, int id, const char *s) {
 	tvhtrace(LS_RTLSDR, "name of ensemble (%d) %s", id, s);
 
-	tvh_mutex_lock(&global_lock);
+	if (!tvh_mutex_trylock(&global_lock)) {
 
-	dei->mmi_ensemble->mm_onid = id;
-	if (dab_ensemble_set_network_name(dei->mmi_ensemble, s))
-		idnode_changed(&dei->mmi_ensemble->mm_id);
+		dei->mmi_ensemble->mm_onid = id;
+		if (dab_ensemble_set_network_name(dei->mmi_ensemble, s))
+			idnode_changed(&dei->mmi_ensemble->mm_id);
 
-	tvh_mutex_unlock(&global_lock);
+		tvh_mutex_unlock(&global_lock);
+	}
 
 	dei->fibProcessorIsSynced = 1;
 	tvhinfo(LS_RTLSDR, "FIC in sync");
