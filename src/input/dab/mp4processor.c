@@ -344,7 +344,11 @@ int16_t	mp4Processor_writeFrame(int16_t framelen,
 	AddBits (    0, 3, &byte_bits, &pointer);	// numLayer
 */
 	if (sp  -> sbrFlag) {
-	   AddBits (0b00101, 5, &byte_bits, &pointer); // SBR
+           if (sp->psFlag) {
+                  AddBits (0b11101, 5, &byte_bits, &pointer); // SBR
+           } else {
+                  AddBits (0b00101, 5, &byte_bits, &pointer); // SBR
+           }
 	   AddBits (sp -> CoreSrIndex, 4, &byte_bits, &pointer); // samplingFrequencyIndex
 	   AddBits (sp -> CoreChConfig, 4, &byte_bits, &pointer); // channelConfiguration
 	   AddBits (sp -> ExtensionSrIndex, 4, &byte_bits, &pointer);	// extensionSamplingFrequencyIndex
