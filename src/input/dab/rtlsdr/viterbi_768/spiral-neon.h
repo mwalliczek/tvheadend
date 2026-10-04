@@ -1,4 +1,5 @@
 #include "build.h"
+#include "viterbi-simd.h"
 #if !defined(SPIRAL_NEON_) && defined(CONFIG_NEON)
 #define SPIRAL_NEON_
 /***************************************************************

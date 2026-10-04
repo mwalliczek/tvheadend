@@ -5,6 +5,7 @@
  * 	Viterbi.h according to the SPIRAL project
  */
  #include 	"tvheadend.h"
+#include	"viterbi-simd.h"
 
 #include	"../../dab_constants.h"
 

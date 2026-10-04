@@ -1,4 +1,5 @@
 #include "build.h"
+#include "viterbi-simd.h"
 #if !defined(SPIRAL_NO_SSE__) && !defined(CONFIG_NEON) && !defined(SSE_AVAILABLE)
 #define SPIRAL_NO_SSE__
 

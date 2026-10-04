@@ -68,7 +68,7 @@ tests/%.o:	$(RTLSDR)/%.c
 tests/%.o:	$(RTLSDR)/viterbi_768/%.c
 		gcc $(INC) -I$(RTLSDR)/viterbi_768/ $(CFLAGS) -c $< -o $@
 
-VITERBI    = tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-neon.o
+VITERBI    = tests/viterbi-768.o tests/spiral-no-sse.o tests/spiral-sse.o tests/spiral-neon.o
 PROTECTION = tests/protection.o tests/protTables.o $(VITERBI)
 SDR_INPUT  = tests/input_sdr.o tests/ficHandler.o tests/phasereference.o tests/sdr_fifo.o \
              tests/fic_protection.o tests/ofdmDecoder.o $(PROTECTION)
