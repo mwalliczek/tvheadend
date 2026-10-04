@@ -29,7 +29,6 @@ david.may.muc@googlemail.com
 #include "ficHandler.h"
 #include "input_sdr_async.h"
 
-static float _Complex oscillatorTable[INPUT_RATE];
 
 float jan_abs(float _Complex z) {
     float re = crealf(z);
@@ -62,24 +61,65 @@ float convTable[] = {
     , 96 / 128.0 , 97 / 128.0 , 98 / 128.0 , 99 / 128.0 , 100 / 128.0 , 101 / 128.0 , 102 / 128.0 , 103 / 128.0 , 104 / 128.0 , 105 / 128.0 , 106 / 128.0 , 107 / 128.0 , 108 / 128.0 , 109 / 128.0 , 110 / 128.0 , 111 / 128.0
     , 112 / 128.0 , 113 / 128.0 , 114 / 128.0 , 115 / 128.0 , 116 / 128.0 , 117 / 128.0 , 118 / 128.0 , 119 / 128.0 , 120 / 128.0 , 121 / 128.0 , 122 / 128.0 , 123 / 128.0 , 124 / 128.0 , 125 / 128.0 , 126 / 128.0 , 127 / 128.0 };
 
+#define LEVEL_ALPHA	0.00001f
+
+/* the oscillator rotates by -freqOffset / INPUT_RATE turns per sample */
+static void osc_set_offset(struct sdr_state_t *sdr, int32_t freqOffset) {
+    double w;
+    if (freqOffset == sdr->oscOffset)
+        return;
+    w = -2.0 * M_PI * freqOffset / INPUT_RATE;
+    sdr->oscStepRe = cos(w);
+    sdr->oscStepIm = sin(w);
+    sdr->oscOffset = freqOffset;
+}
+
+/* keep the phasor on the unit circle (float rounding) */
+static void osc_normalize(struct sdr_state_t *sdr) {
+    float m = sqrtf(sdr->oscRe * sdr->oscRe + sdr->oscIm * sdr->oscIm);
+    sdr->oscRe /= m;
+    sdr->oscIm /= m;
+}
+
 uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, int32_t freqOffset) {
     struct sdr_state_t *sdr = &lfe->sdr;
-    uint32_t i;
+    uint32_t i = 0, k, n;
     const uint8_t *buffer;
-    for (i = 0; i < size; i++) {
-        if (cbCount(&sdr->fifo) < 2) {
-            if (!readFromDevice(lfe)) {
+    float oRe, oIm, sRe, sIm, level;
+
+    osc_set_offset(sdr, freqOffset);
+    sRe = sdr->oscStepRe;
+    sIm = sdr->oscStepIm;
+    while (i < size) {
+        buffer = cbReadPtr(&sdr->fifo, &n);
+        n /= 2;
+        if (n == 0) {
+            if (!readFromDevice(lfe))
                 return i;
-            }
+            continue;
         }
-        buffer = cbReadDouble(&(sdr->fifo));
-        sdr->localPhase -= freqOffset;
-        sdr->localPhase = (sdr->localPhase + INPUT_RATE) % INPUT_RATE;
+        if (n > size - i)
+            n = size - i;
 
-        v[i] = convTable[buffer[0]] + convTable[buffer[1]] * I;
-        v[i] *= oscillatorTable[sdr->localPhase];
-
-        sdr->sLevel = 0.00001 * jan_abs(v[i]) + (1 - 0.00001) * sdr->sLevel;
+        oRe = sdr->oscRe;
+        oIm = sdr->oscIm;
+        level = sdr->sLevel;
+        for (k = 0; k < n; k++, i++) {
+            float re = convTable[buffer[2 * k]], im = convTable[buffer[2 * k + 1]];
+            float t = oRe * sRe - oIm * sIm;
+            oIm = oRe * sIm + oIm * sRe;
+            oRe = t;
+            t = re * oRe - im * oIm;
+            im = re * oIm + im * oRe;
+            re = t;
+            v[i] = re + im * I;
+            level = LEVEL_ALPHA * (fabsf(re) + fabsf(im)) + (1 - LEVEL_ALPHA) * level;
+        }
+        sdr->oscRe = oRe;
+        sdr->oscIm = oIm;
+        sdr->sLevel = level;
+        osc_normalize(sdr);
+        cbConsume(&sdr->fifo, 2 * n);
     }
     return size;
 }
@@ -87,27 +127,36 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, in
 uint32_t getSample(rtlsdr_frontend_t *lfe, float _Complex *v, float *abs, int32_t freqOffset) {
     struct sdr_state_t *sdr = &lfe->sdr;
     const uint8_t *buffer;
-    if (cbCount(&sdr->fifo) < 2 && !readFromDevice(lfe)) {
-        return 0;
+    uint32_t n;
+    float re, im, t;
+
+    buffer = cbReadPtr(&sdr->fifo, &n);
+    if (n < 2) {
+        if (!readFromDevice(lfe))
+            return 0;
+        buffer = cbReadPtr(&sdr->fifo, &n);
     }
-    buffer = cbReadDouble(&(sdr->fifo));
+    osc_set_offset(sdr, freqOffset);
+    t = sdr->oscRe * sdr->oscStepRe - sdr->oscIm * sdr->oscStepIm;
+    sdr->oscIm = sdr->oscRe * sdr->oscStepIm + sdr->oscIm * sdr->oscStepRe;
+    sdr->oscRe = t;
+    if ((++sdr->oscCount & 0xFFF) == 0)
+        osc_normalize(sdr);
 
-    sdr->localPhase -= freqOffset;
-    sdr->localPhase = (sdr->localPhase + INPUT_RATE) % INPUT_RATE;
+    re = convTable[buffer[0]];
+    im = convTable[buffer[1]];
+    cbConsume(&sdr->fifo, 2);
+    t = re * sdr->oscRe - im * sdr->oscIm;
+    im = re * sdr->oscIm + im * sdr->oscRe;
+    re = t;
+    *v = re + im * I;
 
-    *v = convTable[buffer[0]] + convTable[buffer[1]] * I;
-    *v *= oscillatorTable[sdr->localPhase];
-
-    *abs = jan_abs(*v);
-    sdr->sLevel = 0.00001 * *abs + (1 - 0.00001) * sdr->sLevel;
+    *abs = fabsf(re) + fabsf(im);
+    sdr->sLevel = LEVEL_ALPHA * *abs + (1 - LEVEL_ALPHA) * sdr->sLevel;
     return 1;
 }
 
 void sdr_init_const(void) {
-    int i;
-    for (i = 0; i < INPUT_RATE; i++) {
-        oscillatorTable[i] = cosf(2.0 * M_PI * i / INPUT_RATE) + sinf(2.0 * M_PI * i / INPUT_RATE) * I;
-    }
 }
 
 void sdr_init(struct sdr_state_t *sdr) {
@@ -121,7 +170,12 @@ void sdr_init(struct sdr_state_t *sdr) {
     initFicHandler(sdr);
 
     sdr->sLevel = 0;
-    sdr->localPhase = 0;
+    sdr->oscRe = 1;
+    sdr->oscIm = 0;
+    sdr->oscStepRe = 1;
+    sdr->oscStepIm = 0;
+    sdr->oscOffset = 0;
+    sdr->oscCount = 0;
 
     sdr->mmi->fibProcessorIsSynced = 0;
 

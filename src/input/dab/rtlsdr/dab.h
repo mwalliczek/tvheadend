@@ -54,6 +54,10 @@ struct ofdm_decoder_t {
 	pthread_t thread;
 	th_pipe_t pipe;
 	float _Complex buffer[L][T_s];
+	/* a buffer is busy from the hand over until the OFDM thread is done */
+	tvh_mutex_t busyLock;
+	tvh_cond_t busyCond;
+	uint8_t busy[L];
 };
 
 struct sdr_dab_service_instance
@@ -94,7 +98,11 @@ struct sdr_state_t {
 
 	int		isSynced;
 
-	int32_t		localPhase;
+	/* local oscillator for the frequency correction: a rotating phasor */
+	float		oscRe, oscIm;
+	float		oscStepRe, oscStepIm;
+	int32_t		oscOffset;
+	uint32_t	oscCount;
 	float		sLevel;
 
 	struct phase_reference_t phaseReference;

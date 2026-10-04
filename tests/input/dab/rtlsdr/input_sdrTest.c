@@ -6,9 +6,19 @@ void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
 }
 
 static FILE *pFile;
+static long synthetic;      /* remaining bytes of a constant test signal */
 
 int readFromDevice(rtlsdr_frontend_t *lfe) {
     uint8_t input[1024];
+    if (synthetic > 0) {
+        for (int i = 0; i < 1024; i += 2) {
+            input[i] = 128 + 72;    /* I = 72 / 128 */
+            input[i + 1] = 128;     /* Q = 0 */
+        }
+        synthetic -= 1024;
+        cbWrite(&(lfe->sdr.fifo), input, 1024);
+        return 1;
+    }
     if (pFile == NULL || fread(input, 1, 1024, pFile) < 1024)
         return 0;
     cbWrite(&(lfe->sdr.fifo), input, 1024);
@@ -57,36 +67,55 @@ START_TEST(getSamplesTest) {
     pFile = NULL;
 } END_TEST
 
-START_TEST(getSampleFrequencyShiftTest) {
-    float _Complex v;
-    float abs;
-    rtlsdr_frontend_t *lfe;
+/* the frequency correction must stay exact over a long time */
+START_TEST(oscillatorAccuracyTest) {
+    static float _Complex v[2048];
+    const int32_t offset = 12345;
+    rtlsdr_frontend_t *lfe = create_frontend();
+    double maxerr = 0;
+    long n = 0;
 
-    sdr_init_const();
-    pFile = fopen("input/dab/rtlsdr/input_sdrTest/rtlsdr_raw", "rb");
-    ck_assert_ptr_ne(pFile, NULL);
-    lfe = create_frontend();
-
-    /* the oscillator only rotates the sample, the magnitude stays the same */
-    ck_assert_int_eq(getSample(lfe, &v, &abs, 0), 1);
-    float mag0 = cabsf(v);
-    ck_assert(fabsf(abs - jan_abs(v)) < 1e-6);
-    lfe->sdr.fifo.start -= 2;
-    lfe->sdr.fifo.count += 2;
-    ck_assert_int_eq(getSample(lfe, &v, &abs, INPUT_RATE / 4), 1);
-    ck_assert(fabsf(cabsf(v) - mag0) < 1e-5);
-    ck_assert_int_eq(lfe->sdr.localPhase, INPUT_RATE - INPUT_RATE / 4);
-
+    synthetic = 2L * INPUT_RATE;    /* one second */
+    while (getSamples(lfe, v, 2048, offset) == 2048) {
+        for (int k = 0; k < 2048; k++) {
+            double w = -2.0 * M_PI * (double)offset * (double)(n + k + 1) / INPUT_RATE;
+            double re = 72 / 128.0 * cos(w), im = 72 / 128.0 * sin(w);
+            double e = hypot(crealf(v[k]) - re, cimagf(v[k]) - im);
+            if (e > maxerr)
+                maxerr = e;
+        }
+        n += 2048;
+    }
+    ck_assert_int_eq(n, INPUT_RATE);
+    ck_assert_msg(maxerr < 1e-3, "oscillator error %g", maxerr);
     destroy_frontend(lfe);
-    fclose(pFile);
-    pFile = NULL;
+} END_TEST
+
+START_TEST(getSampleMatchesGetSamplesTest) {
+    static float _Complex a[600], b[600];
+    float abs;
+    rtlsdr_frontend_t *lfe = create_frontend();
+
+    synthetic = 2 * 600;
+    ck_assert_int_eq(getSamples(lfe, a, 600, -777), 600);
+    destroy_frontend(lfe);
+    lfe = create_frontend();
+    synthetic = 2 * 600;
+    for (int k = 0; k < 600; k++) {
+        ck_assert_int_eq(getSample(lfe, &b[k], &abs, -777), 1);
+        ck_assert(fabsf(abs - jan_abs(b[k])) < 1e-6);
+    }
+    for (int k = 0; k < 600; k++)
+        ck_assert(cabsf(a[k] - b[k]) < 1e-5);
+    destroy_frontend(lfe);
 } END_TEST
 
 static Suite *input_sdr_suite(void) {
     Suite *s = suite_create("input_sdr");
     TCase *tc_core = tcase_create("Core");
     tcase_add_test(tc_core, getSamplesTest);
-    tcase_add_test(tc_core, getSampleFrequencyShiftTest);
+    tcase_add_test(tc_core, oscillatorAccuracyTest);
+    tcase_add_test(tc_core, getSampleMatchesGetSamplesTest);
     suite_add_tcase(s, tc_core);
     return s;
 }

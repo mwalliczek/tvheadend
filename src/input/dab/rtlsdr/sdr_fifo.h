@@ -49,3 +49,15 @@ uint8_t * cbReadDouble(CircularBuffer *cb);
 static inline uint32_t cbCount(CircularBuffer *cb) {
   return __atomic_load_n(&cb->count, __ATOMIC_ACQUIRE);
 }
+
+/* consumer: contiguous readable data, release it with cbConsume */
+static inline const uint8_t *cbReadPtr(CircularBuffer *cb, uint32_t *len) {
+  uint32_t count = cbCount(cb), contiguous = cb->size - cb->start;
+  *len = count < contiguous ? count : contiguous;
+  return &cb->elems[cb->start];
+}
+
+static inline void cbConsume(CircularBuffer *cb, uint32_t len) {
+  cb->start = (cb->start + len) % cb->size;
+  __atomic_sub_fetch(&cb->count, len, __ATOMIC_RELEASE);
+}

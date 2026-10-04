@@ -75,6 +75,9 @@ void initOfdmDecoder(struct sdr_state_t *sdr) {
 	sdr->ofdmDecoder.plan = fftwf_plan_dft_1d(T_u, (float(*)[2]) sdr->ofdmDecoder.fftBuffer, (float(*)[2])sdr->ofdmDecoder.fftBuffer, FFTW_FORWARD, FFTW_ESTIMATE);
 
 #ifndef DAB_SINGLE_THREAD
+	tvh_mutex_init(&sdr->ofdmDecoder.busyLock, NULL);
+	tvh_cond_init(&sdr->ofdmDecoder.busyCond, 1);
+	memset(sdr->ofdmDecoder.busy, 0, sizeof(sdr->ofdmDecoder.busy));
 	tvh_pipe(0, &sdr->ofdmDecoder.pipe);
 	tvh_thread_create(&sdr->ofdmDecoder.thread, NULL,
 		run_thread_fn, sdr, "rtlsdr-ofdm");
@@ -86,13 +89,36 @@ void destroyOfdmDecoder(struct sdr_state_t *sdr) {
 #ifndef DAB_SINGLE_THREAD
 	tvh_pipe_close(&sdr->ofdmDecoder.pipe);
 	pthread_join(sdr->ofdmDecoder.thread, NULL);
+	tvh_cond_destroy(&sdr->ofdmDecoder.busyCond);
+	tvh_mutex_destroy(&sdr->ofdmDecoder.busyLock);
 #endif
 	fftwf_destroy_plan(sdr->ofdmDecoder.plan);
 	fftwf_free(sdr->ofdmDecoder.fftBuffer);
 }
 
+#ifndef DAB_SINGLE_THREAD
+/* wait until the OFDM thread has finished with the previous use of the buffer */
+static void acquireBuffer(struct sdr_state_t *sdr, int blkno) {
+	tvh_mutex_lock(&sdr->ofdmDecoder.busyLock);
+	while (sdr->ofdmDecoder.busy[blkno])
+		tvh_cond_wait(&sdr->ofdmDecoder.busyCond, &sdr->ofdmDecoder.busyLock);
+	sdr->ofdmDecoder.busy[blkno] = 1;
+	tvh_mutex_unlock(&sdr->ofdmDecoder.busyLock);
+}
+
+static void releaseBuffer(struct sdr_state_t *sdr, int blkno) {
+	tvh_mutex_lock(&sdr->ofdmDecoder.busyLock);
+	sdr->ofdmDecoder.busy[blkno] = 0;
+	tvh_cond_signal(&sdr->ofdmDecoder.busyCond, 0);
+	tvh_mutex_unlock(&sdr->ofdmDecoder.busyLock);
+}
+#endif
+
 void processBlock_0(struct sdr_state_t *sdr, const float _Complex* v) {
 	int blkno = 0;
+#ifndef DAB_SINGLE_THREAD
+	acquireBuffer(sdr, blkno);
+#endif
 	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_u);
 #ifdef DAB_SINGLE_THREAD
 	processBlock_0_int(sdr, sdr->ofdmDecoder.buffer[blkno]);
@@ -145,6 +171,9 @@ int16_t	get_snr(const float _Complex* v) {
 }
 
 void decodeBlock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno) {
+#ifndef DAB_SINGLE_THREAD
+	acquireBuffer(sdr, blkno);
+#endif
 	memcpy(sdr->ofdmDecoder.buffer[blkno], v, sizeof(float _Complex) * T_s);
 #ifdef DAB_SINGLE_THREAD
 	if (blkno < 4) {
@@ -227,6 +256,7 @@ static void *run_thread_fn(void *arg) {
 		else {
 			decodeMscblock(sdr, sdr->ofdmDecoder.buffer[blkno], blkno);
 		}
+		releaseBuffer(sdr, blkno);
 	} while (1);
 
 	return 0;
