@@ -314,7 +314,6 @@ SRCS-2 = \
 	src/api/api_channel.c \
 	src/api/api_service.c \
 	src/api/api_mpegts.c \
-	src/api/api_dab.c \
 	src/api/api_epg.c \
 	src/api/api_epggrab.c \
 	src/api/api_imagecache.c \
@@ -446,6 +445,7 @@ I18N-C += $(SRCS-LINUXDVB)
 
 # RTLSDR
 SRCS-RTLSDR = \
+    src/api/api_dab.c \
     src/input/dab.c \
     src/input/dab/dab_input.c \
     src/input/dab/dab_ensemble.c \

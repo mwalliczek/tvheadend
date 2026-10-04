@@ -160,6 +160,9 @@ const tvh_caps_t tvheadend_capabilities[] = {
 #if ENABLE_LINUXDVB || ENABLE_SATIP_CLIENT || ENABLE_HDHOMERUN_CLIENT || ENABLE_RTLSDR
   { "tvadapters", NULL },
 #endif
+#if ENABLE_RTLSDR
+  { "dab", NULL },
+#endif
 #if ENABLE_SATIP_CLIENT
   { "satip_client", NULL },
 #endif

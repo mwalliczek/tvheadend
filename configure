@@ -25,7 +25,7 @@ OPTIONS=(
   "capmt:yes"
   "constcw:yes"
   "linuxdvb:yes"
-  "rtlsdr:yes"
+  "rtlsdr:auto"
   "neon:auto"
   "satip_server:yes"
   "satip_client:yes"
@@ -490,13 +490,18 @@ fi
 #
 # RTL SDR
 #
-check_cc_header 'rtl-sdr' rtlsdr_h
+# DAB+ reception, built when librtlsdr and fftw3 are available
+#
 if enabled_or_auto rtlsdr; then
-  if enabled rtlsdr_h; then
+  check_cc_header 'rtl-sdr' rtlsdr_h
+  check_cc_header 'fftw3' fftw3_h
+  if enabled rtlsdr_h && enabled fftw3_h; then
     enable rtlsdr
     LDFLAGS="$LDFLAGS -lrtlsdr"
   elif enabled rtlsdr; then
-    die "rtl-sdr.h not found (use --disable-rtlsdr)"
+    die "rtl-sdr.h or fftw3.h not found (install librtlsdr and fftw3 development files or use --disable-rtlsdr)"
+  else
+    disable rtlsdr
   fi
 fi
 
