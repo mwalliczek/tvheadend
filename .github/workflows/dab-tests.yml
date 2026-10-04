@@ -1,0 +1,44 @@
+name: DAB unit tests
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'src/input/dab/**'
+      - 'src/input/dab.h'
+      - 'src/epggrab/module/dab.c'
+      - 'tests/**'
+      - 'Makefile.tests'
+      - '.github/workflows/dab-tests.yml'
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  dab-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential pkg-config gettext python3 bzip2 \
+          libssl-dev zlib1g-dev liburiparser-dev \
+          librtlsdr-dev libfftw3-dev check libsubunit-dev
+    - name: Configure
+      run: |
+        ./configure --disable-dvbscan --disable-ffmpeg_static --disable-libav \
+          --disable-hdhomerun_static --disable-avahi --disable-dbus_1 \
+          --disable-pcre --disable-pcre2 --disable-libsystemd_daemon \
+          --disable-dvbcsa --disable-bintray_cache
+    - name: Unit tests
+      run: make -f Makefile.tests tests
+    - name: Unit tests (AddressSanitizer / UBSan)
+      run: |
+        make -f Makefile.tests clean
+        make -f Makefile.tests tests \
+          EXTRA_CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+          EXTRA_LIBS="-fsanitize=address,undefined"

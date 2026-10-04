@@ -30,6 +30,7 @@ OPTIONS=(
   "satip_server:yes"
   "satip_client:yes"
   "hdhomerun_client:no"
+  "hdhomerun_server:yes"
   "hdhomerun_static:yes"
   "iptv:yes"
   "tsfile:yes"
@@ -39,6 +40,8 @@ OPTIONS=(
   "avahi:auto"
   "zlib:auto"
   "libav:auto"
+  "vue_build:auto"
+  "vue_cache:no"
   "ffmpeg_static:yes"
   "libx264:yes"
   "libx264_static:yes"
@@ -97,7 +100,7 @@ opt=
 val=
 for opt do
   val=${opt#*=}
-  opt=${opt%=*}
+  opt=${opt%%=*}
   opt=${opt#*--}
   case "$opt" in
     help)
@@ -122,6 +125,20 @@ for opt do
       ;;
   esac
 done
+
+# ###########################################################################
+# Invalidate previous output
+# ###########################################################################
+#
+# Remove any .config.mk left by an earlier run *before* starting the checks.
+# write_config() (the sole writer) only runs once all checks have passed, so
+# if this run dies on a missing dependency - or is killed by a signal - it
+# must not leave a stale .config.mk behind for make to silently reuse (which
+# previously could e.g. link the wrong ffmpeg). The invariant is: .config.mk
+# exists only if a configure run completed. Done after argument parsing so
+# --help (which exits earlier) never removes a valid config.
+#
+rm -f "${ROOTDIR}/.config.mk" "${ROOTDIR}/.config.mk.tmp"
 
 # ###########################################################################
 # Checks
@@ -271,7 +288,7 @@ int test ( void )
 }' -lpthread
 
 check_cc_snippet qsort_r '
-#define __USE_GNU
+#define _GNU_SOURCE
 #include <stdlib.h>
 #define TEST test
 int test(void)
@@ -280,6 +297,40 @@ int test(void)
   return 0;
 }
 '
+
+check_cc_snippet time_ld '
+#define _FILE_OFFSET_BITS 64
+#define _TIME_BITS 64
+#include <stdio.h>
+#include <time.h>
+#define TEST test
+int test(void)
+{
+  printf("%ld", (time_t)1);
+  return 0;
+}
+' '-Wformat -Werror=format'
+
+check_cc_snippet time_lld '
+#define _FILE_OFFSET_BITS 64
+#define _TIME_BITS 64
+#include <stdio.h>
+#include <time.h>
+#define TEST test
+int test(void)
+{
+  printf("%lld", (time_t)1);
+  return 0;
+}
+' '-Wformat -Werror=format'
+
+if enabled time_lld; then
+  printf "    ^ using time_t format 'lld'\n"
+elif enabled time_ld; then
+  printf "    ^ using time_t format 'ld'\n"
+else
+  die 'Unable to determine size of "time_t"'
+fi
 
 check_cc_snippet stime '
 #include <time.h>
@@ -327,9 +378,19 @@ int test(void)
 }
 '
 
-# a check for the external iconv library
+# a check for the external (gnu)iconv library
 # for build-in libc iconv routines this check should fail
 # note that iconv routines are mandatory
+check_cc_snippet gnu_libiconv '
+#include <gnu-libiconv/iconv.h>
+#define TEST test
+int test(void)
+{
+  iconv_t ic = iconv_open("ASCII", "ASCII");
+  return 0;
+}
+' -liconv
+
 check_cc_snippet libiconv '
 #include <iconv.h>
 #define TEST test
@@ -340,7 +401,9 @@ int test(void)
 }
 ' -liconv
 
-if enabled libiconv; then
+if enabled gnu_libiconv; then
+  printf "    ^ using gnu libiconv library\n"
+elif enabled libiconv; then
   printf "    ^ using external iconv library\n"
 else
   printf "    ^ using build-in glibc iconv routines\n"
@@ -439,14 +502,17 @@ fi
 
 #
 # NEON for the DAB viterbi decoder: 64 bit ARM always has it, 32 bit ARM
-# needs -mfpu=neon (the viterbi code selects SSE2 / NEON / C itself)
+# needs -mfpu=neon, which is only added with --enable-neon (the viterbi code
+# selects SSE2 / NEON / C itself)
 #
 if enabled_or_auto neon; then
   printf 'int main(void) { return 0; }\n' > /tmp/tvh-neon.c
   if echo | $CC -dM -E - 2>/dev/null | grep -q '__ARM_NEON'; then
     enable neon
     echo "  checking whether NEON is available ... Yes." | tee -a configure.log
-  elif $CC $CFLAGS -mfpu=neon -c /tmp/tvh-neon.c -o /dev/null 2>/dev/null; then
+  elif enabled neon && $CC $CFLAGS -mfpu=neon -c /tmp/tvh-neon.c -o /dev/null 2>/dev/null; then
+    # only on request: the binary would not run on ARM CPUs without NEON
+    # (e.g. Raspberry Pi 1 / Zero), a Raspberry Pi 2 or newer is required
     enable neon
     CFLAGS="$CFLAGS -mfpu=neon"
     echo "  checking whether -mfpu=neon is available ... Yes." | tee -a configure.log
@@ -677,7 +743,6 @@ else
 
     check_pkg libavfilter   ">=6.47.100"  || has_libav=false
     check_pkg libswresample ">=2.1.100"   && has_resample=true
-    check_pkg libavresample ">=3.0.0"     && has_resample=true
     check_pkg libswscale    ">=4.1.100"   || has_libav=false
     check_pkg libavformat   ">=57.41.100" || has_libav=false
     check_pkg libavcodec    ">=57.48.101" || has_libav=false
@@ -695,6 +760,49 @@ else
 
   fi
 
+fi
+
+#
+# Vue UI — two complementary delivery paths:
+#   vue_build   Local Vite/npm build. Requires node + npm on PATH;
+#               auto-detects.
+#   vue_cache   Pre-built dist downloaded from pcloud. Off by default;
+#               packagers without a Node toolchain enable this with
+#               --enable-vue_cache --disable-vue_build to ship the UI
+#               without building it locally.
+# Either (or both) cause the dist to be bundled into the binary.
+#
+if enabled_or_auto vue_build; then
+  has_node=true
+  command -v node >/dev/null 2>&1 || has_node=false
+  command -v npm  >/dev/null 2>&1 || has_node=false
+
+  if $has_node; then
+    enable vue_build
+  else
+    if enabled vue_build && disabled vue_cache; then
+      die "--enable-vue_build requested but node + npm not found"
+    fi
+    disable vue_build
+    if enabled vue_cache; then
+      echo "INFO: node + npm not found — using pre-built Vue UI from pcloud cache"
+    else
+      echo "WARNING: node and/or npm not found"
+      echo "         * install node + npm to build the Vue UI locally, OR"
+      echo "         * --enable-vue_cache to download a pre-built dist from pcloud, OR"
+      echo "         * --disable-vue_build to skip the Vue UI entirely"
+      echo "WARNING: this build will serve the Vue UI stub page at /gui"
+    fi
+  fi
+fi
+
+if enabled vue_cache; then
+  # Cache mode requires pcloud_cache (the shared download/upload
+  # machinery via support/lib.sh + support/pcloud.py). Enabling it
+  # without pcloud_cache would silently skip the fetch.
+  if disabled pcloud_cache; then
+    die "--enable-vue_cache requires --enable-pcloud_cache (default yes)"
+  fi
 fi
 
 #
