@@ -248,18 +248,27 @@ uint32_t	i;
 #endif
 }
 
+/* must match the definitions in spiral-*.c exactly, LTO checks the types */
 #if defined(SSE_AVAILABLE)
-void FULL_SPIRAL_sse (int,
+typedef int32_t SPIRAL_COMPUTETYPE;
+typedef unsigned char SPIRAL_DECISIONTYPE;
+void FULL_SPIRAL_sse (int amount, int32_t *Y, int32_t *X, int32_t *syms,
+                      unsigned char *dec, int32_t *Branchtab);
+#define FULL_SPIRAL FULL_SPIRAL_sse
 #elif defined(CONFIG_NEON)
-void FULL_SPIRAL_neon (int,
+typedef int32_t SPIRAL_COMPUTETYPE;
+typedef unsigned char SPIRAL_DECISIONTYPE;
+void FULL_SPIRAL_neon (int amount, int32_t *Y, int32_t *X, int32_t *syms,
+                       unsigned char *dec, int32_t *Branchtab);
+#define FULL_SPIRAL FULL_SPIRAL_neon
 #else
-void FULL_SPIRAL_no_sse (int,
+typedef unsigned int SPIRAL_COMPUTETYPE;
+typedef unsigned int SPIRAL_DECISIONTYPE;
+void FULL_SPIRAL_no_sse (int amount, unsigned int *Y, unsigned int *X,
+                         unsigned int *syms, unsigned int *dec,
+                         unsigned int *Branchtab);
+#define FULL_SPIRAL FULL_SPIRAL_no_sse
 #endif
-	                 COMPUTETYPE *Y,
-	                 COMPUTETYPE *X,
-	                 COMPUTETYPE *syms,
-	                 DECISIONTYPE *dec,
-	                 COMPUTETYPE *Branchtab);
 
 void	update_viterbi_blk_SPIRAL (struct v *vp,
 					        COMPUTETYPE *syms,
@@ -270,17 +279,12 @@ int32_t s;
 	for (s = 0; s < nbits; s++)
 	   memset (d + s, 0, sizeof(decision_t));
 
-#if defined(SSE_AVAILABLE)
-	FULL_SPIRAL_sse (nbits,
-#elif defined(CONFIG_NEON)
-	FULL_SPIRAL_neon (nbits,
-#else
-	FULL_SPIRAL_no_sse (nbits,
-#endif
-	                 vp -> new_metrics -> t,
-	                 vp -> old_metrics -> t,
-	                 syms,
-	                 d -> t, Branchtab);
+	FULL_SPIRAL (nbits,
+	             (SPIRAL_COMPUTETYPE *)vp -> new_metrics -> t,
+	             (SPIRAL_COMPUTETYPE *)vp -> old_metrics -> t,
+	             (SPIRAL_COMPUTETYPE *)syms,
+	             (SPIRAL_DECISIONTYPE *)d -> t,
+	             (SPIRAL_COMPUTETYPE *)Branchtab);
 }
 
 //
