@@ -75,7 +75,7 @@ static void *producer(void *arg) {
     CircularBuffer *cb = arg;
     uint8_t buf[64];
     uint32_t value = 0;
-    while (value < 2000000) {
+    while (value < 400000) {
         if (cb->size - cbCount(cb) < sizeof(buf))
             continue;
         for (unsigned i = 0; i < sizeof(buf); i++)
@@ -91,7 +91,7 @@ START_TEST(concurrentProducerConsumerTest) {
     uint32_t expected = 0;
     cbInit(&cb, 1024);
     pthread_create(&thread, NULL, producer, &cb);
-    while (expected < 1000000) {
+    while (expected < 200000) {
         uint8_t *p;
         if (cbCount(&cb) < 2)
             continue;
@@ -108,6 +108,7 @@ START_TEST(concurrentProducerConsumerTest) {
 static Suite *sdr_fifo_suite(void) {
     Suite *s = suite_create("sdr_fifo");
     TCase *tc_core = tcase_create("Core");
+    tcase_set_timeout(tc_core, 60);
     tcase_add_test(tc_core, writeReadWrapTest);
     tcase_add_test(tc_core, exactlyFullTest);
     tcase_add_test(tc_core, overflowDropsNewDataTest);

@@ -41,7 +41,7 @@ void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
     tvh_mutex_lock(&sdr->active_service_mutex);
     
     LIST_FOREACH(s, &sdr->active_service_instance, service_link) {
-        tvhtrace(LS_RTLSDR, "checking %s", s->dai_service->s_nicename);
+        tvhtrace(LS_RTLSDR, "checking %s", s->dai_service ? s->dai_service->s_nicename : "data");
 	int startAddr	= s -> subChannel -> StartAddr;
 	int Length	= s -> subChannel -> Length;
 	if (Length > 0 && startAddr >= 0 &&
@@ -49,7 +49,7 @@ void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
             int16_t myBegin [Length * CUSize];
 	    memcpy (myBegin, &sdr->cifVector [startAddr * CUSize],
 	                               Length * CUSize * sizeof (int16_t));
-            tvhtrace(LS_RTLSDR, "msc -> %s", s->dai_service->s_nicename);
+            tvhtrace(LS_RTLSDR, "msc -> %s", s->dai_service ? s->dai_service->s_nicename : "data");
 
             sdr_dab_service_instance_process_data(s, myBegin);
         }

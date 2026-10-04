@@ -143,7 +143,19 @@ struct servicecomponents {
    int32_t      packetAddress;  // used in packet
    int32_t	appType;	// used in packet
    int		is_madePublic;
+   uint32_t	SId;		// service carrying the component
+   int32_t	SCIdS;		// component within the service, -1 unknown
 };
+
+/* user application signalled with FIG 0/13 (ETSI TS 101 756 table 16) */
+#define DAB_UA_SPI_EPG	0x007
+
+typedef struct dab_user_application {
+   int		inUse;
+   uint32_t	SId;
+   int32_t	SCIdS;
+   int32_t	type;
+} dab_user_application_t;
 
 typedef struct servicecomponents serviceComponent;
 
@@ -218,6 +230,7 @@ struct dab_ensemble
         tvh_mutex_t                 mm_tables_lock;
         subChannel	subChannels[64];
         serviceComponent	ServiceComps[64];
+        dab_user_application_t	userApps[32];
 
         /*
          * Functions
@@ -578,6 +591,14 @@ dab_ensemble_instance_t *dab_ensemble_instance_create0
     dab_input_t *mi, dab_ensemble_t *mm );
 
 dab_service_t *dab_ensemble_find_service(dab_ensemble_t *ms, uint16_t sid);
+
+/* DAB EPG grabber (epggrab/module/dab.c) */
+struct dab_mot_object;
+int dab_epggrab_enabled(void);
+void dab_epggrab_queue(dab_ensemble_t *mm, const struct dab_mot_object *obj);
+
+/* the packet mode component carrying the EPG of the ensemble, mm_tables_lock held */
+int dab_ensemble_find_epg_component(dab_ensemble_t *mm, int *subChId, int *packetAddress);
 
 #define dab_ensemble_instance_create(type, uuid, mi, mm)\
   (struct type*)dab_ensemble_instance_create0(calloc(1, sizeof(struct type)),\

@@ -115,7 +115,7 @@
    void		FIG0Extension5(dab_ensemble_instance_t *dei, const uint8_t *);
    void		FIG0Extension6(const uint8_t *);
    void            FIG0Extension7(const uint8_t *);
-   void            FIG0Extension8(const uint8_t *);
+   void            FIG0Extension8(dab_ensemble_instance_t *dei, const uint8_t *);
    void            FIG0Extension11(const uint8_t *);
    void            FIG0Extension12(const uint8_t *);
    void            FIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *);
@@ -137,10 +137,10 @@
 	   int16_t, uint8_t, uint8_t);
    int16_t		HandleFIG0Extension3(dab_ensemble_instance_t *dei, const uint8_t *, int16_t);
    int16_t		HandleFIG0Extension5(dab_ensemble_instance_t *dei, const uint8_t *, int16_t);
-   int16_t		HandleFIG0Extension8(const uint8_t *,
+   int16_t		HandleFIG0Extension8(dab_ensemble_instance_t *dei, const uint8_t *,
 	   int16_t, uint8_t);
-//   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *,
-//	   int16_t, uint8_t);
+   int16_t		HandleFIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *,
+	   int16_t, uint8_t);
    int16_t		HandleFIG0Extension22(const uint8_t *, int16_t);
    void    nameofEnsemble  (dab_ensemble_instance_t *dei, int id, const char *s);
 
@@ -233,7 +233,7 @@ uint8_t	extension	= getBits_5 (d, 8 + 3);
 	      break;
 
 	   case 8:
-	      FIG0Extension8 (d);
+	      FIG0Extension8 (dei, d);
 	      break;
 
 	   case 11:
@@ -602,17 +602,17 @@ void    FIG0Extension6 (const uint8_t *d) {
 void    FIG0Extension7 (const uint8_t *d) {
 }
 
-void	FIG0Extension8 (const uint8_t *d) {
+void	FIG0Extension8 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	used	= 2;		// offset in bytes
 int16_t	Length	= getBits_5 (d, 3);
 uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 
 	while (used < Length) {
-	   used = HandleFIG0Extension8 (d, used, PD_bit);
+	   used = HandleFIG0Extension8 (dei, d, used, PD_bit);
 	}
 }
 
-int16_t	HandleFIG0Extension8 (const uint8_t *d, int16_t used,
+int16_t	HandleFIG0Extension8 (dab_ensemble_instance_t *dei, const uint8_t *d, int16_t used,
 	                                     uint8_t pdBit) {
 int16_t	lOffset	= used * 8;
 uint32_t	SId	= getLBits (d, lOffset, pdBit == 1 ? 32 : 16);
@@ -632,9 +632,11 @@ uint8_t		extensionFlag;
         if (lsFlag == 1) {
            SCid = getBits (d, lOffset + 4, 12);
            lOffset += 16;
-//           if (find_packetComponent ((SCIds << 4) | SCid) != NULL) {
-//              fprintf (stderr, "packet component bestaat !!\n");
-//           }
+           serviceComponent *packetComp = find_packetComponent (dei, SCid);
+           if (packetComp != NULL) {
+              packetComp -> SId	= SId;
+              packetComp -> SCIdS	= SCIds;
+           }
         }
 	else {
 	   MSCflag	= getBits_1 (d, lOffset + 1);
@@ -663,23 +665,46 @@ void    FIG0Extension12 (const uint8_t *d) {
 //
 //
 void	FIG0Extension13 (dab_ensemble_instance_t *dei, const uint8_t *d) {
-//int16_t	used	= 2;		// offset in bytes
-//int16_t	Length	= getBits_5 (d, 3);
-//uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
+int16_t	used	= 2;		// offset in bytes
+int16_t	Length	= getBits_5 (d, 3);
+uint8_t	PD_bit	= getBits_1 (d, 8 + 2);
 
-//	while (used < Length) 
-//	   used = HandleFIG0Extension13 (dei, d, used, PD_bit);
+	while (used < Length)
+	   used = HandleFIG0Extension13 (dei, d, used, PD_bit);
 }
 
-/*int16_t	HandleFIG0Extension13 (dab_ensemble_instance_t *dei, uint8_t *d,
-	                                     int16_t used,
-	                                     uint8_t pdBit) {
-int16_t	lOffset		= used * 8;
-uint32_t	SId	= getLBits (d, lOffset, pdBit == 1 ? 32 : 16);
-uint16_t	SCIdS;
+static void	add_userApplication (dab_ensemble_t *mm, uint32_t SId,
+	                             int16_t SCIdS, int16_t type) {
+int16_t	i, freeSlot = -1;
+
+	for (i = 0; i < 32; i ++) {
+	   dab_user_application_t *ua = &mm->userApps [i];
+	   if (!ua->inUse) {
+	      if (freeSlot < 0)
+	         freeSlot = i;
+	      continue;
+	   }
+	   if (ua->SId == SId && ua->SCIdS == SCIdS && ua->type == type)
+	      return;
+	}
+	if (freeSlot < 0)
+	   return;
+	tvhtrace(LS_RTLSDR, "FIG 0/13: SId %x SCIdS %d user application %d",
+	         SId, SCIdS, type);
+	mm->userApps [freeSlot]. inUse	= 1;
+	mm->userApps [freeSlot]. SId	= SId;
+	mm->userApps [freeSlot]. SCIdS	= SCIdS;
+	mm->userApps [freeSlot]. type	= type;
+}
+
+//	User application information 6.3.6
+int16_t	HandleFIG0Extension13 (dab_ensemble_instance_t *dei, const uint8_t *d,
+	                       int16_t used, uint8_t pdBit) {
+int16_t		lOffset		= used * 8;
+uint32_t	SId		= getLBits (d, lOffset, pdBit == 1 ? 32 : 16);
+int16_t		SCIdS;
 int16_t		NoApplications;
 int16_t		i;
-int16_t		appType;
 
 	lOffset		+= pdBit == 1 ? 32 : 16;
 	SCIdS		= getBits_4 (d, lOffset);
@@ -687,17 +712,44 @@ int16_t		appType;
 	lOffset += 8;
 
 	for (i = 0; i < NoApplications; i ++) {
-	   appType		= getBits (d, lOffset, 11);
+	   int16_t appType	= getBits (d, lOffset, 11);
 	   int16_t length	= getBits_5 (d, lOffset + 11);
-	   lOffset += (11 + 5 + 8 * length);
-	   serviceComponent *packetComp        =
-	                         find_serviceComponent (dei, SId, SCIdS);
-	   if (packetComp != NULL) 
-	      packetComp      -> appType       = appType;
+	   lOffset += 16 + 8 * length;
+	   if (lOffset > 30 * 8)	// beyond the FIB
+	      break;
+	   add_userApplication (dei->mmi_ensemble, SId, SCIdS, appType);
 	}
 
 	return lOffset / 8;
-}*/
+}
+
+//	the packet mode MOT component of a service with the SPI/EPG application
+int	dab_ensemble_find_epg_component (dab_ensemble_t *mm, int *subChId,
+	                                 int *packetAddress) {
+int16_t	i, j;
+
+	for (i = 0; i < 32; i ++) {
+	   dab_user_application_t *ua = &mm->userApps [i];
+	   if (!ua->inUse || ua->type != DAB_UA_SPI_EPG)
+	      continue;
+	   for (j = 0; j < 64; j ++) {
+	      serviceComponent *sc = &mm->ServiceComps [j];
+	      if (!sc->inUse || sc->TMid != 03 || !sc->is_madePublic)
+	         continue;
+	      if (sc->SId != ua->SId || sc->SCIdS != ua->SCIdS)
+	         continue;
+	      if (sc->DSCTy != 60 ||		// MOT
+	          sc->packetAddress == 0 ||
+	          !mm->subChannels [sc->subchannelId]. inUse)
+	         continue;
+	      *subChId		= sc->subchannelId;
+	      *packetAddress	= sc->packetAddress;
+	      return 1;
+	   }
+	}
+	return 0;
+}
+
 //
 //      FEC sub-channel organization 6.2.2
 void	FIG0Extension14 (dab_ensemble_instance_t *dei, const uint8_t *d) {
@@ -1122,6 +1174,8 @@ int16_t	firstFree	= -1;
 	mm->ServiceComps [firstFree]. PS_flag = ps_flag;
 	mm->ServiceComps [firstFree]. CAflag = CAflag;
 	mm->ServiceComps [firstFree]. is_madePublic = 0;
+	mm->ServiceComps [firstFree]. SId    = SId;
+	mm->ServiceComps [firstFree]. SCIdS  = ps_flag ? 0 : -1;	// the primary component has SCIdS 0
 }
 
 void	setupforNewFrame (dab_ensemble_instance_t *dei) {

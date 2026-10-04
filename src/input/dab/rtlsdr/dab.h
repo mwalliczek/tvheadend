@@ -36,6 +36,7 @@
 #include "viterbi_768/viterbi-768.h"
 
 #include "../mp4processor.h"
+#include "../dab_mot.h"
 
 #define DEFAULT_BUF_LENGTH (16 * 16384)
 
@@ -77,7 +78,10 @@ struct sdr_dab_service_instance
         
         protection_t*	protection;
         
-        mp4processor_t*	mp4processor;
+        mp4processor_t*	mp4processor;   /* DAB+ audio service */
+
+        dab_mot_decoder_t*	mot;            /* packet mode data (EPG) */
+        uint8_t*	packetBytes;
 };
 
 struct sdr_state_t {
@@ -110,6 +114,7 @@ struct sdr_state_t {
 	tvh_mutex_t	active_service_mutex;
 	
 	LIST_HEAD(,sdr_dab_service_instance) active_service_instance;
+	sdr_dab_service_instance_t *epg;	/* EPG decoder, also in the list above */
 	
 	int16_t		cifVector[55296];
 	
@@ -156,6 +161,9 @@ int	check_CRC_bits(uint8_t *in, int32_t size) {
 }
 
 sdr_dab_service_instance_t* sdr_dab_service_instance_create(dab_service_t* service);
+
+sdr_dab_service_instance_t* sdr_dab_data_instance_create(dab_ensemble_t *mm, int subChId,
+        int packetAddress, dab_mot_object_cb_t cb, void *opaque);
 
 void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds);
 

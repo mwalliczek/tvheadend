@@ -22,29 +22,25 @@
 
 void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context);
 
-sdr_dab_service_instance_t * 
-sdr_dab_service_instance_create(dab_service_t* service)
+static sdr_dab_service_instance_t *
+sdr_dab_instance_create(subChannel *subChannel, int subChId)
 {
     int i;
-    sdr_dab_service_instance_t* res = calloc(1, sizeof(sdr_dab_service_instance_t));
-    memset(res, 0, sizeof(sdr_dab_service_instance_t));
-    res->dai_service = service;
-    res->subChannel = &service->s_dab_ensemble->subChannels[service->subChId];
+    sdr_dab_service_instance_t* res;
 
-    if (res->subChannel->BitRate <= 0 || res->subChannel->Length <= 0) {
+    if (subChannel->BitRate <= 0 || subChannel->Length <= 0) {
         tvherror(LS_RTLSDR, "invalid subchannel %d (bitrate %d, length %d)",
-            service->subChId, res->subChannel->BitRate, res->subChannel->Length);
-        free(res);
+            subChId, subChannel->BitRate, subChannel->Length);
         return NULL;
     }
+    res = calloc(1, sizeof(sdr_dab_service_instance_t));
+    res->subChannel = subChannel;
     res->outV = calloc(24 * res->subChannel->BitRate, sizeof(uint8_t));
 
     res->fragmentSize = res->subChannel->Length * CUSize;
 
-    for (i = 0; i < 16; i++) {
+    for (i = 0; i < 16; i++)
         res->interleaveData[i] = calloc(res->fragmentSize, sizeof(int16_t));
-        memset(res->interleaveData[i], 0, res->fragmentSize * sizeof(int16_t));
-    }
 
     res->interleaverIndex = 0;
     res->countforInterleaver = 0;
@@ -56,8 +52,6 @@ sdr_dab_service_instance_create(dab_service_t* service)
         res->protection = eep_protection_init(res->subChannel->BitRate,
             res->subChannel->protLevel);
 
-    res->mp4processor = init_mp4processor(res->subChannel->BitRate, res, sdr_dab_service_instance_dataCallback);
-
     res->tempX = calloc(res->fragmentSize, sizeof(int16_t));
     res->nextIn = 0;
     res->nextOut = 0;
@@ -66,6 +60,31 @@ sdr_dab_service_instance_create(dab_service_t* service)
 
     tvhdebug(LS_RTLSDR, "created sdr_dab_service_instance_t %p", res);
 
+    return res;
+}
+
+sdr_dab_service_instance_t * 
+sdr_dab_service_instance_create(dab_service_t* service)
+{
+    sdr_dab_service_instance_t* res = sdr_dab_instance_create(
+        &service->s_dab_ensemble->subChannels[service->subChId], service->subChId);
+    if (res == NULL)
+        return NULL;
+    res->dai_service = service;
+    res->mp4processor = init_mp4processor(res->subChannel->BitRate, res, sdr_dab_service_instance_dataCallback);
+    return res;
+}
+
+sdr_dab_service_instance_t *
+sdr_dab_data_instance_create(dab_ensemble_t *mm, int subChId, int packetAddress,
+                             dab_mot_object_cb_t cb, void *opaque)
+{
+    sdr_dab_service_instance_t* res = sdr_dab_instance_create(&mm->subChannels[subChId], subChId);
+    if (res == NULL)
+        return NULL;
+    res->mot = dab_mot_decoder_create(packetAddress, cb, opaque);
+    res->packetBytes = calloc(3 * res->subChannel->BitRate, sizeof(uint8_t));
+    tvhdebug(LS_RTLSDR, "decoding packet address %d in subchannel %d", packetAddress, subChId);
     return res;
 }
 
@@ -81,7 +100,10 @@ void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
     for (i = 0; i < 20; i++)
         free(sds->theData[i]);
     protection_destroy(sds->protection);
-    destroy_mp4processor(sds->mp4processor);
+    if (sds->mp4processor)
+        destroy_mp4processor(sds->mp4processor);
+    dab_mot_decoder_destroy(sds->mot);
+    free(sds->packetBytes);
     free(sds);
 }
 
@@ -108,7 +130,17 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
 
     protection_deconvolve(sds->protection, sds->tempX, sds->outV);
 
-    mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
+    if (sds->mp4processor) {
+        mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
+    } else if (sds->mot) {
+        /* packet mode: one bit per byte to bytes */
+        for (i = 0; i < 3 * sds->subChannel->BitRate; i++) {
+            const uint8_t *b = &sds->outV[i * 8];
+            sds->packetBytes[i] = (b[0] << 7) | (b[1] << 6) | (b[2] << 5) | (b[3] << 4) |
+                                  (b[4] << 3) | (b[5] << 2) | (b[6] << 1) | b[7];
+        }
+        dab_mot_decoder_feed_packets(sds->mot, sds->packetBytes, 3 * sds->subChannel->BitRate);
+    }
 }
 
 void

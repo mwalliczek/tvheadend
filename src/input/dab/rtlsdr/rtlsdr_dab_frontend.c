@@ -76,8 +76,9 @@ rtlsdr_frontend_open_fd(rtlsdr_frontend_t *lfe)
 	if (lfe->dev == NULL) {
 		r = rtlsdr_open(&lfe->dev, lfe->lfe_adapter->dev_index);
 		if (r < 0) {
-			tvherror(LS_RTLSDR, "Failed to open rtlsdr device #%d.\n", lfe->lfe_adapter->dev_index);
-			exit(1);
+			tvherror(LS_RTLSDR, "Failed to open rtlsdr device #%d.", lfe->lfe_adapter->dev_index);
+			lfe->dev = NULL;
+			return -1;
 		}
 	}
 
@@ -122,6 +123,69 @@ rtlsdr_frontend_is_enabled
 	return MI_IS_ENABLED_OK;
 }
 
+/* **************************************************************************
+* EPG
+* *************************************************************************/
+
+/* demodulator thread: a new MOT object of the EPG component */
+static void rtlsdr_frontend_epg_object(const dab_mot_object_t *obj, void *opaque)
+{
+	rtlsdr_frontend_t *lfe = opaque;
+	dab_ensemble_instance_t *mmi = lfe->sdr.mmi;
+
+	if (mmi)
+		dab_epggrab_queue(mmi->mmi_ensemble, obj);
+}
+
+static void rtlsdr_frontend_epg_stop(rtlsdr_frontend_t *lfe)
+{
+	struct sdr_state_t *sdr = &lfe->sdr;
+	sdr_dab_service_instance_t *sds;
+
+	tvh_mutex_lock(&sdr->active_service_mutex);
+	if ((sds = sdr->epg) != NULL) {
+		LIST_REMOVE(sds, service_link);
+		sdr->epg = NULL;
+	}
+	tvh_mutex_unlock(&sdr->active_service_mutex);
+	if (sds)
+		sdr_dab_service_instance_destroy(sds);
+}
+
+/*
+ * Start decoding the EPG component as soon as the FIC signals one.
+ * global_lock is held (monitor timer).
+ */
+static void rtlsdr_frontend_epg_check(rtlsdr_frontend_t *lfe)
+{
+	struct sdr_state_t *sdr = &lfe->sdr;
+	dab_ensemble_t *mm;
+	sdr_dab_service_instance_t *sds = NULL;
+	int subChId, address;
+
+	if (!dab_epggrab_enabled()) {
+		if (sdr->epg)
+			rtlsdr_frontend_epg_stop(lfe);
+		return;
+	}
+	if (sdr->epg || sdr->mmi == NULL || !sdr->mmi->fibProcessorIsSynced)
+		return;
+	mm = sdr->mmi->mmi_ensemble;
+	tvh_mutex_lock(&mm->mm_tables_lock);
+	if (dab_ensemble_find_epg_component(mm, &subChId, &address))
+		sds = sdr_dab_data_instance_create(mm, subChId, address,
+			rtlsdr_frontend_epg_object, lfe);
+	tvh_mutex_unlock(&mm->mm_tables_lock);
+	if (sds == NULL)
+		return;
+	tvhinfo(LS_DABEPG, "%s: receiving EPG (subchannel %d, packet address %d)",
+		mm->mm_nicename, subChId, address);
+	tvh_mutex_lock(&sdr->active_service_mutex);
+	LIST_INSERT_HEAD(&sdr->active_service_instance, sds, service_link);
+	sdr->epg = sds;
+	tvh_mutex_unlock(&sdr->active_service_mutex);
+}
+
 static void
 rtlsdr_frontend_stop_ensemble
 (dab_input_t *mi, dab_ensemble_instance_t *mmi)
@@ -143,7 +207,8 @@ rtlsdr_frontend_stop_ensemble
 		pthread_join(lfe->read_thread, NULL);
 		tvh_pipe_close(&lfe->lfe_control_pipe);
 	}
-	
+
+	rtlsdr_frontend_epg_stop(lfe);
 	sdr_destroy(&lfe->sdr);
 
 	/* Not locked */
@@ -368,6 +433,7 @@ rtlsdr_frontend_monitor(void *aux)
 			rtlsdr_read_thread_fn, lfe, "rtlsdr-front-read");
 
 	} else  {
+		rtlsdr_frontend_epg_check(lfe);
 		lfe->lfe_locked = lfe->sdr.mmi->fibProcessorIsSynced;
 		status = lfe->sdr.isSynced ? SIGNAL_GOOD : SIGNAL_NONE;
 

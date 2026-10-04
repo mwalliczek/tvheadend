@@ -288,6 +288,58 @@ START_TEST(oversizedFigTest) {
     ck_assert_int_eq(dei->mmi_ensemble->subChannels[0].inUse, 0);
 } END_TEST
 
+
+/* FIG 0/1, 0/2 (data service with a packet mode component), 0/3 and 0/13 */
+static void epg_service_fib(fib_t *f, int appType) {
+    fib_init(f);
+    fig0_header(f, 1 + 3, 0, 1);        /* subchannel 3: 16 CU */
+    put(f, 6, 3);
+    put(f, 10, 500);
+    put(f, 1, 0);
+    put(f, 1, 0);
+    put(f, 6, 0);
+    fig0_header(f, 1 + 4 + 1 + 2, 1, 2); /* data service E0123456, one packet component */
+    put(f, 32, 0xE0123456);
+    put(f, 1, 0);
+    put(f, 3, 0);
+    put(f, 4, 1);
+    put(f, 2, 3);                       /* TMid: packet data */
+    put(f, 12, 5);                      /* SCId */
+    put(f, 1, 1);                       /* primary */
+    put(f, 1, 0);
+    fig0_header(f, 1 + 5, 0, 3);        /* SCId 5 -> subchannel 3, address 1, MOT */
+    put(f, 12, 5);
+    put(f, 3, 0);
+    put(f, 1, 0);                       /* no CAOrg */
+    put(f, 1, 0);                       /* DG flag */
+    put(f, 1, 0);
+    put(f, 6, 60);                      /* DSCTy: MOT */
+    put(f, 6, 3);
+    put(f, 10, 1);
+    fig0_header(f, 1 + 4 + 1 + 2, 1, 13); /* user application of E0123456 */
+    put(f, 32, 0xE0123456);
+    put(f, 4, 0);                       /* SCIdS */
+    put(f, 4, 1);                       /* one application */
+    put(f, 11, appType);
+    put(f, 5, 0);
+}
+
+START_TEST(epgComponentTest) {
+    fib_t f;
+    int subch = -1, address = -1;
+
+    epg_service_fib(&f, 2);             /* MOT slideshow: not an EPG */
+    process(&f);
+    ck_assert_int_eq(dab_ensemble_find_epg_component(dei->mmi_ensemble, &subch, &address), 0);
+
+    epg_service_fib(&f, 7);             /* SPI / EPG */
+    process(&f);
+    ck_assert_int_eq(dab_ensemble_find_epg_component(dei->mmi_ensemble, &subch, &address), 1);
+    ck_assert_int_eq(subch, 3);
+    ck_assert_int_eq(address, 1);
+    ck_assert_int_eq(dei->mmi_ensemble->subChannels[3].BitRate, 32);
+} END_TEST
+
 static Suite *fib_processor_suite(void) {
     Suite *s = suite_create("fib-processor");
     TCase *tc_core = tcase_create("Core");
@@ -301,6 +353,7 @@ static Suite *fib_processor_suite(void) {
     tcase_add_test(tc_core, programTypeTest);
     tcase_add_test(tc_core, fecSchemeTest);
     tcase_add_test(tc_core, oversizedFigTest);
+    tcase_add_test(tc_core, epgComponentTest);
     suite_add_tcase(s, tc_core);
     return s;
 }

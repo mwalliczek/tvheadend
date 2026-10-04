@@ -33,6 +33,7 @@
 /* MOT header parameters */
 #define MOT_PARAM_CONTENT_NAME      0x0C
 #define MOT_PARAM_COMPRESSION_TYPE  0x11
+#define MOT_PARAM_EPG_SCOPE_ID      0x27
 
 typedef struct mot_segbuf {
   uint8_t   **seg;
@@ -188,6 +189,8 @@ typedef struct mot_header {
   int       content_subtype;
   char     *name;
   int       compression;
+  uint8_t   scope_id[8];
+  size_t    scope_id_len;
 } mot_header_t;
 
 /* parse core header + parameters, returns header size or -1 */
@@ -233,6 +236,10 @@ static int mot_header_parse(const uint8_t *h, size_t len, mot_header_t *mh)
                                       (CharacterSet)(h[i + hl] >> 4), dlen - 1);
     else if (id == MOT_PARAM_COMPRESSION_TYPE && dlen == 1)
       mh->compression = h[i + hl];
+    else if (id == MOT_PARAM_EPG_SCOPE_ID && dlen <= sizeof(mh->scope_id)) {
+      memcpy(mh->scope_id, &h[i + hl], dlen);
+      mh->scope_id_len = dlen;
+    }
     i += hl + dlen;
   }
   return mh->header_size;
@@ -377,6 +384,8 @@ static void entry_try_deliver(dab_mot_decoder_t *dec, mot_entry_t *e)
   obj.content_type = mh.content_type;
   obj.content_subtype = mh.content_subtype;
   obj.name = mh.name;
+  memcpy(obj.scope_id, mh.scope_id, sizeof(obj.scope_id));
+  obj.scope_id_len = mh.scope_id_len;
   obj.body = e->pending;
   obj.body_len = e->pending_len;
   if (mh.compression == 1 ||

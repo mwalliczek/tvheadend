@@ -7,6 +7,7 @@ CFLAGS += -g -DENABLE_TRACE=1
 CFLAGS  += -Wall -Wwrite-strings -Wno-deprecated-declarations
 CFLAGS  += -Wmissing-prototypes
 CFLAGS  += -fms-extensions -funsigned-char -fno-strict-aliasing -fcommon
+CFLAGS  += -MMD -MP
 
 LIBS += -lcheck_pic  -pthread  -lrt -lm -lsubunit
 
@@ -29,7 +30,7 @@ TESTS = viterbiTest ficHandlerTest mp4processorTest firecheckTest protectionTest
 .PHONY: tests clean
 
 clean:
-		rm -f tests/*.o tests/*.xml $(addprefix tests/,$(TESTS)) tests/viterbiTest-neu
+		rm -f tests/*.o tests/*.d tests/*.xml $(addprefix tests/,$(TESTS)) tests/viterbiTest-neu
 
 tests:		$(addprefix tests/,$(TESTS))
 		@failed=""; for t in $(TESTS); do \
@@ -103,8 +104,9 @@ tests/fib-processorTest:	tests/fib-processorTest.o tests/fib-processor.o tests/d
 tests/sdr_dab_service_instance_Test:	tests/sdr_dab_service_instance_Test.o tests/sdr_dab_service_instance.o \
 			tests/mscHandler.o tests/eep_protection.o tests/uep_protection.o $(PROTECTION) \
 			tests/utilities.o tests/mp4processor.o tests/firecheck.o tests/reed-solomon.o \
-			tests/services.o tests/packet.o tests/streaming.o tests/tvh_thread.o
-		gcc $(CFLAGS) $^ $(LIBS) -o $@
+			tests/services.o tests/packet.o tests/streaming.o tests/tvh_thread.o \
+			tests/dab_mot.o tests/charsets.o
+		gcc $(CFLAGS) $^ $(LIBS) -lz -o $@
 
 tests/input_sdrTest:	tests/input_sdrTest.o $(SDR_INPUT) tests/utilities.o tests/fib-processorMock.o
 		gcc $(CFLAGS) $^ $(LIBS) -lfftw3f -o $@
@@ -118,3 +120,5 @@ tests/dab_motTest:	tests/dab_motTest.o tests/dab_mot.o tests/charsets.o tests/ut
 
 tests/dab_epgTest:	tests/dab_epgTest.o tests/dab_epg.o
 		gcc $(CFLAGS) $^ $(LIBS) -o $@
+
+-include $(wildcard tests/*.d)

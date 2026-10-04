@@ -67,3 +67,4 @@ tests/*_Test
 tests/*TestResult.xml
 tests/input/dab/rtlsdr/rtlsdr_raw
 configure.log
+tests/*.d

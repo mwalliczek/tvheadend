@@ -48,6 +48,8 @@ typedef struct dab_mot_object {
   int             content_type;
   int             content_subtype;
   char           *name;           /* ContentName as UTF-8, may be NULL */
+  uint8_t         scope_id[8];    /* EPG ScopeId parameter (a content id) */
+  size_t          scope_id_len;
   const uint8_t  *body;           /* uncompressed body */
   size_t          body_len;
 } dab_mot_object_t;

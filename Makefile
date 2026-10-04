@@ -449,6 +449,9 @@ SRCS-RTLSDR = \
     src/input/dab/fib-processor.c \
     src/input/dab/mp4processor.c \
     src/input/dab/charsets.c \
+    src/input/dab/dab_mot.c \
+    src/input/dab/dab_epg.c \
+    src/epggrab/module/dab.c \
     src/input/dab/rtlsdr/sdr_dab_basic_demodulation.c \
     src/input/dab/rtlsdr/reed-solomon.c \
     src/input/dab/rtlsdr/firecheck.c \
