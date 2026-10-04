@@ -1160,23 +1160,25 @@ function accessUpdate(o) {
 
         cp.add(dvbin);
 
-        /* DAB inputs, networks, muxes, services */
-        var dabin = new Ext.TabPanel({
-            tabIndex: 3,
-            activeTab: 0,
-            autoScroll: true,
-            title: _('DAB Inputs'),
-            iconCls: 'hardware',
-            items: []
-        });
+        /* DAB inputs, networks, muxes, services (built with rtl-sdr) */
+        if (tvheadend.capabilities.indexOf('dab') !== -1) {
+            var dabin = new Ext.TabPanel({
+                tabIndex: 3,
+                activeTab: 0,
+                autoScroll: true,
+                title: _('DAB Inputs'),
+                iconCls: 'hardware',
+                items: []
+            });
 
-        if (tvheadend.capabilities.indexOf('tvadapters') !== -1)
-            tvheadend.tvadapters(dabin);
-        tvheadend.dab.networks(dabin);
-        tvheadend.dab.muxes(dabin);
-        tvheadend.dab.services(dabin);
+            if (tvheadend.capabilities.indexOf('tvadapters') !== -1)
+                tvheadend.tvadapters(dabin);
+            tvheadend.dab.networks(dabin);
+            tvheadend.dab.muxes(dabin);
+            tvheadend.dab.services(dabin);
 
-        cp.add(dabin);
+            cp.add(dabin);
+        }
 
         /* Channel / EPG */
         var chepg = new Ext.TabPanel({
