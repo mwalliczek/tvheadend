@@ -161,7 +161,7 @@ PROP_DOC(network_discovery)
 const idclass_t dab_network_class =
 {
   .ic_class      = "dab_network",
-  .ic_caption    = N_("DAB Network 2"),
+  .ic_caption    = N_("DAB Network"),
   .ic_doc        = tvh_doc_dab_network_class,
   .ic_event      = "dab_network",
   .ic_perm_def   = ACCESS_ADMIN,

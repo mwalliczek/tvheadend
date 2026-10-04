@@ -60,6 +60,11 @@ First you need to configure:
 If build dependencies are missing the configure script will complain or attempt
 to disable optional features.
 
+DAB+ radio reception with RTL-SDR sticks is built when the development files of
+librtlsdr and FFTW3 are installed (e.g. `librtlsdr-dev libfftw3-dev` on
+Debian/Ubuntu, `rtl-sdr-devel fftw-devel` on Fedora). Use `--enable-rtlsdr` to
+make them mandatory or `--disable-rtlsdr` to build without DAB+ support.
+
 To build the binary:
 
 	$ make

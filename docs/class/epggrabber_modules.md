@@ -14,6 +14,7 @@ there are a variety of specific grabber implementations.
 Type                                          | Description
 ----------------------------------------------|----------------------------
 [Over-the-air (OTA)](class/epggrab_mod_ota)   | This type of grabber pulls EPG data directly from the broadcast signal.
+[DAB SPI](dabinputs#program-guide-epg-)       | This type of grabber decodes the DAB service and programme information (ETSI TS 102 371) while a DAB ensemble is tuned. Only available when built with RTL-SDR support.
 [Internal XMLTV](class/epggrab_mod_int_xmltv) | This type of grabber executes an internal (local) [XMLTV](http://xmltv.org) grabber script & parses the output.
 [External XMLTV](class/epggrab_mod_ext_xmltv) | This type of grabber reads EPG data from a socket pushed to it using an [XMLTV](http://xmltv.org) grabber script.
 [Internal PyEPG](class/epggrab_mod_int_pyepg) | This type of grabber executes an internal (local) [PyEPG](https://github.com/adamsutton/PyEPG) grabber script & parses the output. This isn't widely used!
@@ -29,7 +30,7 @@ Type                                          | Description
 
 ## Notes
 
-Only OTA EIT and PSIP (ATSC) grabbers are enabled by default. If 
+Only OTA EIT, PSIP (ATSC) and DAB SPI grabbers are enabled by default. If 
 you're missing EPG data, make sure to enable the correct grabber(s) 
 for your location/provider. If you use more than one grabber, be sure 
 to give a higher priority to the grabber that provides you with richer data.
