@@ -269,6 +269,7 @@ rtlsdr_done(void)
 	rtlsdr_adapter_t *la;
 	tvh_hardware_t *th, *n;
 
+	tvh_mutex_lock(&global_lock);
 	for (th = LIST_FIRST(&tvh_hardware); th != NULL; th = n) {
 		n = LIST_NEXT(th, th_link);
 		if (idnode_is_instance(&th->th_id, &rtlsdr_adapter_class)) {
@@ -276,4 +277,5 @@ rtlsdr_done(void)
 			rtlsdr_adapter_del(la->dev_index);
 		}
 	}
+	tvh_mutex_unlock(&global_lock);
 }

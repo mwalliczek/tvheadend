@@ -700,8 +700,13 @@ rtlsdr_frontend_save(rtlsdr_frontend_t *lfe, htsmsg_t *fe)
 void
 rtlsdr_frontend_destroy(rtlsdr_frontend_t *lfe)
 {
+	lock_assert(&global_lock);
+
 	/* Ensure we're stopped */
 	dab_input_stop_all((dab_input_t*)lfe);
+
+	/* Stop monitor */
+	mtimer_disarm(&lfe->lfe_monitor_timer);
 
 	/* Close FDs */
 	if (lfe->dev != NULL)

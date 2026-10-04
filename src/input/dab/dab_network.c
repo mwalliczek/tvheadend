@@ -581,10 +581,23 @@ void dab_network_init ( void )
   htsmsg_destroy(c);
 }
 
+void
+dab_network_class_delete(const idclass_t *idc, int delconf)
+{
+  dab_network_t *mn, *n;
+
+  for (mn = LIST_FIRST(&dab_network_all); mn != NULL; mn = n) {
+    n = LIST_NEXT(mn, mn_global_link);
+    if (mn->mn_id.in_class == idc)
+      mn->mn_delete(mn, delconf);
+  }
+}
+
 void dab_network_done ( void )
 {
   tvh_mutex_lock(&global_lock);
-  mpegts_network_unregister_builder(&dab_network_class);
-  mpegts_network_class_delete(&dab_network_class, 0);
+  /* the DAB networks are not in the mpegts lists */
+  dab_network_unregister_builder(&dab_network_class);
+  dab_network_class_delete(&dab_network_class, 0);
   tvh_mutex_unlock(&global_lock);
 }
