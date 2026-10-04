@@ -306,7 +306,9 @@ static void AddBits (int data_new, size_t count, size_t *byte_bits, uint8_t **ou
 }
 
 static void	AddBytes (const uint8_t *data, size_t len, size_t *byte_bits, uint8_t **output) {
-	for(size_t i = 0; i < len; i++)
+	size_t i;
+
+	for(i = 0; i < len; i++)
 	   AddBits (data[i], 8, byte_bits, output);
 }
 
@@ -316,6 +318,7 @@ int16_t	mp4Processor_writeFrame(int16_t framelen,
     
     size_t byte_bits = 0;
     uint8_t *pointer = output;
+    int i;
     
     memcpy(pointer, "\x56\xE0\x00\x20\x00", 5);
     pointer += 5-1;
@@ -357,7 +360,7 @@ int16_t	mp4Processor_writeFrame(int16_t framelen,
 	AddBits (   0, 1, &byte_bits, &pointer);	// crcCheckPresent
 
 //	PayloadLengthInfo()
-	for (int i = 0; i < framelen / 255; i++)
+	for (i = 0; i < framelen / 255; i++)
 	   AddBits (0xFF, 8, &byte_bits, &pointer);
 	AddBits (framelen % 255, 8, &byte_bits, &pointer);
 	tvhtrace(LS_RTLSDR, "mp4 byte_bits %zu", byte_bits);
