@@ -24,6 +24,8 @@
 #error "Use header file input.h not input/dab.h"
 #endif
 
+#include "input/dab/dab_scan.h"
+
 /* Types */
 typedef struct dab_network       dab_network_t;
 typedef struct dab_service       dab_service_t;
@@ -120,6 +122,7 @@ struct dab_network
   int      mn_enabled;
   int      mn_autodiscovery;
   int      mn_skipinitscan;
+  int      mn_bandiii;      ///< create the Band III channels for a new network
   int      mn_idlescan;
   int      mn_localtime;
 };
@@ -206,6 +209,7 @@ struct dab_ensemble
         int                      mm_scan_weight;  ///< Scan priority
         int                      mm_scan_flags;   ///< Subscription flags
         int                      mm_scan_init;    ///< Flag to timeout handler
+        dab_scan_state_t         mm_scan_progress; ///< Scan progress (dab_scan_tick)
         mtimer_t                 mm_scan_timeout; ///< Timer to handle timeout
         TAILQ_ENTRY(dab_ensemble)  mm_scan_link;    ///< Link to Queue
         mpegts_mux_scan_state_t  mm_scan_state;   ///< Scanning state

@@ -405,7 +405,11 @@ const idclass_t dab_ensemble_class =
 static void
 dab_ensemble_display_name ( dab_ensemble_t *mm, char *buf, size_t len )
 {
-  snprintf(buf, len, "%dKHz", mm->mm_freq / 1000);
+  const char *ch = dab_band3_channel_name(mm->mm_freq);
+  if (ch)
+    snprintf(buf, len, "%s (%dKHz)", ch, mm->mm_freq / 1000);
+  else
+    snprintf(buf, len, "%dKHz", mm->mm_freq / 1000);
 }
 
 void
@@ -569,18 +573,15 @@ static void
 dab_ensemble_scan_active
   ( dab_ensemble_t *mm, const char *buf, dab_input_t *mi )
 {
-  int t;
 
   /* Setup scan */
   if (mm->mm_scan_state == MM_SCAN_STATE_PEND ||
       mm->mm_scan_state == MM_SCAN_STATE_IPEND) {
     dab_network_scan_ensemble_active(mm);
 
-    /* Get timeout */
-    t = dab_input_grace(mi, mm);
-  
-    /* Setup timeout */
-    mtimer_arm_rel(&mm->mm_scan_timeout, dab_ensemble_scan_timeout, mm, sec2mono(t));
+    /* Evaluate the progress every second, see dab_scan_tick */
+    memset(&mm->mm_scan_progress, 0, sizeof(mm->mm_scan_progress));
+    mtimer_arm_rel(&mm->mm_scan_timeout, dab_ensemble_scan_timeout, mm, sec2mono(1));
   }
 }
 
@@ -817,41 +818,43 @@ dab_ensemble_scan_service_check ( dab_ensemble_t *mm )
   }
 }
 
+/* services with name and sub-channel (complete) or only with a name */
+static void
+dab_ensemble_scan_count ( dab_ensemble_t *mm, int *complete, int *incomplete )
+{
+  dab_service_t *ms;
+
+  *complete = *incomplete = 0;
+  LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link) {
+    if (!ms->s_dab_svcname)
+      continue;           /* data services, programme type only, ... */
+    if (ms->s_verified)
+      (*complete)++;
+    else
+      (*incomplete)++;
+  }
+}
+
 void
 dab_ensemble_scan_done ( dab_ensemble_t *mm, const char *buf, int res )
 {
-  int complete = 0;
-  int incomplete = 0;
-  dab_service_t *ms;
+  int complete, incomplete;
 
   assert(mm->mm_scan_state == MM_SCAN_STATE_ACTIVE);
 
-  /* Log */
-  tvh_mutex_lock(&mm->mm_tables_lock);
-  LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link)
-    if (ms->s_dab_svcname && ms->subChId) {
-      complete++;
-    } else {
-      incomplete++;
-    }
-  
-  tvh_mutex_unlock(&mm->mm_tables_lock);
-
-  /* override if all tables were found */
-  if (res < 0 && incomplete <= 0 && complete > 2)
-    res = 1;
+  dab_ensemble_scan_count(mm, &complete, &incomplete);
 
   if (res < 0) {
-    /* is threshold 3 missing tables enough? */
-    if (incomplete > 0 && complete > 0 && incomplete <= 3) {
-      tvhinfo(LS_RTLSDR, "%s - scan complete (partial - %d/%d tables)", buf, complete, incomplete);
+    if (complete > 0) {
+      tvhinfo(LS_RTLSDR, "%s - scan complete (partial - %d services, %d without subchannel)",
+              buf, complete, incomplete);
       dab_network_scan_ensemble_partial(mm);
     } else {
-      tvhwarn(LS_RTLSDR, "%s - scan timed out (%d/%d tables)", buf, complete, incomplete);
+      tvhwarn(LS_RTLSDR, "%s - scan timed out (%d services without subchannel)", buf, incomplete);
       dab_network_scan_ensemble_fail(mm);
     }
   } else if (res) {
-    tvhinfo(LS_RTLSDR, "%s scan complete", buf);
+    tvhinfo(LS_RTLSDR, "%s - scan complete (%d services)", buf, complete);
     dab_network_scan_ensemble_done(mm);
     dab_ensemble_scan_service_check(mm);
   } else {
@@ -860,44 +863,31 @@ dab_ensemble_scan_done ( dab_ensemble_t *mm, const char *buf, int res )
   }
 }
 
+/* once per second while scanning */
 static void
 dab_ensemble_scan_timeout ( void *aux )
 {
-  int complete = 0;
-  int incomplete = 0;
-  dab_service_t *ms;
   dab_ensemble_t *mm = aux;
+  int complete, incomplete, synced;
 
-  /* Timeout */
-  if (mm->mm_scan_init) {
-    dab_ensemble_scan_done(mm, mm->mm_nicename, -1);
+  if (mm->mm_scan_state != MM_SCAN_STATE_ACTIVE)
     return;
-  }
-  mm->mm_scan_init = 1;
-  
-  /* Check tables */
-  tvh_mutex_lock(&mm->mm_tables_lock);
-  LIST_FOREACH(ms, &mm->mm_services, s_dab_ensemble_link)
-    if (ms->s_dab_svcname && ms->subChId) {
-      complete++;
-    } else {
-      incomplete++;
-    }
-  tvh_mutex_unlock(&mm->mm_tables_lock);
-      
-  /* No DATA - give up now */
-  if ((complete + incomplete) == 0) {
-    dab_ensemble_scan_done(mm, mm->mm_nicename, 0);
+  dab_ensemble_scan_count(mm, &complete, &incomplete);
+  synced = mm->mm_active && mm->mm_active->fibProcessorIsSynced;
 
-  /* Pending tables (another 20s or 30s - bit arbitrary) */
-  } else if (incomplete > 0) {
-    tvhtrace(LS_RTLSDR, "%s - scan needs more time", mm->mm_nicename);
-    mtimer_arm_rel(&mm->mm_scan_timeout, dab_ensemble_scan_timeout, mm, sec2mono(30));
-    return;
-
-  /* Complete */
-  } else {
+  switch (dab_scan_tick(&mm->mm_scan_progress, synced, complete, incomplete)) {
+  case DAB_SCAN_CONTINUE:
+    mtimer_arm_rel(&mm->mm_scan_timeout, dab_ensemble_scan_timeout, mm, sec2mono(1));
+    break;
+  case DAB_SCAN_COMPLETE:
     dab_ensemble_scan_done(mm, mm->mm_nicename, 1);
+    break;
+  case DAB_SCAN_PARTIAL:
+    dab_ensemble_scan_done(mm, mm->mm_nicename, -1);
+    break;
+  case DAB_SCAN_NO_DATA:
+    dab_ensemble_scan_done(mm, mm->mm_nicename, 0);
+    break;
   }
 }
 

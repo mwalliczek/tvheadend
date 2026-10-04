@@ -25,7 +25,7 @@ RTLSDR = src/input/dab/rtlsdr
 
 TESTS = viterbiTest ficHandlerTest mp4processorTest firecheckTest protectionTest \
         sdr_dab_service_instance_Test input_sdrTest sdr_dab_basic_demodulationTest \
-        sdr_fifoTest charsetsTest fib-processorTest dab_motTest dab_epgTest
+        sdr_fifoTest charsetsTest fib-processorTest dab_motTest dab_epgTest dab_scanTest
 
 .PHONY: tests clean
 
@@ -122,3 +122,6 @@ tests/dab_epgTest:	tests/dab_epgTest.o tests/dab_epg.o
 		gcc $(CFLAGS) $^ $(LIBS) -o $@
 
 -include $(wildcard tests/*.d)
+
+tests/dab_scanTest:	tests/dab_scanTest.o tests/dab_scan.o
+		gcc $(CFLAGS) $^ $(LIBS) -o $@

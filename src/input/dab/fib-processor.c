@@ -787,7 +787,9 @@ dab_service_t	*s;
 	      Language = getBits_8 (d, offset + 24);
 	   type	= getBits_5 (d, offset + (L_flag ? 35 : 27));
 	   if (!tvh_mutex_trylock(&global_lock)) {
-		   s	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
+		   /* annotate known services only, do not create services
+		      which are only mentioned in FIG 0/17 */
+		   s	= dab_service_find(dei->mmi_ensemble, SId, 0, 0);
 		   if (s != NULL) {
 		      if (L_flag) {
 		         s -> language = Language;

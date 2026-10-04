@@ -198,6 +198,18 @@ const idclass_t dab_network_class =
     },
     {
       .type     = PT_BOOL,
+      .id       = "bandiii",
+      .name     = N_("Scan all Band III channels"),
+      .desc     = N_("Create the ensembles for the DAB Band III channels "
+                     "5A - 13F when the network is created, so that all "
+                     "stations are found by the initial scan. Channels "
+                     "without signal are marked as failed."),
+      .off      = offsetof(dab_network_t, mn_bandiii),
+      .opts     = PO_ADVANCED,
+      .def.i    = 1
+    },
+    {
+      .type     = PT_BOOL,
       .id       = "skipinitscan",
       .name     = N_("Skip startup scan"),
       .desc     = N_("Skip scanning known muxes when Tvheadend starts. "
@@ -329,7 +341,8 @@ static dab_ensemble_t *
 dab_network_ensemble_create2
   ( dab_network_t *mn, htsmsg_t *conf )
 {
-  return dab_ensemble_create1(NULL, mn, 0, conf);
+  /* post create: queue the initial scan of the new ensemble */
+  return dab_ensemble_post_create(dab_ensemble_create1(NULL, mn, 0, conf));
 }
 
 void
@@ -525,6 +538,7 @@ dab_network_create0
   /* Defaults */
   mn->mn_enabled = 1;
   mn->mn_skipinitscan = 1;
+  mn->mn_bandiii = 1;
   mn->mn_autodiscovery = MN_DISCOVERY_NEW;
 
   /* Load config */
@@ -554,10 +568,35 @@ dab_network_create0
   return mn;
 }
 
+/* a new network: add the Band III channels, they get an initial scan */
+static void
+dab_network_create_bandiii ( dab_network_t *mn )
+{
+  dab_ensemble_t *mm;
+  htsmsg_t *conf;
+  int i;
+
+  if (!mn->mn_bandiii || LIST_FIRST(&mn->mn_ensembles))
+    return;
+  for (i = 0; i < dab_band3_channel_count; i++) {
+    conf = htsmsg_create_map();
+    htsmsg_add_u32(conf, "frequency", dab_band3_channels[i].freq);
+    mm = dab_ensemble_create1(NULL, mn, 0, conf);
+    htsmsg_destroy(conf);
+    if (mm) {
+      dab_ensemble_post_create(mm);
+      idnode_changed(&mm->mm_id);
+    }
+  }
+}
+
 static dab_network_t *
 dab_network_builder( const idclass_t *idc, htsmsg_t *conf )
 {
-  return (dab_network_t*)dab_network_create(dab_network, NULL, NULL, conf);
+  dab_network_t *mn = (dab_network_t*)dab_network_create(dab_network, NULL, NULL, conf);
+  if (mn)
+    dab_network_create_bandiii(mn);
+  return mn;
 }
 
 void dab_network_init ( void )

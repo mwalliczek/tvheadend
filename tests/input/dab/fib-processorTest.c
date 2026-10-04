@@ -222,6 +222,16 @@ START_TEST(programTypeTest) {
     fib_t f;
     dab_service_t *s1, *s2;
 
+    /* FIG 0/17 only annotates known services */
+    fib_init(&f);
+    fig0_header(&f, 1 + 4, 0, 17);
+    put(&f, 16, 0xD003);
+    put(&f, 16, 0x0000);
+    process(&f);
+    ck_assert_ptr_eq(dab_service_find(dei->mmi_ensemble, 0xD003, 0, NULL), NULL);
+    dab_service_find(dei->mmi_ensemble, 0xD001, 1, NULL);
+    dab_service_find(dei->mmi_ensemble, 0xD002, 1, NULL);
+
     fib_init(&f);
     fig0_header(&f, 1 + 5 + 4, 0, 17);
     put(&f, 16, 0xD001);    /* first entry with language */
