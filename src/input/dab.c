@@ -18,6 +18,8 @@
 
 #include "input.h"
 
+struct dab_listener_list dab_listeners;
+
 void dab_init(void) {
   /* Register classes (avoid API 400 errors due to not yet defined) */
   idclass_register(&dab_network_class);

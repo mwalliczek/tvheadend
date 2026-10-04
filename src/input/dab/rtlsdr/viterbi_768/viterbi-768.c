@@ -65,8 +65,8 @@ static COMPUTETYPE Branchtab[NUMSTATES / 2 * RATE] __attribute__((aligned(16)));
 int	parity(int);
 void	init_viterbi(struct v *, int16_t);
 void	update_viterbi_blk_SPIRAL(struct v *, COMPUTETYPE *,
-	int16_t);
-void	chainback_viterbi(struct v *, int16_t, uint16_t);
+	int32_t);
+void	chainback_viterbi(struct v *, int32_t, uint16_t);
 
 static uint8_t Partab [] = 
 { 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
@@ -124,7 +124,7 @@ int16_t	i, state;
 //	There are (in mode 1) 3 ofdm blocks, giving 4 FIC blocks
 //	There all have a predefined length. In that case we use the
 //	"fast" (i.e. spiral) code, otherwise we use the generic code
-void initViterbi768 (struct v *vp, int16_t wordlength) {
+void initViterbi768 (struct v *vp, int32_t wordlength) {
 #ifdef	__MINGW32__
 uint32_t	size;
 #endif
@@ -222,7 +222,7 @@ uint32_t	i;
 #endif
 
 	init_viterbi (vp, 0);
-	for (i = 0; i < (uint16_t)(vp->frameBits + (VITERBI_K - 1)) * RATE; i ++) {
+	for (i = 0; i < (uint32_t)(vp->frameBits + (VITERBI_K - 1)) * RATE; i ++) {
 	   int16_t temp = input [i] + 127;
 	   if (temp < 0) temp = 0;
 	   if (temp > 255) temp = 255;
@@ -232,7 +232,7 @@ uint32_t	i;
 
 	chainback_viterbi (vp, vp->frameBits, 0);
 
-	for (i = 0; i < (uint16_t)vp->frameBits; i ++)
+	for (i = 0; i < (uint32_t)vp->frameBits; i ++)
 	   output [i] = getbit (vp->data [i >> 3], i & 07);
 	   
 #ifdef TRACE_VITERBI
@@ -263,7 +263,7 @@ void FULL_SPIRAL_no_sse (int,
 
 void	update_viterbi_blk_SPIRAL (struct v *vp,
 					        COMPUTETYPE *syms,
-					        int16_t nbits){
+					        int32_t nbits){
 decision_t *d = (decision_t *)vp -> decisions;
 int32_t s;
 
@@ -286,7 +286,7 @@ int32_t s;
 //
 /* Viterbi chainback */
 void	chainback_viterbi (struct v *vp,
-	                            int16_t nbits, /* Number of data bits */
+	                            int32_t nbits, /* Number of data bits */
 	                            uint16_t endstate){ /*Terminal encoder state */
 decision_t *d = vp -> decisions;
 

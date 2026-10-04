@@ -248,7 +248,9 @@ static void rtlsdr_frontend_open_service(dab_input_t *di, dab_service_t *s, int 
 	dab_input_open_service(di, s, flags, first, weight);
 	if (s->s_type != STYPE_RAW) {
 		sdr_dab_service_instance_t *sds = sdr_dab_service_instance_create(s);
-		
+		if (sds == NULL)
+			return;
+
 		tvh_mutex_lock(&lfe->sdr.active_service_mutex);
 		LIST_INSERT_HEAD(&lfe->sdr.active_service_instance, sds, service_link);
 		tvh_mutex_unlock(&lfe->sdr.active_service_mutex);
@@ -286,7 +288,7 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
 	struct sdr_state_t *sdr = &lfe->sdr;
-	tvhtrace(LS_RTLSDR, "callback with %u bytes, count %u", len, sdr->fifo.count);
+	tvhtrace(LS_RTLSDR, "callback with %u bytes, count %u", len, cbCount(&sdr->fifo));
 	if (!ctx) {
 		return;
 	}
@@ -319,7 +321,7 @@ rtlsdr_frontend_monitor(void *aux)
 //	mpegts_mux_t *mm;
 //	service_t *s;
 	uint32_t period = MINMAX(lfe->lfe_status_period, 250, 8000);
-	struct sdr_state_t *sdr;
+	struct sdr_state_t *sdr = &lfe->sdr;
 	signal_state_t status;
 	signal_status_t sigstat;
 	streaming_message_t sm;

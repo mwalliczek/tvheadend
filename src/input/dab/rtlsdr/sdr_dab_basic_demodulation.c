@@ -44,7 +44,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 	/* Read */
 	if (getSamples(lfe, v, T_F / 2, 0) < T_F / 2) {
 		tvherror(LS_RTLSDR, "getSamples failed");
-		return 0;
+		goto out;
 	}
 	tvhtrace(LS_RTLSDR, "started, sLevel: %.6f", sdr->sLevel);
 	while (tvheadend_is_running() && lfe->lfe_dvr_pipe.rd > 0 && lfe->running) {
@@ -55,7 +55,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 			for (i = 0; i < 50; i++) {
 				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], 0) == 0) {
 					tvherror(LS_RTLSDR, "getSamples failed");
-					return 0;
+					goto out;
 				}
 				cLevel += envBuffer[syncBufferIndex];
 				syncBufferIndex++;
@@ -69,7 +69,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 			while (cLevel / 50 > 0.50 * sdr->sLevel) {
 				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], coarseCorrector + fineCorrector) == 0) {
 					tvherror(LS_RTLSDR, "getSamples failed");
-					return 0;
+					goto out;
 				}
 				cLevel += envBuffer[syncBufferIndex] -
 					envBuffer[(syncBufferIndex - 50) & syncBufferMask];
@@ -97,7 +97,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 			while (cLevel / 50 < 0.75 * sdr->sLevel) {
 				if (getSample(lfe, &sample, &envBuffer[syncBufferIndex], coarseCorrector + fineCorrector) == 0) {
 					tvherror(LS_RTLSDR, "getSamples failed");
-					return 0;
+					goto out;
 				}
 				cLevel += envBuffer[syncBufferIndex] -
 					envBuffer[(syncBufferIndex - 50) & syncBufferMask];
@@ -123,7 +123,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 		//      is part of the samples read.
 		if (getSamples(lfe, ofdmBuffer, T_u, coarseCorrector + fineCorrector) < T_u) {
 			tvherror(LS_RTLSDR, "getSamples failed");
-			return 0;
+			goto out;
 		}
 		startIndex = phaseReferenceFindIndex(sdr, ofdmBuffer);
 		if (startIndex < 0) { // no sync, try again
@@ -150,7 +150,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 		if (getSamples(lfe, &ofdmBuffer[ofdmBufferIndex],
 			T_u - ofdmBufferIndex, coarseCorrector + fineCorrector) < T_u - ofdmBufferIndex) {
 			tvherror(LS_RTLSDR, "getSamples failed");
-			return 0;
+			goto out;
 		}
 		processBlock_0(sdr, ofdmBuffer);
 		tvhtrace(LS_RTLSDR, "snr: %.6f", sdr->mmi->tii_stats.snr / 10000.0);
@@ -179,7 +179,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 			ofdmSymbolCount < (uint16_t)L; ofdmSymbolCount++) {
 			if (getSamples(lfe, ofdmBuffer, T_s, coarseCorrector + fineCorrector) < T_s) {
 				tvherror(LS_RTLSDR, "getSamples failed");
-				return 0;
+				goto out;
 			}
 			for (i = (int)T_u; i < (int)T_s; i++) {
 				FreqCorr += ofdmBuffer[i] * conjf(ofdmBuffer[i - T_u]);
@@ -195,7 +195,7 @@ void *rtlsdr_demod_thread_fn(void *arg)
 		//	at the end of the frame, just skip Tnull samples
 		if (getSamples(lfe, ofdmBuffer, T_null, coarseCorrector + fineCorrector) < T_null) {
 			tvherror(LS_RTLSDR, "getSamples failed");
-			return 0;
+			goto out;
 		}
 		if (fineCorrector > carrierDiff / 2) {
 			coarseCorrector += carrierDiff;
@@ -210,8 +210,10 @@ void *rtlsdr_demod_thread_fn(void *arg)
 	
 	tvhtrace(LS_RTLSDR, "rtlsdr_demod_thread_fn end loop");
 
+out:
 	tvhpoll_destroy(sdr->efd);
-	
+	sdr->efd = NULL;
+
 	return 0;
 }
 

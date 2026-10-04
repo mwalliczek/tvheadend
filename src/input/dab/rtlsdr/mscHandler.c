@@ -44,7 +44,8 @@ void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
         tvhtrace(LS_RTLSDR, "checking %s", s->dai_service->s_nicename);
 	int startAddr	= s -> subChannel -> StartAddr;
 	int Length	= s -> subChannel -> Length;
-	if (Length > 0) {
+	if (Length > 0 && startAddr >= 0 &&
+	    startAddr + Length <= numberofblocksperCIF * 2 * K / CUSize) {
             int16_t myBegin [Length * CUSize];
 	    memcpy (myBegin, &sdr->cifVector [startAddr * CUSize],
 	                               Length * CUSize * sizeof (int16_t));

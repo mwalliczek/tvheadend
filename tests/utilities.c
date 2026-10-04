@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "tvheadend.h"
 #include "tvhlog.h"
@@ -36,15 +37,27 @@ void tvhlogv ( const char *file, int line, int severity,
   printf("\n");
 }
 
+/* number of currently held (mocked) locks, lets tests check lock balance */
+int test_mutex_locked;
+/* number of following tvh_mutex_trylock calls failing like a contended lock */
+int test_mutex_trylock_fail;
+
 int tvh__mutex_unlock(tvh_mutex_t *mutex) {
+  test_mutex_locked--;
   return 0;
 }
 
 int tvh__mutex_lock(tvh_mutex_t *mutex, const char *filename, int lineno) {
+  test_mutex_locked++;
   return 0;
 }
 
 int tvh__mutex_trylock(tvh_mutex_t *mutex, const char *filename, int lineno) {
+  if (test_mutex_trylock_fail > 0) {
+    test_mutex_trylock_fail--;
+    return EBUSY;
+  }
+  test_mutex_locked++;
   return 0;
 }
 

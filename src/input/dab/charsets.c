@@ -29,56 +29,118 @@
 #include	<string.h>
 #include	<stdlib.h>
 
-static const char* utf8_encoded_EBU_Latin[] = {
-"\0", "E", "I", "U", "A", "E", "D", "?", "?", "C", "\n","\v","G", "L", "Z", "N",
-"a", "e", "i", "u", "a", "e", "d", "?", "?", "c", "N", "E", "g", "l", "z", "\x82",
-" ", "!", "\"","#", "l", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/",
-"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":", ";", "<", "=", ">", "?",
-"@", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
-"P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "[", "U", "]", "L", "_",
-"A", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o",
-"p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "«", "u", "»", "L", "H",
-"á", "à", "é", "è", "í", "ì", "ó", "ò", "ú", "ù", "Ñ", "Ç", "S", "ß", "¡", "Ÿ",
-"â", "ä", "ê", "ë", "î", "ï", "ô", "ö", "û", "ü", "ñ", "ç", "s", "g", "i", "ÿ",
-"K", "N", "©", "G", "G", "e", "n", "o", "O", "€", "£", "$", "A", "E", "I", "U",
-"k", "n", "L", "g", "l", "I", "n", "u", "U", "¿", "l", "°", "a", "e", "i", "u",
-"Á", "À", "É", "È", "Í", "Ì", "Ó", "Ò", "Ú", "Ù", "R", "C", "Š", "Ž", "Ð", "?",
-"Â", "Ä", "Ê", "Ë", "Î", "Ï", "Ô", "Ö", "Û", "Ü", "r", "c", "š", "ž", "d", "?",
-"Ã", "Å", "Æ", "Œ", "y", "Ý", "Õ", "Ø", "Þ", "?", "R", "C", "S", "Z", "T", "ð",
-"ã", "å", "æ", "œ", "w", "ý", "õ", "ø", "þ", "?", "r", "c", "s", "z", "t", "h"};
+/*
+ * EBU Latin based repertoire (ETSI TS 101 756, Annex C) to UCS-2
+ */
+static const uint16_t ebuLatinToUcs2[256] = {
+/* 0x00 */ 0x0000, 0x0118, 0x012e, 0x0172, 0x0102, 0x0116, 0x010e, 0x0218,
+/* 0x08 */ 0x021a, 0x010a, 0x000a, 0x000b, 0x0120, 0x0139, 0x017b, 0x0143,
+/* 0x10 */ 0x0105, 0x0119, 0x012f, 0x0173, 0x0103, 0x0117, 0x010f, 0x0219,
+/* 0x18 */ 0x021b, 0x010b, 0x0147, 0x011a, 0x0121, 0x013a, 0x017c, 0x0082,
+/* 0x20 */ 0x0020, 0x0021, 0x0022, 0x0023, 0x0142, 0x0025, 0x0026, 0x0027,
+/* 0x28 */ 0x0028, 0x0029, 0x002a, 0x002b, 0x002c, 0x002d, 0x002e, 0x002f,
+/* 0x30 */ 0x0030, 0x0031, 0x0032, 0x0033, 0x0034, 0x0035, 0x0036, 0x0037,
+/* 0x38 */ 0x0038, 0x0039, 0x003a, 0x003b, 0x003c, 0x003d, 0x003e, 0x003f,
+/* 0x40 */ 0x0040, 0x0041, 0x0042, 0x0043, 0x0044, 0x0045, 0x0046, 0x0047,
+/* 0x48 */ 0x0048, 0x0049, 0x004a, 0x004b, 0x004c, 0x004d, 0x004e, 0x004f,
+/* 0x50 */ 0x0050, 0x0051, 0x0052, 0x0053, 0x0054, 0x0055, 0x0056, 0x0057,
+/* 0x58 */ 0x0058, 0x0059, 0x005a, 0x005b, 0x016e, 0x005d, 0x0141, 0x005f,
+/* 0x60 */ 0x0104, 0x0061, 0x0062, 0x0063, 0x0064, 0x0065, 0x0066, 0x0067,
+/* 0x68 */ 0x0068, 0x0069, 0x006a, 0x006b, 0x006c, 0x006d, 0x006e, 0x006f,
+/* 0x70 */ 0x0070, 0x0071, 0x0072, 0x0073, 0x0074, 0x0075, 0x0076, 0x0077,
+/* 0x78 */ 0x0078, 0x0079, 0x007a, 0x00ab, 0x016f, 0x00bb, 0x013d, 0x0126,
+/* 0x80 */ 0x00e1, 0x00e0, 0x00e9, 0x00e8, 0x00ed, 0x00ec, 0x00f3, 0x00f2,
+/* 0x88 */ 0x00fa, 0x00f9, 0x00d1, 0x00c7, 0x015e, 0x00df, 0x00a1, 0x0178,
+/* 0x90 */ 0x00e2, 0x00e4, 0x00ea, 0x00eb, 0x00ee, 0x00ef, 0x00f4, 0x00f6,
+/* 0x98 */ 0x00fb, 0x00fc, 0x00f1, 0x00e7, 0x015f, 0x011f, 0x0131, 0x00ff,
+/* 0xa0 */ 0x0136, 0x0145, 0x00a9, 0x0122, 0x011e, 0x011b, 0x0148, 0x0151,
+/* 0xa8 */ 0x0150, 0x20ac, 0x00a3, 0x0024, 0x0100, 0x0112, 0x012a, 0x016a,
+/* 0xb0 */ 0x0137, 0x0146, 0x013b, 0x0123, 0x013c, 0x0130, 0x0144, 0x0171,
+/* 0xb8 */ 0x0170, 0x00bf, 0x013e, 0x00b0, 0x0101, 0x0113, 0x012b, 0x016b,
+/* 0xc0 */ 0x00c1, 0x00c0, 0x00c9, 0x00c8, 0x00cd, 0x00cc, 0x00d3, 0x00d2,
+/* 0xc8 */ 0x00da, 0x00d9, 0x0158, 0x010c, 0x0160, 0x017d, 0x00d0, 0x013f,
+/* 0xd0 */ 0x00c2, 0x00c4, 0x00ca, 0x00cb, 0x00ce, 0x00cf, 0x00d4, 0x00d6,
+/* 0xd8 */ 0x00db, 0x00dc, 0x0159, 0x010d, 0x0161, 0x017e, 0x0111, 0x0140,
+/* 0xe0 */ 0x00c3, 0x00c5, 0x00c6, 0x0152, 0x0177, 0x00dd, 0x00d5, 0x00d8,
+/* 0xe8 */ 0x00de, 0x014a, 0x0154, 0x0106, 0x015a, 0x0179, 0x0166, 0x00f0,
+/* 0xf0 */ 0x00e3, 0x00e5, 0x00e6, 0x0153, 0x0175, 0x00fd, 0x00f5, 0x00f8,
+/* 0xf8 */ 0x00fe, 0x014b, 0x0155, 0x0107, 0x015b, 0x017a, 0x0167, 0x0127
+};
 
+/* append the UTF-8 encoding of a BMP code point, returns bytes written */
+static size_t put_utf8(char *d, uint16_t c) {
+	if (c < 0x80) {
+	   d[0] = (char)c;
+	   return 1;
+	}
+	if (c < 0x800) {
+	   d[0] = (char)(0xc0 | (c >> 6));
+	   d[1] = (char)(0x80 | (c & 0x3f));
+	   return 2;
+	}
+	d[0] = (char)(0xe0 | (c >> 12));
+	d[1] = (char)(0x80 | ((c >> 6) & 0x3f));
+	d[2] = (char)(0x80 | (c & 0x3f));
+	return 3;
+}
 
+/*
+ * Convert a DAB label (FIG 1, X-PAD, EPG strings) to a newly allocated,
+ * NUL-terminated UTF-8 string. size == -1 means buffer is NUL-terminated,
+ * otherwise at most size bytes are used (stopping at an embedded NUL).
+ * Trailing spaces are removed. The caller has to free the result.
+ */
 char* toStringUsingCharset (const char* buffer,
 	                          CharacterSet charset, int size) {
+const uint8_t *in = (const uint8_t *) buffer;
 char*  s;
-uint16_t length = 0;
-uint16_t i;
+size_t length = 0;
+size_t i, o = 0;
 
-	if (size == -1)
+	if (size < 0)
 	   length = strlen (buffer);
 	else
-	   length = size;
+	   while (length < (size_t) size && (charset == UnicodeUcs2 || in[length] != 0))
+	      length++;
+
+	//	worst case: every input byte becomes a 3 byte UTF-8 sequence
+	s = malloc (length * 3 + 1);
+	if (s == NULL)
+	   return NULL;
 
 	switch (charset) {
-	   case UnicodeUcs2:
-		   s = strdup("\0");
- 	       break;
+	   case UnicodeUcs2:		// big endian UCS-2
+	      for (i = 0; i + 1 < length; i += 2) {
+	         uint16_t c = (in[i] << 8) | in[i + 1];
+	         if (c == 0)
+	            break;
+	         o += put_utf8 (&s[o], c);
+	      }
+	      break;
 
 	   case UnicodeUtf8:
-	   case IsoLatin:
-	   default:
-		   s = strndup(buffer, length);
-	       break;
+	      memcpy (s, in, length);
+	      o = length;
+	      break;
+
+	   case IsoLatin:		// ISO 8859-1
+	      for (i = 0; i < length; i++)
+	         o += put_utf8 (&s[o], in[i]);
+	      break;
 
 	   case EbuLatin:
-		   s = malloc(length * 2);
-		   *s = '\0';
-		   for (i = 0; i < length; i++)
-			   strcat(s, utf8_encoded_EBU_Latin [buffer[i] & 0xff]);
+	   default:
+	      for (i = 0; i < length; i++) {
+	         uint16_t c = ebuLatinToUcs2 [in[i]];
+	         if (c == 0)
+	            break;
+	         o += put_utf8 (&s[o], c);
+	      }
 	      break;
 	}
-	for (i = length-1; s[i] == ' '; i--)
-		s[i] = '\0';
+	while (o > 0 && s[o - 1] == ' ')
+	   o--;
+	s[o] = '\0';
 
 	return s;
 }

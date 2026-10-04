@@ -161,8 +161,12 @@ const uint8_t	*d		= p;
 	while (processedBytes  < 30) {
 	   FIGtype 		= getBits_3 (d, 0);
 	   uint8_t FIGlength    = getBits_5 (d, 3);
-           if ((FIGtype == 0x07) && (FIGlength == 0x3F))
-              return;
+	   //	end marker (0xFF) or padding: nothing more in this FIB
+	   if ((FIGtype == 0x07) && (FIGlength == 0x1F))
+	      break;
+	   //	a FIG must not extend beyond the 30 data bytes of the FIB
+	   if (processedBytes + FIGlength + 1 > 30)
+	      break;
 	   switch (FIGtype) {
 	      case 0:
 	         process_FIG0 (dei, d);	
@@ -702,7 +706,7 @@ int16_t	used	= 2;			// in Bytes
 int16_t	i;
 dab_ensemble_t *mm = dei->mmi_ensemble;
 
-	while (used < Length) {
+	while (used <= Length) {	// entries are one byte long
 	   int16_t SubChId	= getBits_6 (d, used * 8);
 	   uint8_t FEC_scheme	= getBits_2 (d, used * 8 + 6);
 	   used = used + 1;
@@ -727,19 +731,22 @@ dab_service_t	*s;
 	   int	CC_flag	= getBits_1 (d, offset + 19);
 	   int16_t type;
 	   int16_t Language = 0x00;	// init with unknown language
+	   if (L_flag)			// language field present
+	      Language = getBits_8 (d, offset + 24);
+	   type	= getBits_5 (d, offset + (L_flag ? 35 : 27));
 	   if (!tvh_mutex_trylock(&global_lock)) {
 		   s	= dab_service_find(dei->mmi_ensemble, SId, 1, 0);
-		   tvh_mutex_unlock(&global_lock);
-		   if (L_flag) {		// language field present
-		      Language = getBits_8 (d, offset + 24);
-		      s -> language = Language;
-		      s -> hasLanguage = 1;
-		      offset += 8;
+		   if (s != NULL) {
+		      if (L_flag) {
+		         s -> language = Language;
+		         s -> hasLanguage = 1;
+		      }
+		      s	-> programType	= type;
 		   }
-
-		   type	= getBits_5 (d, offset + 27);
-		   s	-> programType	= type;
+		   tvh_mutex_unlock(&global_lock);
 	   }
+	   if (L_flag)
+	      offset += 8;
 	   if (CC_flag)			// cc flag
 	      offset += 40;
 	   else
@@ -833,7 +840,7 @@ int	i;
 	(void)mainId;
 	MS	= getBits_1 (d, used * 8);
 	if (MS == 0) {		// fixed size
-	   return used + 48 / 6;
+	   return used + 48 / 8;
 	}
 
 	//	MS == 1
@@ -904,9 +911,10 @@ char		label [17];
 	         {
 	            char *name = toStringUsingCharset (
 	                                      (const char *) label,
-	                                      (CharacterSet) charSet, 
-										  -1);
+	                                      (CharacterSet) charSet,
+	                                      16);
 	            nameofEnsemble (dei, SId, name);
+	            free (name);
 				tvhinfo(LS_RTLSDR, "FIC in sync");
 		 }
 	      }
@@ -924,10 +932,12 @@ char		label [17];
 			    label [i] = getBits_8 (d, offset + 8 * i);
 			 }
 			 
-			 tvh_str_set(&myIndex->s_dab_svcname, toStringUsingCharset (
+			 char *name = toStringUsingCharset (
 						(const char *) label,
 						(CharacterSet) charSet,
-									-1));
+						16);
+			 tvh_str_set(&myIndex->s_dab_svcname, name);
+			 free (name);
 			 idnode_changed(&myIndex->s_id);
 			 service_refresh_channel((service_t*)myIndex);
 				 
@@ -1100,6 +1110,9 @@ int16_t	firstFree	= -1;
 	      continue;
 	   }
 	}
+
+	if (firstFree == -1)		// no free slot left
+	   return;
 
 	mm->ServiceComps [firstFree]. inUse  = 1;
 	mm->ServiceComps [firstFree]. TMid   = TMid;

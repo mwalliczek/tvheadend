@@ -59,3 +59,9 @@ src/webui/static/intl
 Thumbs.db
 #Folder config file
 Desktop.ini
+# unit tests (Makefile.tests)
+tests/*Test
+tests/*_Test
+tests/*TestResult.xml
+tests/input/dab/rtlsdr/rtlsdr_raw
+configure.log

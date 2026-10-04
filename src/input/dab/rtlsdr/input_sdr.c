@@ -67,7 +67,7 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, in
     uint32_t i;
     const uint8_t *buffer;
     for (i = 0; i < size; i++) {
-        if (sdr->fifo.count < 2) {
+        if (cbCount(&sdr->fifo) < 2) {
             if (!readFromDevice(lfe)) {
                 return i;
             }
@@ -87,7 +87,7 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, in
 uint32_t getSample(rtlsdr_frontend_t *lfe, float _Complex *v, float *abs, int32_t freqOffset) {
     struct sdr_state_t *sdr = &lfe->sdr;
     const uint8_t *buffer;
-    if (sdr->fifo.count < 2 && !readFromDevice(lfe)) {
+    if (cbCount(&sdr->fifo) < 2 && !readFromDevice(lfe)) {
         return 0;
     }
     buffer = cbReadDouble(&(sdr->fifo));

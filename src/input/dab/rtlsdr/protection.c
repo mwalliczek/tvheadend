@@ -56,8 +56,8 @@ protection_t* protection_init(int16_t bitRate) {
 
 void protection_createIndexTable(protection_t* protection, int16_t L1, const int8_t *PI1, int16_t L2, const int8_t *PI2,
     int16_t L3, const int8_t *PI3, int16_t L4, const int8_t *PI4) {
-    int16_t i, j;
-    int16_t viterbiCounter = 0;
+    int32_t i, j;
+    int32_t viterbiCounter = 0;
     const int8_t  *PI_X;
 
     //
@@ -120,8 +120,8 @@ void protection_destroy(protection_t* protection) {
 }
 
 void protection_deconvolve(protection_t *protection, int16_t *v, uint8_t *outBuffer) {
-int16_t	i;
-int16_t	inputCounter	= 0;
+int32_t	i;
+int32_t	inputCounter	= 0;
 
 	memset (protection->viterbiBlock, 0, protection->indexTableSize * sizeof (int16_t)); 
 

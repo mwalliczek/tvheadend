@@ -603,7 +603,7 @@ typedef struct dab_listener
   void (*ml_ensemble_delete) (dab_ensemble_t *mm, void *p);
 } dab_listener_t;
 
-LIST_HEAD(,dab_listener) dab_listeners;
+extern LIST_HEAD(dab_listener_list, dab_listener) dab_listeners;
 
 #define dab_add_listener(ml)\
   LIST_INSERT_HEAD(&dab_listeners, ml, ml_link)

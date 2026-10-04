@@ -40,7 +40,7 @@ int	check_crc_bytes(const uint8_t *msg, int32_t len) {
     uint16_t	genpoly = 0x1021;
 
     for (i = 0; i < len; i++) {
-        int16_t data = msg[i] << 8;
+        uint16_t data = msg[i] << 8;
         for (j = 8; j > 0; j--) {
             if ((data ^ accumulator) & 0x8000)
                 accumulator = ((accumulator << 1) ^ genpoly) & 0xFFFF;
@@ -274,16 +274,6 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
         //	but first the crc check
         if (check_crc_bytes(&mp4processor->outVector[mp4processor->au_start[i]],
             aac_frame_length)) {
-            //
-            //	if there is pad handle it always
-            if (((mp4processor->outVector[mp4processor->au_start[i] + 0] >> 5) & 07) == 4) {
-                int16_t count = mp4processor->outVector[mp4processor->au_start[i] + 1];
-                uint8_t buffer[count];
-                memcpy(buffer, &mp4processor->outVector[mp4processor->au_start[i] + 2], count);
-                //                 uint8_t L0   = buffer [count - 1];
-                //                 uint8_t L1   = buffer [count - 2];
-                //                 my_padHandler. processPAD (buffer, count - 3, L1, L0);
-            }
             uint8_t fileBuffer[1024];
             memset(fileBuffer, 0, 1024);
             int size = mp4Processor_writeFrame(aac_frame_length, &streamParameters, fileBuffer, &mp4processor->outVector[mp4processor->au_start[i]]);
@@ -370,7 +360,7 @@ int16_t	mp4Processor_writeFrame(int16_t framelen,
 	for (int i = 0; i < framelen / 255; i++)
 	   AddBits (0xFF, 8, &byte_bits, &pointer);
 	AddBits (framelen % 255, 8, &byte_bits, &pointer);
-	tvhtrace(LS_RTLSDR, "mp4 byte_bits %d", byte_bits);
+	tvhtrace(LS_RTLSDR, "mp4 byte_bits %zu", byte_bits);
 
 	AddBytes (data, framelen, &byte_bits, &pointer);
 	size_t len = (pointer-output) + 1 - 3;

@@ -64,7 +64,7 @@ struct protectionProfile {
 	{80,	4,	6, 10, 41, 3,	11, 6, 5, 6},
 	{80,	3,	6, 11, 40, 3,	16, 8, 6, 7},
 	{80,	2,	6, 10, 41, 3,	23, 13, 8, 13},
-	{80,	1,	6, 10, 41, 3,	24, 7, 12, 18},
+	{80,	1,	6, 10, 41, 3,	24, 17, 12, 18},
 
 	{96,	5,	7, 9, 53, 3,	5, 4, 2, 4},
 	{96,	4,	7, 10, 52, 3,	9, 6, 4, 6},
@@ -156,7 +156,7 @@ protection_t* uep_protection_init (int16_t bitRate, int16_t protLevel) {
 	PI1	= get_PCodes (profileTable [index]. PI1 -1);
 	PI2	= get_PCodes (profileTable [index]. PI2 -1);
 	PI3	= get_PCodes (profileTable [index]. PI3 -1);
-	if ((profileTable [index]. PI4 - 1) != -1)
+	if (profileTable [index]. PI4 != -1)
 	   PI4	= get_PCodes (profileTable [index]. PI4 -1);
 	else
 	   PI4	= NULL;

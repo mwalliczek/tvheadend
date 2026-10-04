@@ -24,10 +24,16 @@ david.may.muc@googlemail.com
 #include <malloc.h>
 
 
+/*
+ * Single producer (rtlsdr read thread) / single consumer (demodulator)
+ * ring buffer: start is only changed by the consumer, end only by the
+ * producer and count is updated atomically by both.
+ */
 typedef struct 
 {
   uint32_t size;
   uint32_t start;
+  uint32_t end;
   uint32_t count;
   uint8_t *elems;
 } CircularBuffer;
@@ -39,3 +45,7 @@ int cbIsFull(CircularBuffer *cb);
 int cbIsEmpty(CircularBuffer *cb);
 void cbWrite(CircularBuffer *cb, uint8_t *elem, uint32_t size);
 uint8_t * cbReadDouble(CircularBuffer *cb);
+
+static inline uint32_t cbCount(CircularBuffer *cb) {
+  return __atomic_load_n(&cb->count, __ATOMIC_ACQUIRE);
+}

@@ -31,7 +31,12 @@ sdr_dab_service_instance_create(dab_service_t* service)
     res->dai_service = service;
     res->subChannel = &service->s_dab_ensemble->subChannels[service->subChId];
 
-    assert(res->subChannel->BitRate > 0);
+    if (res->subChannel->BitRate <= 0 || res->subChannel->Length <= 0) {
+        tvherror(LS_RTLSDR, "invalid subchannel %d (bitrate %d, length %d)",
+            service->subChId, res->subChannel->BitRate, res->subChannel->Length);
+        free(res);
+        return NULL;
+    }
     res->outV = calloc(24 * res->subChannel->BitRate, sizeof(uint8_t));
 
     res->fragmentSize = res->subChannel->Length * CUSize;
@@ -108,6 +113,12 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
 
 void
 sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int16_t *v) {
+    if (sds->subChannel->Length * CUSize != sds->fragmentSize) {
+        /* the subchannel was reorganized, sizes do not fit anymore */
+        tvhtrace(LS_RTLSDR, "subchannel size changed (%d != %d)",
+            sds->subChannel->Length * CUSize, sds->fragmentSize);
+        return;
+    }
     memcpy(sds->theData[sds->nextIn], v, sds->fragmentSize * sizeof(int16_t));
     processSegment(sds, sds->theData[sds->nextIn]);
     sds->nextIn = (sds->nextIn + 1) % 20;
@@ -137,7 +148,8 @@ void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t result
   sdr_dab_service_instance_t *sds = (sdr_dab_service_instance_t *) context;
   dab_service_t *t = sds->dai_service;
   int sr = aac_sample_rates[sp->CoreSrIndex];
-  int duration = 90000 * 1024 / sr;
+  /* DAB+ uses the 960 sample transform, so one AU covers 960 core samples */
+  int duration = 90000 * 960 / sr;
   int channels;
   switch (sp->mpegSurround) {
   default:
