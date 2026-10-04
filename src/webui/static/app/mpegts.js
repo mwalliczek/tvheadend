@@ -1,11 +1,12 @@
 /*
  * DVB network
  */
+tvheadend.mpegts = {};
 
-tvheadend.networks = function(panel, index)
+tvheadend.mpegts.networks = function(panel, index)
 {
-    if (!tvheadend.network_list) {
-        tvheadend.network_list = new Ext.data.JsonStore({
+    if (!tvheadend.mpegts.network_list) {
+        tvheadend.mpegts.network_list = new Ext.data.JsonStore({
             url: 'api/idnode/load',
             baseParams: { 'class': 'mpegts_network', 'enum': 1 },
             root: 'entries',
@@ -13,7 +14,7 @@ tvheadend.networks = function(panel, index)
             id: 'key',
             autoLoad: true
         });
-        tvheadend.network_builders = new Ext.data.JsonStore({
+        tvheadend.mpegts.network_builders = new Ext.data.JsonStore({
             url: 'api/mpegts/network/builders',
             root: 'entries',
             fields: ['class', 'caption', 'order', 'groups', 'props'],
@@ -22,8 +23,8 @@ tvheadend.networks = function(panel, index)
         });
         tvheadend.comet.on('mpegts_network', function() {
             // TODO: Might be a bit excessive
-            tvheadend.network_builders.reload();
-            tvheadend.network_list.reload();
+            tvheadend.mpegts.network_builders.reload();
+            tvheadend.mpegts.network_list.reload();
         });
     }
 
@@ -72,7 +73,7 @@ tvheadend.networks = function(panel, index)
             titleS: _('Network'),
             select: {
                 label: _('Type'),
-                store: tvheadend.network_builders,
+                store: tvheadend.mpegts.network_builders,
                 fullRecord: true,
                 displayField: 'caption',
                 valueField: 'class'
@@ -90,7 +91,7 @@ tvheadend.networks = function(panel, index)
     });
 };
 
-tvheadend.muxes = function(panel, index)
+tvheadend.mpegts.muxes = function(panel, index)
 {
     tvheadend.idnode_grid(panel, {
         url: 'api/mpegts/mux',
@@ -103,7 +104,7 @@ tvheadend.muxes = function(panel, index)
             titleS: _('Mux'),
             select: {
                 label: _('Network'),
-                store: tvheadend.network_list,
+                store: tvheadend.mpegts.network_list,
                 valueField: 'key',
                 displayField: 'val',
                 clazz: {
@@ -137,7 +138,7 @@ tvheadend.muxes = function(panel, index)
     });
 };
 
-tvheadend.show_service_streams = function(data) {
+tvheadend.mpegts.show_service_streams = function(data) {
     var i, j;
     var html = '';
 
@@ -261,7 +262,7 @@ tvheadend.show_service_streams = function(data) {
     win.show();
 };
 
-tvheadend.services = function(panel, index)
+tvheadend.mpegts.services = function(panel, index)
 {
     function builder(conf) {
         var mapButton = {
@@ -358,7 +359,7 @@ tvheadend.services = function(panel, index)
                             },
                             success: function(r, o) {
                                 var d = Ext.util.JSON.decode(r.responseText);
-                                tvheadend.show_service_streams(d);
+                                tvheadend.mpegts.show_service_streams(d);
                             }
                         });
                     }
@@ -414,7 +415,7 @@ tvheadend.services = function(panel, index)
     });
 };
 
-tvheadend.mux_sched = function(panel, index)
+tvheadend.mpegts.mux_sched = function(panel, index)
 {
     tvheadend.idnode_grid(panel, {
         url: 'api/mpegts/mux_sched',

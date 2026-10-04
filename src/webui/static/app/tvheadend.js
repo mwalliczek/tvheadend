@@ -1109,16 +1109,34 @@ function accessUpdate(o) {
 
         if (tvheadend.capabilities.indexOf('tvadapters') !== -1)
             tvheadend.tvadapters(dvbin);
-        tvheadend.networks(dvbin);
-        tvheadend.muxes(dvbin);
-        tvheadend.services(dvbin);
-        tvheadend.mux_sched(dvbin);
+        tvheadend.mpegts.networks(dvbin);
+        tvheadend.mpegts.muxes(dvbin);
+        tvheadend.mpegts.services(dvbin);
+        tvheadend.mpegts.mux_sched(dvbin);
 
         cp.add(dvbin);
 
+        /* DAB inputs, networks, muxes, services */
+        var dabin = new Ext.TabPanel({
+            tabIndex: 3,
+            activeTab: 0,
+            autoScroll: true,
+            title: _('DAB Inputs'),
+            iconCls: 'hardware',
+            items: []
+        });
+
+        if (tvheadend.capabilities.indexOf('tvadapters') !== -1)
+            tvheadend.tvadapters(dabin);
+        tvheadend.dab.networks(dabin);
+        tvheadend.dab.muxes(dabin);
+        tvheadend.dab.services(dabin);
+
+        cp.add(dabin);
+
         /* Channel / EPG */
         var chepg = new Ext.TabPanel({
-            tabIndex: 3,
+            tabIndex: 4,
             activeTab: 0,
             autoScroll: true,
             title: _('Channel / EPG'),
@@ -1136,7 +1154,7 @@ function accessUpdate(o) {
 
         /* Stream Config */
         var stream = new Ext.TabPanel({
-            tabIndex: 4,
+            tabIndex: 5,
             activeTab: 0,
             autoScroll: true,
             title: _('Stream'),
@@ -1152,7 +1170,7 @@ function accessUpdate(o) {
 
         /* DVR / Timeshift */
         var tsdvr = new Ext.TabPanel({
-            tabIndex: 5,
+            tabIndex: 6,
             activeTab: 0,
             autoScroll: true,
             title: _('Recording'),
@@ -1167,12 +1185,12 @@ function accessUpdate(o) {
 
         /* CAs */
         if (tvheadend.capabilities.indexOf('caclient') !== -1)
-            tvheadend.caclient(cp, 6);
+            tvheadend.caclient(cp, 7);
 
         /* Debug */
         if (o.uilevel == 'advanced' || o.uilevel == 'expert') {
             var dbg = new Ext.TabPanel({
-                tabIndex: 7,
+                tabIndex: 8,
                 activeTab: 0,
                 autoScroll: true,
                 title: _('Debugging'),

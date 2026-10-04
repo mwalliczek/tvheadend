@@ -33,6 +33,8 @@ nbproject
 *.orig
 *.patch
 
+*.o
+
 debian/changelog
 debian/files
 debian/tvheadend
@@ -59,3 +61,10 @@ Thumbs.db
 Desktop.ini
 #macOS files
 .DS_Store
+# unit tests (Makefile.tests)
+tests/*Test
+tests/*_Test
+tests/*TestResult.xml
+tests/input/dab/rtlsdr/rtlsdr_raw
+configure.log
+tests/*.d

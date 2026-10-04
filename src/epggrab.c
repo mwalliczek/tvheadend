@@ -534,6 +534,9 @@ void epggrab_init ( void )
 #if ENABLE_MPEGTS
   eit_init();
   psip_init();
+#if ENABLE_RTLSDR
+  dab_epggrab_init();
+#endif
   opentv_init();
 #endif
   xmltv_init();
@@ -583,6 +586,9 @@ void epggrab_done ( void )
   }
   epggrab_ota_shutdown();
   eit_done();
+#if ENABLE_RTLSDR
+  dab_epggrab_done();
+#endif
   opentv_done();
   xmltv_done();
   free(epggrab_conf.cron);
