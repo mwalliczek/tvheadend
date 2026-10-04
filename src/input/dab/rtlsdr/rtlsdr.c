@@ -212,20 +212,21 @@ void rtlsdr_init() {
 	----------------------------------------------------*/
 	device_count = rtlsdr_get_device_count();
 	if (!device_count) {
+		/* not an error, tvheadend has to work without a DAB stick */
 		tvhinfo(LS_RTLSDR, "No supported devices found.");
-		exit(1);
+		return;
 	}
 
-	tvhinfo(LS_RTLSDR, "Found %d device(s):", device_count);
-	for (i = 0; i < device_count; i++) {
-		rtlsdr_adapter_add(i);
-	}
-	
 	sdr_init_const();
 	initConstPhaseReference();
 	initConstViterbi768();
 	initConstOfdmDecoder();
 	firecheck_init();
+
+	tvhinfo(LS_RTLSDR, "Found %d device(s):", device_count);
+	for (i = 0; i < device_count; i++) {
+		rtlsdr_adapter_add(i);
+	}
 }
 
 static void
