@@ -11,7 +11,8 @@ void *rtlsdr_demod_thread_fn(void *arg)
 	rtlsdr_frontend_t *lfe = arg;
 	struct sdr_state_t *sdr = &lfe->sdr;
 	float		fineCorrector = 0;
-	float		coarseCorrector = 0;
+	/* start with the cached correction of the last reception */
+	float		coarseCorrector = sdr->initialCorrection;
 	float _Complex v[T_F / 2];
 	int32_t		startIndex;
 	int i;
@@ -191,6 +192,9 @@ void *rtlsdr_demod_thread_fn(void *arg)
 		//	we integrate the newly found frequency error with the
 		//	existing frequency error.
 		fineCorrector += 0.1 * cargf(FreqCorr) / M_PI * carrierDiff;
+
+		sdr->currentCorrection = coarseCorrector + fineCorrector;
+		sdr->correctionValid = 1;
 
 		//	at the end of the frame, just skip Tnull samples
 		if (getSamples(lfe, ofdmBuffer, T_null, coarseCorrector + fineCorrector) < T_null) {

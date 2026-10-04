@@ -113,6 +113,12 @@ START_TEST(subchannelShortFormTest) {
     ck_assert_int_eq(sc->Length, 84);
     ck_assert_int_eq(sc->protLevel, 1);
     ck_assert_int_eq(sc->BitRate, 80);
+
+    /* a new organisation has to be saved, a repetition not */
+    ck_assert_int_eq(dei->mmi_ensemble->mm_fic_changed, 1);
+    dei->mmi_ensemble->mm_fic_changed = 0;
+    process_FIB(dei, f.bits, 0);
+    ck_assert_int_eq(dei->mmi_ensemble->mm_fic_changed, 0);
 } END_TEST
 
 START_TEST(subchannelLongFormTest) {

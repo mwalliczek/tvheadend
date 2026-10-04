@@ -293,6 +293,23 @@ const idclass_t dab_ensemble_class =
       .set      = dab_ensemble_class_frequency_set,
     },
     {
+      .type     = PT_INT,
+      .id       = "freq_correction",
+      .name     = N_("Frequency correction (Hz)"),
+      .desc     = N_("The frequency offset found the last time the ensemble "
+                     "was received. It is used as start value for the next "
+                     "tune, so that the reception starts faster."),
+      .off      = offsetof(dab_ensemble_t, mm_freq_corr),
+      .opts     = PO_RDONLY | PO_EXPERT,
+    },
+    {
+      .type     = PT_BOOL,
+      .id       = "freq_correction_known",
+      .name     = N_("Frequency correction known"),
+      .off      = offsetof(dab_ensemble_t, mm_freq_corr_known),
+      .opts     = PO_RDONLY | PO_NOUI,
+    },
+    {
       .type     = PT_STR,
       .id       = "network",
       .name     = N_("Network"),

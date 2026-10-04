@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <math.h>
 
 #include "tvheadend.h"
 #include "input.h"
@@ -46,6 +47,23 @@ const idclass_t rtlsdr_frontend_dab_class =
 	.ic_class = "rtlsdr_frontend_dab",
 	.ic_caption = N_("TV Adapters - RTL SDR DAB Frontend"),
 	.ic_properties = (const property_t[]) {
+		{
+			.type = PT_DBL,
+			.id = "ppm",
+			.name = N_("Frequency error (ppm)"),
+			.desc = N_("Frequency error of the stick, learned while "
+			           "receiving. Used as start value for ensembles "
+			           "without own frequency correction."),
+			.off = offsetof(rtlsdr_frontend_t, lfe_ppm),
+			.opts = PO_RDONLY | PO_EXPERT,
+		},
+		{
+			.type = PT_BOOL,
+			.id = "ppm_known",
+			.name = N_("Frequency error known"),
+			.off = offsetof(rtlsdr_frontend_t, lfe_ppm_known),
+			.opts = PO_RDONLY | PO_NOUI,
+		},
 		{}
 }
 };
@@ -121,6 +139,47 @@ rtlsdr_frontend_is_enabled
 	if (lfe->lfe_in_setup)
 		return MI_IS_ENABLED_RETRY;
 	return MI_IS_ENABLED_OK;
+}
+
+/* **************************************************************************
+* Reception cache
+* *************************************************************************/
+
+/*
+ * Remember the frequency correction (per ensemble and as ppm of the stick)
+ * and FIC changes once the FIC is decoded. global_lock is held.
+ */
+static void rtlsdr_frontend_cache_update(rtlsdr_frontend_t *lfe)
+{
+	struct sdr_state_t *sdr = &lfe->sdr;
+	dab_ensemble_t *mm;
+	float corr;
+	double ppm;
+
+	if (sdr->mmi == NULL || !sdr->mmi->fibProcessorIsSynced)
+		return;
+	mm = sdr->mmi->mmi_ensemble;
+
+	if (mm->mm_fic_changed) {
+		mm->mm_fic_changed = 0;
+		idnode_changed(&mm->mm_id);
+	}
+
+	if (!sdr->correctionValid || mm->mm_freq == 0)
+		return;
+	corr = sdr->currentCorrection;
+	if (dab_freq_correction_changed(mm->mm_freq_corr_known, mm->mm_freq_corr, corr)) {
+		tvhdebug(LS_RTLSDR, "%s - frequency correction %.0f Hz", mm->mm_nicename, corr);
+		mm->mm_freq_corr = lrintf(corr);
+		mm->mm_freq_corr_known = 1;
+		idnode_changed(&mm->mm_id);
+	}
+	ppm = corr * 1e6 / mm->mm_freq;
+	if (!lfe->lfe_ppm_known || fabs(ppm - lfe->lfe_ppm) >= 0.5) {
+		lfe->lfe_ppm = ppm;
+		lfe->lfe_ppm_known = 1;
+		rtlsdr_adapter_changed(lfe->lfe_adapter);
+	}
 }
 
 /* **************************************************************************
@@ -434,6 +493,7 @@ rtlsdr_frontend_monitor(void *aux)
 
 	} else  {
 		rtlsdr_frontend_epg_check(lfe);
+		rtlsdr_frontend_cache_update(lfe);
 		lfe->lfe_locked = lfe->sdr.mmi->fibProcessorIsSynced;
 		status = lfe->sdr.isSynced ? SIGNAL_GOOD : SIGNAL_NONE;
 
@@ -490,6 +550,13 @@ rtlsdr_frontend_clear
   sdr->mmi = mmi;
   sdr_init(sdr);
 
+  /* fast start: the frequency correction of the last reception */
+  sdr->initialCorrection = dab_freq_correction_initial(
+    mmi->mmi_ensemble->mm_freq_corr_known, mmi->mmi_ensemble->mm_freq_corr,
+    lfe->lfe_ppm_known, lfe->lfe_ppm, mmi->mmi_ensemble->mm_freq);
+  tvhdebug(LS_RTLSDR, "%s - start with frequency correction %.0f Hz",
+           mmi->mmi_ensemble->mm_nicename, sdr->initialCorrection);
+
   return 0;
 }
 
@@ -503,10 +570,9 @@ rtlsdr_frontend_tune0
 	r = rtlsdr_frontend_clear(lfe, mmi);
 	if (r) return r;
 
-	if (freq != (uint32_t)-1)
-		lfe->lfe_freq = freq;
-	else
+	if (freq == (uint32_t)-1)
 		freq = lm->mm_freq;
+	lfe->lfe_freq = freq;
 
 	if (tvhtrace_enabled()) {
 //		char buf2[256];

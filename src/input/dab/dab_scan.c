@@ -18,6 +18,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dab_scan.h"
 
@@ -77,4 +78,25 @@ dab_scan_result_t dab_scan_tick(dab_scan_state_t *st, int synced,
     return DAB_SCAN_NO_DATA;
   }
   return DAB_SCAN_CONTINUE;
+}
+
+float dab_freq_correction_initial(int known, int32_t cached,
+                                  int ppm_known, double ppm, uint32_t freq)
+{
+  float c = 0;
+
+  if (known)
+    c = cached;
+  else if (ppm_known)
+    c = ppm * freq / 1e6;
+  if (fabsf(c) > DAB_FREQ_CORR_MAX)
+    c = 0;
+  return c;
+}
+
+int dab_freq_correction_changed(int known, int32_t cached, float current)
+{
+  if (fabsf(current) > DAB_FREQ_CORR_MAX)
+    return 0;
+  return !known || fabsf(current - cached) >= DAB_FREQ_CORR_UPDATE;
 }

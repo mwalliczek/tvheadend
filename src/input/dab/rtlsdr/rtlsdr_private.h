@@ -86,6 +86,10 @@ struct rtlsdr_frontend
 	mtimer_t                  lfe_monitor_timer;
 	
 	uint32_t                  lfe_status_period;
+
+	/* frequency error of the stick learned on any ensemble (ppm) */
+	double                    lfe_ppm;
+	int                       lfe_ppm_known;
 };
 
 extern const idclass_t rtlsdr_adapter_class;

@@ -365,6 +365,7 @@ int16_t	SubChId		= getBits_6 (d, bitOffset);
 int16_t StartAdr	= getBits (d, bitOffset + 6, 10);
 int16_t	tabelIndex;
 int16_t	option, protLevel, subChanSize;
+subChannel old	= mm->subChannels [SubChId];
 	(void)pd;		// not used right now, maybe later
 	mm->subChannels [SubChId]. StartAddr = StartAdr;
                 
@@ -415,6 +416,8 @@ int16_t	option, protLevel, subChanSize;
 
 	   bitOffset += 32;
 	}
+	if (memcmp (&old, &mm->subChannels [SubChId], sizeof (old)))
+	   mm->mm_fic_changed = 1;	// saved by the frontend (global_lock)
 	return bitOffset / 8;	// we return bytes
 }
 //

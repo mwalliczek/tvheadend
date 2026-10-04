@@ -61,4 +61,22 @@ typedef struct dab_scan_state {
 dab_scan_result_t dab_scan_tick(dab_scan_state_t *st, int synced,
                                 int complete, int incomplete);
 
+/*
+ * Frequency correction cache: transmitter and receiver do not move, so the
+ * offset found for an ensemble (mostly the crystal error of the stick)
+ * stays valid and a new tune can start with it instead of searching.
+ */
+#define DAB_FREQ_CORR_MAX      35000  /* Hz, as the coarse search */
+#define DAB_FREQ_CORR_UPDATE      50  /* Hz, store when it moved that much */
+
+/*
+ * The correction to start a tune with: the value cached for the ensemble,
+ * else the ppm error of the receiver learned on other ensembles, else 0
+ */
+float dab_freq_correction_initial(int known, int32_t cached,
+                                  int ppm_known, double ppm, uint32_t freq);
+
+/* whether the cache of the ensemble has to be updated */
+int dab_freq_correction_changed(int known, int32_t cached, float current);
+
 #endif /* __DAB_SCAN_H__ */

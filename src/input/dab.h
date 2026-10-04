@@ -210,6 +210,13 @@ struct dab_ensemble
         int                      mm_scan_flags;   ///< Subscription flags
         int                      mm_scan_init;    ///< Flag to timeout handler
         dab_scan_state_t         mm_scan_progress; ///< Scan progress (dab_scan_tick)
+
+        /*
+         * Reception cache
+         */
+        int                      mm_freq_corr;       ///< last frequency correction (Hz)
+        int                      mm_freq_corr_known;
+        int                      mm_fic_changed;     ///< FIC organisation changed, save
         mtimer_t                 mm_scan_timeout; ///< Timer to handle timeout
         TAILQ_ENTRY(dab_ensemble)  mm_scan_link;    ///< Link to Queue
         mpegts_mux_scan_state_t  mm_scan_state;   ///< Scanning state

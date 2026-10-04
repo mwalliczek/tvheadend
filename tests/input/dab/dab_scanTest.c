@@ -1,6 +1,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "dab_scan.h"
 
@@ -59,6 +60,23 @@ START_TEST(band3Test) {
         ck_assert_int_gt(dab_band3_channels[i].freq, dab_band3_channels[i - 1].freq);
 } END_TEST
 
+START_TEST(freqCorrectionCacheTest) {
+    /* nothing known: start without correction */
+    ck_assert(dab_freq_correction_initial(0, 0, 0, 0, 222064000) == 0);
+    /* the ensemble's own value wins */
+    ck_assert(dab_freq_correction_initial(1, -1234, 1, 40, 222064000) == -1234);
+    /* else the receiver error: 40 ppm at 222.064 MHz */
+    ck_assert(fabsf(dab_freq_correction_initial(0, 0, 1, 40, 222064000) - 8882.56f) < 0.1f);
+    /* implausible values are ignored */
+    ck_assert(dab_freq_correction_initial(1, 90000, 0, 0, 222064000) == 0);
+    ck_assert(dab_freq_correction_initial(0, 0, 1, 500, 222064000) == 0);
+
+    ck_assert(dab_freq_correction_changed(0, 0, 10));
+    ck_assert(!dab_freq_correction_changed(1, 1000, 1030));
+    ck_assert(dab_freq_correction_changed(1, 1000, 1050));
+    ck_assert(!dab_freq_correction_changed(0, 0, 40000));
+} END_TEST
+
 static Suite *dab_scan_suite(void) {
     Suite *s = suite_create("dab_scan");
     TCase *tc_core = tcase_create("Core");
@@ -67,6 +85,7 @@ static Suite *dab_scan_suite(void) {
     tcase_add_test(tc_core, partialAtTimeoutTest);
     tcase_add_test(tc_core, syncedWithoutAudioTest);
     tcase_add_test(tc_core, band3Test);
+    tcase_add_test(tc_core, freqCorrectionCacheTest);
     suite_add_tcase(s, tc_core);
     return s;
 }

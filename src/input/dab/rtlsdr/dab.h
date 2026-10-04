@@ -98,6 +98,11 @@ struct sdr_state_t {
 
 	int		isSynced;
 
+	/* frequency correction: start value and current value (Hz) */
+	float		initialCorrection;
+	float		currentCorrection;
+	int		correctionValid;
+
 	/* local oscillator for the frequency correction: a rotating phasor */
 	float		oscRe, oscIm;
 	float		oscStepRe, oscStepIm;
