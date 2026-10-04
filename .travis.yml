@@ -1,8 +1,8 @@
 sudo: required
-dist: trusty
+dist: bionic
 language: c
 before_install:
-  - sudo apt-get -qqy update && sudo apt-get install fakeroot cppcheck check libsubunit-dev xsltproc -qqy
+  - sudo apt-get -qqy update && sudo apt-get install fakeroot cppcheck check libsubunit-dev xsltproc librtlsdr-dev libfftw3-dev -qqy
   - sudo ./Autobuild.sh -t raspbianstretch-armhf -o deps
 script:
   - ./Autobuild.sh -t raspbianstretch-armhf
