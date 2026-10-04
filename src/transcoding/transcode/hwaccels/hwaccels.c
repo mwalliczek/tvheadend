@@ -157,7 +157,7 @@ hwaccels_get_scale_filter(AVCodecContext *iavctx, AVCodecContext *oavctx,
 int
 hwaccels_get_deint_filter(AVCodecContext *avctx, char *filter, size_t filter_len)
 {
-    TVHContext *ctx = avctx->opaque;
+    const TVHContext *ctx = avctx->opaque;
 
     if (ctx->hw_accel_ictx) {
         switch (avctx->pix_fmt) {
@@ -169,12 +169,70 @@ hwaccels_get_deint_filter(AVCodecContext *avctx, char *filter, size_t filter_len
                 break;
         }
     }
+
+    return -1;
+}
+
+int
+hwaccels_get_denoise_filter(AVCodecContext *avctx, int value, char *filter, size_t filter_len)
+{
+    TVHContext *ctx = avctx->opaque;
+
+    if (ctx->hw_accel_ictx) {
+        switch (avctx->pix_fmt) {
+#if ENABLE_VAAPI
+            case AV_PIX_FMT_VAAPI:
+                return vaapi_get_denoise_filter(avctx, value, filter, filter_len);
+#endif
+            default:
+                break;
+        }
+    }
     
     return -1;
 }
 
+int
+hwaccels_get_sharpness_filter(AVCodecContext *avctx, int value, char *filter, size_t filter_len)
+{
+    TVHContext *ctx = avctx->opaque;
+
+    if (ctx->hw_accel_ictx) {
+        switch (avctx->pix_fmt) {
+#if ENABLE_VAAPI
+            case AV_PIX_FMT_VAAPI:
+                return vaapi_get_sharpness_filter(avctx, value, filter, filter_len);
+#endif
+            default:
+                break;
+        }
+    }
+    
+    return -1;
+}
 
 /* encoding ================================================================= */
+
+int
+hwaccels_initialize_encoder_from_decoder(const AVCodecContext *iavctx, AVCodecContext *oavctx)
+{
+    switch (iavctx->pix_fmt) {
+        case AV_PIX_FMT_VAAPI:
+            /* we need to ref hw_frames_ctx of decoder to initialize encoder's codec.
+            Only after we get a decoded frame, can we obtain its hw_frames_ctx */
+            oavctx->hw_frames_ctx = av_buffer_ref(iavctx->hw_frames_ctx);
+            if (!oavctx->hw_frames_ctx) {
+                return AVERROR(ENOMEM);
+            }
+            return 0;
+        case AV_PIX_FMT_YUV420P:
+            break;
+        default:
+            break;
+    }
+    return 0;
+}
+
 
 int
 hwaccels_encode_setup_context(AVCodecContext *avctx)

@@ -1355,7 +1355,7 @@ dvb_nit_mux
           priv == 0x3200 || priv == 0x3201) goto lcn;
       break;
     case 0x86:
-      if (priv == 0) goto lcn;
+      if (priv == 0 || priv == 0x1a0) goto lcn;
       break;
     case 0x88:
       if (priv == 0x28) {
@@ -2285,6 +2285,9 @@ static void
 psi_tables_atsc_c ( mpegts_mux_t *mm )
 {
   mpegts_table_add(mm, DVB_VCT_C_BASE, DVB_VCT_MASK, atsc_vct_callback,
+                   NULL, "vct", LS_TBL_ATSC, MT_QUICKREQ | MT_CRC | MT_RECORD,
+                   DVB_VCT_PID, MPS_WEIGHT_VCT);
+    mpegts_table_add(mm, DVB_VCT_T_BASE, DVB_VCT_MASK, atsc_vct_callback,
                    NULL, "vct", LS_TBL_ATSC, MT_QUICKREQ | MT_CRC | MT_RECORD,
                    DVB_VCT_PID, MPS_WEIGHT_VCT);
   mpegts_table_add(mm, DVB_ATSC_STT_BASE, DVB_ATSC_STT_MASK, atsc_stt_callback,

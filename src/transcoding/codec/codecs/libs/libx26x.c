@@ -58,8 +58,8 @@ static int
 tvh_codec_profile_libx26x_open(tvh_codec_profile_libx26x_t *self,
                                AVDictionary **opts)
 {
-    AV_DICT_SET(opts, "preset", self->preset, 0);
-    AV_DICT_SET(opts, "tune", self->tune, 0);
+    AV_DICT_SET(LST_LIBX26X, opts, "preset", self->preset, 0);
+    AV_DICT_SET(LST_LIBX26X, opts, "tune", self->tune, 0);
     return 0;
 }
 
@@ -91,6 +91,17 @@ static const codec_profile_class_t codec_profile_libx26x_class = {
                 .intextra = INTEXTRA_RANGE(0, 51, 1),
                 .def.i    = 0,
             },
+            {
+                .type     = PT_INT,
+                .id       = "gop_size",     // Don't change
+                .name     = N_("GOP size"),
+                .desc     = N_("Sets the Group of Pictures (GOP) size in frame (default 0 is 3 sec.)"),
+                .group    = 3,
+                .get_opts = codec_profile_class_get_opts,
+                .off      = offsetof(TVHVideoCodecProfile, gop_size),
+                .intextra = INTEXTRA_RANGE(0, 1000, 1),
+                .def.i    = 0,
+            },
             {}
         }
     },
@@ -116,13 +127,13 @@ tvh_codec_profile_libx265_destroy(TVHCodecProfile *_self)
 #include <x264.h>
 
 static const AVProfile libx264_profiles[] = {
-    { FF_PROFILE_H264_BASELINE, "Baseline" },
-    { FF_PROFILE_H264_MAIN,     "Main" },
-    { FF_PROFILE_H264_HIGH,     "High" },
-    { FF_PROFILE_H264_HIGH_10,  "High 10" },
-    { FF_PROFILE_H264_HIGH_422, "High 4:2:2" },
-    { FF_PROFILE_H264_HIGH_444, "High 4:4:4" },
-    { FF_PROFILE_UNKNOWN },
+    { FF_AV_PROFILE_H264_BASELINE, "Baseline" },
+    { FF_AV_PROFILE_H264_MAIN,     "Main" },
+    { FF_AV_PROFILE_H264_HIGH,     "High" },
+    { FF_AV_PROFILE_H264_HIGH_10,  "High 10" },
+    { FF_AV_PROFILE_H264_HIGH_422, "High 4:2:2" },
+    { FF_AV_PROFILE_H264_HIGH_444, "High 4:4:4" },
+    { FF_AV_PROFILE_UNKNOWN },
 };
 
 
@@ -132,14 +143,14 @@ tvh_codec_profile_libx264_open(tvh_codec_profile_libx26x_t *self,
 {
     // bit_rate or crf
     if (self->bit_rate) {
-        AV_DICT_SET_BIT_RATE(opts, self->bit_rate);
+        AV_DICT_SET_BIT_RATE(LST_LIBX26X, opts, self->bit_rate);
     }
     else {
-        AV_DICT_SET_CRF(opts, self->crf, 15);
+        AV_DICT_SET_CRF(LST_LIBX26X, opts, self->crf, 15);
     }
     // params
     if (self->params && strlen(self->params)) {
-        AV_DICT_SET(opts, "x264-params", self->params, 0);
+        AV_DICT_SET(LST_LIBX26X, opts, "x264-params", self->params, 0);
     }
     return 0;
 }
@@ -231,14 +242,14 @@ tvh_codec_profile_libx265_open(tvh_codec_profile_libx26x_t *self,
 {
     // bit_rate or crf
     if (self->bit_rate) {
-        AV_DICT_SET_BIT_RATE(opts, self->bit_rate);
+        AV_DICT_SET_BIT_RATE(LST_LIBX26X, opts, self->bit_rate);
     }
     else {
-        AV_DICT_SET_CRF(opts, self->crf, 18);
+        AV_DICT_SET_CRF(LST_LIBX26X, opts, self->crf, 18);
     }
     // params
     if (self->params && strlen(self->params)) {
-        AV_DICT_SET(opts, "x265-params", self->params, 0);
+        AV_DICT_SET(LST_LIBX26X, opts, "x265-params", self->params, 0);
     }
     return 0;
 }

@@ -64,10 +64,10 @@ dvr_parse_edl
   ( const char *line, dvr_cutpoint_t *cutpoint, float *frame )
 {
   int action = 0;
-  float start = 0.0f, end = 0.0f;
+  double start = 0.0, end = 0.0;
 
   /* Invalid line */
-  if (sscanf(line, "%f\t%f\t%d", &start, &end, &action) != 3)
+  if (sscanf(line, "%lf\t%lf\t%d", &start, &end, &action) != 3)
     return 1;
 
   /* Sanity Checks */
@@ -78,8 +78,8 @@ dvr_parse_edl
   }
 
   /* Set values */
-  cutpoint->dc_start_ms = (int) (start * 1000.0f);
-  cutpoint->dc_end_ms   = (int) (end * 1000.0f);
+  cutpoint->dc_start_ms = (int) (start * 1000.0);
+  cutpoint->dc_end_ms   = (int) (end * 1000.0);
   cutpoint->dc_type     = action;
 
   return 0;
@@ -185,20 +185,40 @@ done:
  *
  * // TODO: possibly could be better with some sort of auto-detect
  */
+
+/* DMC 2025 Notes
+ *
+ * I did some testing with Kodi mixing 'sm' and 'edl' records.
+ * The combined records do NOT need to be sorted, overlapping
+ * records of different types work fine from different files.
+ * However, in Kodi, mixing types within files can have unpredictable results.
+ * Keeping type 2 (scene markers) and type 3 (skip) in different files works.
+ * Kodi does not attempt to load cutpoints for 'radio' recordings.
+ */
+
 static struct {
   const char *ext;
   int        (*parse) (const char *path, dvr_cutpoint_list_t *, void *);
   void       *opaque;
+  int        merge;  //Allow merging.  If this parser has data, do not stop there.
 } dvr_cutpoint_parsers[] = {
+  {
+    .ext    = "sm",               // This is just an 'edl' file with an 'sm' extension containing
+    .parse  = dvr_parse_file,     // scene markers.  This is done first so that the results can be
+    .opaque = dvr_parse_edl,      // merged with following edl or txt skip records.
+    .merge  = 1,
+  },
   {
     .ext    = "txt",
     .parse  = dvr_parse_file,
     .opaque = dvr_parse_comskip,
+    .merge  = 0,
   },
   {
     .ext    = "edl",
     .parse  = dvr_parse_file,
     .opaque = dvr_parse_edl,
+    .merge  = 0,
   },
 };
 
@@ -212,6 +232,7 @@ dvr_get_cutpoint_list (dvr_entry_t *de)
   char *path, *sptr;
   const char *filename;
   dvr_cutpoint_list_t *cuts;
+  int found_count = 0;
 
   /* Check this is a valid recording */
   assert(de != NULL);
@@ -248,11 +269,18 @@ dvr_get_cutpoint_list (dvr_entry_t *de)
     /* Try parsing */
     if (dvr_cutpoint_parsers[i].parse(path, cuts,
                                       dvr_cutpoint_parsers[i].opaque) != -1)
-      break;
-  }
+    {
+      found_count++;
+      if(!dvr_cutpoint_parsers[i].merge)
+      {
+        break;
+      }
+    }
+  }//END loop through parsers
 
   /* Cleanup */
-  if (i >= ARRAY_SIZE(dvr_cutpoint_parsers)) {
+  if (found_count == 0)
+  {
     dvr_cutpoint_list_destroy(cuts);
     return NULL;
   }
@@ -291,9 +319,16 @@ dvr_cutpoint_delete_files (const char *s)
   for (i = 0; i < ARRAY_SIZE(dvr_cutpoint_parsers); i++) {
 
     strcpy(path, s);
-    if ((dot = (strrchr(path, '.') + 1)))
-      *dot = 0;
-
+    
+    dot = strrchr(path, '.');
+    if (dot && strchr(dot, '/')) dot = NULL; // Dot is in a directory, that doesn't count
+    if (dot) {
+      /* keep the dot, truncate after it */
+      *(dot + 1) = '\0';
+    } else {
+      /* add a dot so we get "base.ext" */
+      strcat(path, ".");
+    }
     strcat(path, dvr_cutpoint_parsers[i].ext);
 
     /* Check file exists */

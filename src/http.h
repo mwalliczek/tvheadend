@@ -174,6 +174,7 @@ typedef struct http_connection {
   char *hc_password;
   char *hc_authhdr;
   char *hc_nonce;
+  int   hc_nonce_stale;   /* the request carried a nonce we no longer know */
   access_t *hc_access;
   enum {
     HC_AUTH_NONE,
@@ -242,6 +243,9 @@ int http_header_match(http_connection_t *hc, const char *name, const char *value
 void http_output_html(http_connection_t *hc);
 
 void http_output_content(http_connection_t *hc, const char *content);
+
+void http_output_content_disposition(http_connection_t *hc, const char *content,
+                                     const char *disposition);
 
 void http_redirect(http_connection_t *hc, const char *location,
                    struct http_arg_list *req_args, int external);
@@ -399,17 +403,17 @@ struct http_client {
   int          hc_refcnt;       /* callback protection - outside hc_mutex */
   int          hc_redirects;
   int          hc_result;
-  int          hc_shutdown:1;
-  int          hc_sending:1;
-  int          hc_einprogress:1;
-  int          hc_reconnected:1;
-  int          hc_keepalive:1;
-  int          hc_in_data:1;
-  int          hc_in_rtp_data:1;
-  int          hc_chunked:1;
-  int          hc_chunk_trails:1;
-  int          hc_handle_location:1; /* handle the redirection (location) requests */
-  int          hc_pause:1;
+  unsigned int hc_shutdown:1;
+  unsigned int hc_sending:1;
+  unsigned int hc_einprogress:1;
+  unsigned int hc_reconnected:1;
+  unsigned int hc_keepalive:1;
+  unsigned int hc_in_data:1;
+  unsigned int hc_in_rtp_data:1;
+  unsigned int hc_chunked:1;
+  unsigned int hc_chunk_trails:1;
+  unsigned int hc_handle_location:1; /* handle the redirection (location) requests */
+  unsigned int hc_pause:1;
 
   http_client_wcmd_t            *hc_wcmd;
   TAILQ_HEAD(,http_client_wcmd)  hc_wqueue;
@@ -425,8 +429,8 @@ struct http_client {
   int          hc_rtp_tcp;
   int          hc_rtcp_tcp;
   int          hc_rtcp_server_port;
-  int          hc_rtp_multicast:1;
-  int          hc_rtp_avpf:1;
+  unsigned int hc_rtp_multicast:1;
+  unsigned int hc_rtp_avpf:1;
   long         hc_rtsp_stream_id;
   int          hc_rtp_timeout;
   char        *hc_rtsp_user;
@@ -523,7 +527,7 @@ rtsp_teardown( http_client_t *hc, const char *path, const char *query ) {
 
 int rtsp_get_parameter( http_client_t *hc, const char *parameter );
 
-int rtsp_set_speed( http_client_t *hc, float speed );
+int rtsp_set_speed( http_client_t *hc, double speed );
 
 int rtsp_set_position( http_client_t *hc, time_t position );
 

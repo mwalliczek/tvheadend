@@ -39,6 +39,18 @@ COMMITR   = $(COMMIT1)
 endif
 DEFINES   = --define '_topdir $(TOPDIR)'
 
+ifdef TVH_EXTRA_CONFIGURE
+DEFINES  += --define "tvh_extra_configure $(TVH_EXTRA_CONFIGURE)"
+endif
+
+ifdef VUE_FILE_CACHE
+DEFINES  += --define "vue_file_cache $(VUE_FILE_CACHE)"
+endif
+
+ifdef STATICLIB_CACHE
+DEFINES  += --define "staticlib_cache $(STATICLIB_CACHE)"
+endif
+
 tvheadend.spec: $(SPEC)
 	@sed -e 's/@VERSION@/$(VERSION)/g' \
 	     -e 's/@RELEASE@/$(RELEASE)/g' \
@@ -51,24 +63,14 @@ SOURCES:
 
 .PHONY: srpm
 srpm: clean SOURCES tvheadend.spec
-	spectool --get-files -C SOURCES tvheadend.spec
+	cd $(TOPDIR)/.. && git archive --format=tar.gz --prefix=tvheadend-$(COMMITR)/ HEAD -o $(TOPDIR)/SOURCES/tvheadend-$(COMMITR).tar.gz
 	rpmbuild $(DEFINES) -bs tvheadend.spec
 
 .PHONY: build
 build: clean SOURCES tvheadend.spec
-	spectool --get-files -C SOURCES tvheadend.spec
+	cd $(TOPDIR)/.. && git archive --format=tar.gz --prefix=tvheadend-$(COMMITR)/ HEAD -o $(TOPDIR)/SOURCES/tvheadend-$(COMMITR).tar.gz
 	rpmbuild $(DEFINES) -ba tvheadend.spec
 
-.PHONY: build-doozer
-build-doozer: build
-	@rm -f ../filelist.txt
-	@for a in RPMS/$$(uname -m)/tvheadend-$(VERSION)-$(RELEASE)*.rpm \
-	          RPMS/$$(uname -m)/tvheadend-debuginfo-$(VERSION)-$(RELEASE)*.rpm; do \
-		name=$$(basename $$a); \
-		echo "doozer-versioned-artifact:rpm/$$a:rpm:application/x-rpm:$$name"; \
-		echo "rpm/$$a" >> ../filelist.txt; \
-	 done
-	
 
 .PHONY: clean.
 clean:

@@ -24,6 +24,7 @@
 #include "lang_str.h"
 #include "string_list.h"
 #include "access.h"
+#include "ratinglabels.h"  //Needed for the ratinglabel_t struct.
 
 /*
  * External forward decls
@@ -149,6 +150,7 @@ typedef uint64_t epg_changes_t;
 #define EPG_CHANGED_AGE_RATING     (1ULL<<31)
 #define EPG_CHANGED_FIRST_AIRED    (1ULL<<32)
 #define EPG_CHANGED_COPYRIGHT_YEAR (1ULL<<33)
+#define EPG_CHANGED_RATING_LABEL   (1ULL<<34)
 
 typedef struct epg_object_ops {
   void (*getref)  ( void *o );        ///< Get a reference
@@ -163,7 +165,7 @@ struct epg_object
   RB_ENTRY(epg_object)    id_link;    ///< Global (ID) link
   LIST_ENTRY(epg_object)  un_link;    ///< Global unref'd link
   LIST_ENTRY(epg_object)  up_link;    ///< Global updated link
- 
+
   epg_object_type_t       type;       ///< Specific object type
   uint32_t                id;         ///< Internal ID
   time_t                  updated;    ///< Last time object was changed
@@ -203,7 +205,7 @@ void epg_episode_epnum_deserialize( htsmsg_t *m, epg_episode_num_t *num );
 
 /* EpNum format helper */
 // output string will be:
-// if (episode_num) 
+// if (episode_num)
 //   ret = pre
 //   if (season_num) ret += sprintf(sfmt, season_num)
 //   if (season_cnt && cnt) ret += sprintf(cnt, season_cnt)
@@ -255,7 +257,7 @@ struct epg_broadcast
   struct channel            *channel;          ///< Channel being broadcast on
   RB_ENTRY(epg_broadcast)    sched_link;       ///< Schedule link
   LIST_HEAD(, dvr_entry)     dvr_entries;      ///< Associated DVR entries
-  
+
   /* */
   uint16_t                   dvb_eid;          ///< DVB Event ID
   time_t                     start;            ///< Start time
@@ -276,6 +278,7 @@ struct epg_broadcast
   /* Misc flags */
   uint8_t                    star_rating;      ///< Star rating
   uint8_t                    age_rating;       ///< Age certificate
+  ratinglabel_t              *rating_label;    ///< Age certificate label (eg: 'PG')
   uint8_t                    is_new;           ///< New series / file premiere
   uint8_t                    is_repeat;        ///< Repeat screening
   uint8_t                    running;          ///< EPG running flag
@@ -307,14 +310,19 @@ struct epg_broadcast
                                                ///< We'll call it copyright_year since words like "complete" and "finished"
                                                ///< sound too similar to dvr recorded functionality. We'll only store the
                                                ///< year since we only get year not month and day.
+  char                       *xmltv_eid;       ///< XMLTV (or other) unique event identifier
 };
 
 /* Lookup */
-epg_broadcast_t *epg_broadcast_find_by_time 
+epg_broadcast_t *epg_broadcast_find_by_time
   ( struct channel *ch, struct epggrab_module *src,
     time_t start, time_t stop, int create, int *save, epg_changes_t *changes );
 epg_broadcast_t *epg_broadcast_find_by_eid ( struct channel *ch, uint16_t eid );
 epg_broadcast_t *epg_broadcast_find_by_id  ( uint32_t id );
+epg_broadcast_t *epg_broadcast_find_by_xmltv_eid
+  ( struct channel *ch, struct epggrab_module *src,
+    time_t start, time_t stop, int create,
+    int *save, epg_changes_t *changed, const char* xmltv_eid);
 
 /* Post-modify */
 int epg_broadcast_change_finish( epg_broadcast_t *b, epg_changes_t changed, int merge )
@@ -328,6 +336,9 @@ epg_broadcast_t *epg_broadcast_clone
 int epg_broadcast_set_dvb_eid
   ( epg_broadcast_t *b, uint16_t dvb_eid, epg_changes_t *changed )
   __attribute__((warn_unused_result));
+int epg_broadcast_set_xmltv_eid
+  ( epg_broadcast_t *b, const char *xmltv_eid, epg_changes_t *changed )
+  __attribute__((warn_unused_result));
 int epg_broadcast_set_running
   ( epg_broadcast_t *b, epg_running_t running )
   __attribute__((warn_unused_result));
@@ -337,7 +348,7 @@ int epg_broadcast_set_is_widescreen
 int epg_broadcast_set_is_hd
   ( epg_broadcast_t *b, uint8_t hd, epg_changes_t *changed )
   __attribute__((warn_unused_result));
-int epg_broadcast_set_lines 
+int epg_broadcast_set_lines
   ( epg_broadcast_t *b, uint16_t lines, epg_changes_t *changed )
   __attribute__((warn_unused_result));
 int epg_broadcast_set_aspect
@@ -415,11 +426,14 @@ int epg_broadcast_set_copyright_year
 int epg_broadcast_set_age_rating
   ( epg_broadcast_t *b, uint8_t age, epg_changes_t *changed )
   __attribute__((warn_unused_result));
+int epg_broadcast_set_rating_label
+  ( epg_broadcast_t *b, ratinglabel_t *rating_label, epg_changes_t *changed )
+  __attribute__((warn_unused_result));
 
 /* Accessors */
 epg_broadcast_t *epg_broadcast_get_prev( epg_broadcast_t *b );
 epg_broadcast_t *epg_broadcast_get_next( epg_broadcast_t *b );
-const char *epg_broadcast_get_title 
+const char *epg_broadcast_get_title
   ( const epg_broadcast_t *b, const char *lang );
 const char *epg_broadcast_get_subtitle
   ( epg_broadcast_t *b, const char *lang );
@@ -432,12 +446,16 @@ const char *epg_broadcast_get_credits_cached
   ( epg_broadcast_t *b, const char *lang );
 const char *epg_broadcast_get_keyword_cached
   ( epg_broadcast_t *b, const char *lang );
+const ratinglabel_t *epg_broadcast_get_rating_label
+  ( epg_broadcast_t *b );
+char* epg_broadcast_get_merged_text
+  ( epg_broadcast_t *b );
 
 /* Episode number heplers */
 // Note: this does NOT strdup the text field
 void epg_broadcast_get_epnum
   ( const epg_broadcast_t *b, epg_episode_num_t *epnum );
-size_t epg_broadcast_epnumber_format 
+size_t epg_broadcast_epnumber_format
   ( epg_broadcast_t *b, char *buf, size_t len,
     const char *pre,  const char *sfmt,
     const char *sep,  const char *efmt,
@@ -452,7 +470,7 @@ static inline int epg_episode_match(epg_broadcast_t *a, epg_broadcast_t *b)
 
 /* Serialization */
 htsmsg_t        *epg_broadcast_serialize   ( epg_broadcast_t *b );
-epg_broadcast_t *epg_broadcast_deserialize 
+epg_broadcast_t *epg_broadcast_deserialize
   ( htsmsg_t *m, int create, int *save );
 
 /* ************************************************************************
@@ -518,6 +536,7 @@ typedef struct epg_query {
   char             *stitle;
   tvh_regex_t       stitle_re;
   int               fulltext;
+  int               mergetext;
   int               new_only;
   char             *channel;
   char             *channel_tag;

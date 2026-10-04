@@ -38,19 +38,20 @@ typedef struct udp_connection {
   int fd;
   int subsystem;
   char *name;
-  int rxtxsize;
+  int rxsize;
+  int txsize;
 } udp_connection_t;
 
 udp_connection_t *
 udp_bind ( int subsystem, const char *name,
            const char *bindaddr, int port, const char *multicast_src,
-           const char *ifname, int rxsize, int txsize );
+           const char *ifname, int rxsize, int txsize, int bind_fail_allowed );
 int
 udp_bind_double ( udp_connection_t **_u1, udp_connection_t **_u2,
                   int subsystem, const char *name1,
                   const char *name2, const char *host, int port,
                   const char *ifname, int rxsize1, int rxsize2,
-                  int txsize1, int txsize2 );
+                  int txsize1, int txsize2, int bind_fail_allowed );
 udp_connection_t *
 udp_sendinit ( int subsystem, const char *name,
                const char *ifname, int txsize );

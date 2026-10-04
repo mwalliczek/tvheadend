@@ -27,6 +27,7 @@
 #include "profile.h"
 #include "dvb_charset.h"
 #include "epggrab.h"
+#include "config.h"
 
 #include <assert.h>
 
@@ -88,21 +89,21 @@ mpegts_mux_instance_create0
 }
 
 static void
+mpegts_mux_scan_timeout_arm ( mpegts_mux_t *mm, mpegts_input_t *mi )
+{
+  mtimer_arm_rel(&mm->mm_scan_timeout, mpegts_mux_scan_timeout, mm,
+                 sec2mono(mpegts_input_grace(mi, mm)));
+}
+
+static void
 mpegts_mux_scan_active
   ( mpegts_mux_t *mm, const char *buf, mpegts_input_t *mi )
 {
-  int t;
-
   /* Setup scan */
   if (mm->mm_scan_state == MM_SCAN_STATE_PEND ||
       mm->mm_scan_state == MM_SCAN_STATE_IPEND) {
     mpegts_network_scan_mux_active(mm);
-
-    /* Get timeout */
-    t = mpegts_input_grace(mi, mm);
-  
-    /* Setup timeout */
-    mtimer_arm_rel(&mm->mm_scan_timeout, mpegts_mux_scan_timeout, mm, sec2mono(t));
+    mpegts_mux_scan_timeout_arm(mm, mi);
   }
 }
 
@@ -268,6 +269,11 @@ mpegts_mux_instance_start
   tvhdebug(LS_MPEGTS, "%s - started", mm->mm_nicename);
   mm->mm_start_monoclock = mclk();
   mi->mi_started_mux(mi, mmi);
+
+  /* Reset Error Counters */
+  if (config.auto_clear_input_counters && mmi->tii_clear_stats) {
+    mmi->tii_clear_stats((tvh_input_instance_t *)mmi);
+  }
 
   /* Event handler */
   mpegts_fire_event(mm, ml_mux_start);
@@ -1295,12 +1301,16 @@ void
 mpegts_mux_save ( mpegts_mux_t *mm, htsmsg_t *c, int refs )
 {
   mpegts_service_t *ms;
+  mpegts_mux_instance_t *mmi;
   htsmsg_t *root = !refs ? htsmsg_create_map() : c;
   htsmsg_t *services = !refs ? htsmsg_create_map() : htsmsg_create_list();
   htsmsg_t *e;
   char ubuf[UUID_HEX_SIZE];
 
   idnode_save(&mm->mm_id, root);
+  LIST_FOREACH(mmi, &mm->mm_instances, mmi_mux_link) {
+    mmi->mmi_tune_failed = 0;
+  }
   LIST_FOREACH(ms, &mm->mm_services, s_dvb_mux_link) {
     if (refs) {
       htsmsg_add_uuid(services, NULL, &ms->s_id.in_uuid);
@@ -1346,7 +1356,8 @@ mpegts_mux_set_tsid ( mpegts_mux_t *mm, uint32_t tsid, int force )
   mm->mm_tsid = tsid;
   tvhtrace(LS_MPEGTS, "%s - set tsid %04X (%d)", mm->mm_nicename, tsid, tsid);
   idnode_changed(&mm->mm_id);
-  mpegts_network_scan_mux_reactivate(mm);
+  if (mpegts_network_scan_mux_reactivate(mm))
+    mpegts_mux_scan_timeout_arm(mm, mm->mm_active->mmi_input);
   return 1;
 }
 

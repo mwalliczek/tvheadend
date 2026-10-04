@@ -126,9 +126,12 @@ void
 dvr_autorec_purge_obsolete_timers(void)
 {
   dvr_entry_t *de;
+  dvr_entry_t *de_next;
   int num_purged = 0;
 
-  LIST_FOREACH(de, &dvrentries, de_global_link) {
+  de = LIST_FIRST(&dvrentries);
+  while (de != NULL) {
+    de_next = LIST_NEXT(de, de_global_link);
     if (dvr_autorec_entry_can_be_purged(de)) {
       char ubuf[UUID_HEX_SIZE];
       char t1buf[32], t2buf[32];
@@ -142,6 +145,7 @@ dvr_autorec_purge_obsolete_timers(void)
       dvr_entry_destroy(de, 1);
       ++num_purged;
     }
+    de = de_next;
   }
   if (num_purged)
     tvhinfo(LS_DVR, "Purged %d autorec entries that no longer match schedule", num_purged);
@@ -193,6 +197,8 @@ dvr_autorec_cmp(dvr_autorec_entry_t *dae, epg_broadcast_t *e)
   idnode_list_mapping_t *ilm;
   dvr_config_t *cfg;
   double duration;
+  char    *mergedtext = NULL;
+  int     mergedtextResult = 0;
 
   if (!e) return 0;
   if (!e->channel) return 0;
@@ -350,32 +356,58 @@ dvr_autorec_cmp(dvr_autorec_entry_t *dae, epg_broadcast_t *e)
   /* Do not check title if the event is from the serieslink group */
   if((dae->dae_serieslink_uri == NULL || dae->dae_serieslink_uri[0] == '\0') &&
      dae->dae_title != NULL && dae->dae_title[0] != '\0') {
-    lang_str_ele_t *ls;
-    if (!dae->dae_fulltext) {
-      if(!e->title) return 0;
-      RB_FOREACH(ls, e->title, link)
-        if (!regex_match(&dae->dae_title_regex, ls->str)) break;
-    } else {
-      ls = NULL;
-      if (e->title)
+    lang_str_ele_t *ls = NULL;
+
+    //Because a mergetext search is more comprehensive than a full text
+    //search, if mergetext is enabled, it takes priority over fulltext.
+    if (!dae->dae_mergetext)
+    {
+      //Only consider doing a fulltext if we are NOT doing a mergetext search.
+      if (!dae->dae_fulltext) {
+        if(!e->title) return 0;
         RB_FOREACH(ls, e->title, link)
           if (!regex_match(&dae->dae_title_regex, ls->str)) break;
-      if (!ls && e->subtitle)
-        RB_FOREACH(ls, e->subtitle, link)
-          if (!regex_match(&dae->dae_title_regex, ls->str)) break;
-      if (!ls && e->summary)
-        RB_FOREACH(ls, e->summary, link)
-          if (!regex_match(&dae->dae_title_regex, ls->str)) break;
-      if (!ls && e->description)
-        RB_FOREACH(ls, e->description, link)
-          if (!regex_match(&dae->dae_title_regex, ls->str)) break;
-      if (!ls && e->credits_cached)
-        RB_FOREACH(ls, e->credits_cached, link)
-          if (!regex_match(&dae->dae_title_regex, ls->str)) break;
-      if (!ls && e->keyword_cached)
-        RB_FOREACH(ls, e->keyword_cached, link)
-          if (!regex_match(&dae->dae_title_regex, ls->str)) break;
+      } else {
+        ls = NULL;
+        if (e->title)
+          RB_FOREACH(ls, e->title, link)
+            if (!regex_match(&dae->dae_title_regex, ls->str)) break;
+        if (!ls && e->subtitle)
+          RB_FOREACH(ls, e->subtitle, link)
+            if (!regex_match(&dae->dae_title_regex, ls->str)) break;
+        if (!ls && e->summary)
+          RB_FOREACH(ls, e->summary, link)
+            if (!regex_match(&dae->dae_title_regex, ls->str)) break;
+        if (!ls && e->description)
+          RB_FOREACH(ls, e->description, link)
+            if (!regex_match(&dae->dae_title_regex, ls->str)) break;
+        if (!ls && e->credits_cached)
+          RB_FOREACH(ls, e->credits_cached, link)
+            if (!regex_match(&dae->dae_title_regex, ls->str)) break;
+        if (!ls && e->keyword_cached)
+          RB_FOREACH(ls, e->keyword_cached, link)
+            if (!regex_match(&dae->dae_title_regex, ls->str)) break;
+      }//END fulltext block
     }
+    else
+    {
+      mergedtextResult = 0;
+      mergedtext = epg_broadcast_get_merged_text(e);  //'e' is the EPG record being merged.
+      if(mergedtext)
+      {
+        mergedtextResult = regex_match(&dae->dae_title_regex, mergedtext);
+        free(mergedtext);
+        if(!mergedtextResult)
+        {
+          return 1;
+        }
+      }
+      else
+      {
+          return 0;  //To get here, epg_broadcast_get_merged_text() returned NULL.
+      }
+    }//END mergetext block
+
     if (!ls) return 0;
   }
 
@@ -399,11 +431,14 @@ dvr_autorec_create(const char *uuid, htsmsg_t *conf)
     return NULL;
   }
 
+  dvr_config_t *c = dvr_config_find_by_uuid(htsmsg_get_str(conf, "config_name"));
+  if (c && c->dvr_autorec_dedup) dae->dae_record = c->dvr_autorec_dedup;
   dae->dae_weekdays = 0x7f;
   dae->dae_pri = DVR_PRIO_DEFAULT;
   dae->dae_start = -1;
   dae->dae_start_window = -1;
   dae->dae_enabled = 1;
+  dae->dae_record = DVR_AUTOREC_RECORD_DVR_PROFILE;
   dae->dae_config = dvr_config_find_by_name_default(NULL);
   LIST_INSERT_HEAD(&dae->dae_config->dvr_autorec_entries, dae, dae_config_link);
 
@@ -998,6 +1033,8 @@ static htsmsg_t *
 dvr_autorec_entry_class_dedup_list ( void *o, const char *lang )
 {
   static const struct strtab tab[] = {
+    { N_("Use DVR configuration"),
+        DVR_AUTOREC_RECORD_DVR_PROFILE },
     { N_("Record all"),
         DVR_AUTOREC_RECORD_ALL },
     { N_("All: Record if EPG/XMLTV indicates it is a unique programme"),
@@ -1070,6 +1107,7 @@ dvr_autorec_entry_class_owner_opts(void *o, uint32_t opts)
 
 CLASS_DOC(dvrautorec)
 PROP_DOC(duplicate_handling)
+PROP_DOC(autorec_directory)
 
 /* We provide several category drop-downs to make it easy for user
  * to select several. So abstract the properties away since they
@@ -1128,6 +1166,7 @@ const idclass_t dvr_autorec_entry_class = {
                      "defined in the DVR configuration and puts all "
                      "recordings done by this entry into the "
                      "subdirectory named here. See Help for more info."),
+      .doc      = prop_doc_autorec_directory,
       .off      = offsetof(dvr_autorec_entry_t, dae_directory),
       .opts     = PO_EXPERT,
     },
@@ -1162,6 +1201,16 @@ const idclass_t dvr_autorec_entry_class = {
       .desc     = N_("When the fulltext is checked, the title pattern is "
                      "matched against title, subtitle, summary and description."),
       .off      = offsetof(dvr_autorec_entry_t, dae_fulltext),
+    },
+    {
+      .type     = PT_BOOL,
+      .id       = "mergetext",
+      .name     = N_("Merge-text"),
+      .desc     = N_("When 'Merge-Text' is selected, the title pattern is "
+                     "matched against a merged single string consisting of the "
+                     "title + subtitle + summary + description + credits + keywords "
+                     "for all languages contained in the EPG entry being searched."),
+      .off      = offsetof(dvr_autorec_entry_t, dae_mergetext),
     },
     {
       .type     = PT_STR,
@@ -1352,8 +1401,10 @@ const idclass_t dvr_autorec_entry_class = {
       .type     = PT_U32,
       .id       = "record",
       .name     = N_("Duplicate handling"),
-      .desc     = N_("Duplicate recording handling."),
-      .def.i    = DVR_AUTOREC_RECORD_ALL,
+      .desc     = N_("How to handle duplicate recordings. The 'Use DVR "
+                     "Configuration' value (the default) inherits the "
+                     "settings from the assigned DVR configuration"),
+      .def.i    = DVR_AUTOREC_RECORD_DVR_PROFILE,
       .doc      = prop_doc_duplicate_handling,
       .off      = offsetof(dvr_autorec_entry_t, dae_record),
       .list     = dvr_autorec_entry_class_dedup_list,

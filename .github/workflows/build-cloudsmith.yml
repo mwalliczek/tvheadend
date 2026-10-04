@@ -1,0 +1,442 @@
+name: Build Tvheadend Repo
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore: '.github'
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  vue:
+    # Build the Vue UI once; every package job below depends on this and
+    # consumes the dist via a GitHub artifact (no per-build pcloud fetch).
+    uses: ./.github/workflows/webui-vue-build.yml
+    secrets: inherit
+
+  build-raspberry:
+    needs: vue
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    name: Build on Raspberry Pi ${{ matrix.arch }}
+    env:
+      GITHUB_ENV: CLOUDSMITH_API_KEY
+      CLOUDSMITH_ORG: ${{ vars.CLOUDSMITH_ORG }}
+      CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO }}
+      CLOUDSMITH_OWNER: ${{ secrets.CLOUDSMITH_OWNER }}
+      CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_KEY }}
+      PCLOUD_TOKEN: ${{ secrets.PCLOUD_TOKEN }}
+      NODIRTY: ${{ secrets.NODIRTY }}
+    strategy:
+      matrix:
+        arch: [armv6l, armv7l, aarch64]
+        include:
+        - arch: armv6l
+          cpu: arm1176
+          base_image: raspios_lite:latest
+          cpu_info: cpuinfo/raspberrypi_zero_w
+        - arch: armv7l
+          cpu: cortex-a7
+          base_image: raspios_lite:latest
+          cpu_info: cpuinfo/raspberrypi_3b
+        - arch: aarch64
+          cpu: cortex-a53
+          base_image: raspios_lite_arm64:latest
+          cpu_info: cpuinfo/raspberrypi_zero2_w_arm64
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Download Vue UI artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ needs.vue.outputs.artifact_name }}
+        path: .vuecache
+    - uses: pguyot/arm-runner-action@v2
+      with:
+        base_image: ${{ matrix.base_image }}
+        cpu: ${{ matrix.cpu }}
+        cpu_info: ${{ matrix.cpu_info }}
+        image_additional_mb: 10000
+        copy_artifact_path: ../tvheadend*.deb
+        import_github_env: true
+        commands: |
+          sudo apt-get update -y
+          sudo apt-get install --force-yes -y cmake git build-essential pkg-config gettext libavahi-client-dev libssl-dev zlib1g-dev wget bzip2 git-core liburiparser-dev libdvbcsa-dev python3 python3-requests debhelper ccache lsb-release libc6-dev-armel-cross
+          DEBIAN_FRONTEND=noninteractive apt-get install --force-yes -y libpcre3-dev || DEBIAN_FRONTEND=noninteractive apt-get install --force-yes -y libpcre2-dev
+          VUE_FILE_CACHE="$PWD/.vuecache" AUTOBUILD_CONFIGURE_EXTRA="--enable-ccache --enable-ffmpeg_static --enable-hdhomerun_static --python=python3 --enable-vue_cache --disable-vue_build" ./Autobuild.sh -p raspios
+          support/cloudsmith.sh -p raspios -f '../tvheadend*.deb'
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Tvheadend-RPiOS-${{ matrix.arch }}
+        path: tvheadend*.deb
+        if-no-files-found: error
+
+  build-crosscompile:
+    # The host should always be linux
+    runs-on: ubuntu-latest
+    needs: vue
+    continue-on-error: true
+    name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
+    # Run steps on a matrix
+    strategy:
+      matrix:
+       # aarch64 is not emulated here: it builds natively on arm64
+       # runners in build-deb-native below.
+       arch: [ armv7 ]
+       distro: [ stretch, buster, bullseye, bookworm, ubuntu16.04, ubuntu18.04, ubuntu20.04, ubuntu22.04, ubuntu24.04 ]
+       include:
+         - arch: armv6
+           distro: stretch
+         - arch: armv6
+           distro: buster
+         - arch: armv6
+           distro: bullseye
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Download Vue UI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.vue.outputs.artifact_name }}
+          path: artifacts/.vuecache
+      - uses: uraimo/run-on-arch-action@v3
+        name: Build artifact
+        id: build
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ${{ matrix.distro }}
+
+          # Not required, but speeds up builds
+          githubToken: ${{ github.token }}
+
+          # Create an artifacts directory
+          setup: |
+            mkdir -p "${PWD}/artifacts"
+
+          # Mount the artifacts directory as /artifacts in the container.
+          # The Vue dist tarball is downloaded into artifacts/.vuecache so
+          # it rides in on this same mount — a second --volume would make
+          # dockerRunArgs multi-line, which run-on-arch mis-parses.
+          dockerRunArgs: |
+            --volume "${PWD}/artifacts:/artifacts"
+
+          # Pass some environment variables to the container. Quote the
+          # templated values: an unset secret/var parses as YAML null,
+          # which run-on-arch rejects as a non-flat env value. Quoting
+          # makes it an empty string instead.
+          env: | # YAML, but pipe character is necessary
+            artifact_name: git-${{ matrix.distro }}_${{ matrix.arch }}
+            CLOUDSMITH_ORG: "${{ vars.CLOUDSMITH_ORG }}"
+            CLOUDSMITH_REPO: "${{ vars.CLOUDSMITH_REPO }}"
+            CLOUDSMITH_OWNER: "${{ secrets.CLOUDSMITH_OWNER }}"
+            CLOUDSMITH_API_KEY: "${{ secrets.CLOUDSMITH_KEY }}"
+            PCLOUD_TOKEN: "${{ secrets.PCLOUD_TOKEN }}"
+            NODIRTY: "${{ secrets.NODIRTY }}"
+            GITHUB_ACTIONS: "true"
+
+
+          # The shell to run commands with in the container
+          shell: /bin/sh
+
+          # Install some dependencies in the container. This speeds up builds if
+          # you are also using githubToken. Any dependencies installed here will
+          # be part of the container image that gets cached, so subsequent
+          # builds don't have to re-install them. The image layer is cached
+          # publicly in your project's package repository, so it is vital that
+          # no secrets are present in the container state or logs.
+          install: |
+            case "${{ matrix.distro }}" in
+              jessie|stretch|buster)
+                sed -i 's/archive.raspbian.org/legacy.raspbian.org/g' /etc/apt/sources.list
+                sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list
+                sed -i 's/security.debian.org/archive.debian.org/g' /etc/apt/sources.list
+                sed -i '/${{ matrix.distro }}-updates/d' /etc/apt/sources.list
+                ;;
+              bullseye)
+                sed -i 's|//deb.debian.org/debian-security|//snapshot.debian.org/archive/debian-security/20260901T000000Z|g' /etc/apt/sources.list
+                sed -i 's|//security.debian.org/debian-security|//snapshot.debian.org/archive/debian-security/20260901T000000Z|g' /etc/apt/sources.list
+                sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list
+                echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until
+                ;;
+            esac
+            case "${{ matrix.distro }}" in
+              ubuntu*|jessie|stretch|buster|bullseye|bookworm|trixie)
+                apt-get update -y
+                DEBIAN_FRONTEND=noninteractive apt-get install --force-yes -y cmake git build-essential pkg-config gettext libavahi-client-dev libssl-dev zlib1g-dev wget bzip2 git-core liburiparser-dev libdvbcsa-dev python3 python3-requests debhelper ccache lsb-release libc6-dev-armel-cross
+                DEBIAN_FRONTEND=noninteractive apt-get install --force-yes -y libpcre3-dev || DEBIAN_FRONTEND=noninteractive apt-get install --force-yes -y libpcre2-dev
+                ;;
+              fedora*)
+                dnf -y update
+                dnf -y install git which
+                ;;
+              alpine*)
+                apk update
+                apk add git
+                ;;
+            esac
+
+          # Produce a binary artifact
+          run: |
+            git config --global --add safe.directory /home/runner/work/tvheadend/tvheadend || true
+            export VUE_FILE_CACHE=/artifacts/.vuecache
+            AUTOBUILD_CONFIGURE_EXTRA="--enable-ccache --enable-ffmpeg_static --enable-hdhomerun_static --python=python3 --enable-vue_cache --disable-vue_build" ./Autobuild.sh
+            cp ../tvheadend*.deb /artifacts/
+            if [ '${{ matrix.distro }}' = 'buster' ] && [ '${{ matrix.arch }}' = 'armv7' ]; then update-ca-certificates --fresh; fi
+            support/cloudsmith.sh -f '../tvheadend*.deb'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tvheadend-${{ matrix.distro }}-${{ matrix.arch }}
+          path: artifacts/tvheadend*.deb
+          if-no-files-found: error
+
+  build-deb-native:
+    runs-on: ${{ matrix.runner }}
+    needs: vue
+    continue-on-error: true
+    name: Build on ${{ matrix.container[2] || format('native {0}', matrix.container[1]) }}
+    env:
+      PCLOUD_TOKEN: ${{ secrets.PCLOUD_TOKEN }}
+    strategy:
+      matrix:
+        runner: ["ubuntu-latest"]
+        container: [["i386/ubuntu:trusty", "i386-ubuntu-trusty"], ["ubuntu:trusty", "ubuntu-trusty"], ["i386/ubuntu:xenial", "i386-ubuntu-xenial"], ["ubuntu:xenial", "ubuntu-xenial"], ["ubuntu:bionic", "ubuntu-bionic"], ["ubuntu:focal", "ubuntu-focal"], ["ubuntu:jammy", "ubuntu-jammy"], ["ubuntu:noble", "ubuntu-noble"], ["ubuntu:plucky", "ubuntu-plucky"], ["ubuntu:questing", "ubuntu-questing"], ["ubuntu:resolute", "ubuntu-resolute"], ["i386/debian:stretch", "i386-debian-stretch"], ["debian:stretch", "debian-stretch"], ["i386/debian:buster", "i386-debian-buster"], ["debian:buster", "debian-buster"], ["i386/debian:bullseye", "i386-debian-bullseye"], ["debian:bullseye", "debian-bullseye"], ["i386/debian:bookworm", "i386-debian-bookworm"], ["debian:bookworm", "debian-bookworm"], ["i386/debian:trixie", "i386-debian-trixie"], ["debian:trixie", "debian-trixie"], ["i386/debian:sid", "i386-debian-sid"], ["debian:sid", "debian-sid"]]
+        # aarch64 legs on GitHub's arm64 runners, replacing the QEMU-emulated
+        # aarch64 builds formerly in build-crosscompile:
+        # uraimo/run-on-arch-action cannot run on arm64 hosts (its QEMU
+        # helper image is amd64-only, uraimo/run-on-arch-action#161).
+        # Each include entry overrides both matrix axes, so it is added as
+        # its own combination instead of cross-multiplying with the
+        # ubuntu-latest legs above.
+        # The third container element is the display name: these legs keep
+        # the job names of the QEMU builds they replace, so the required
+        # status checks on master keep matching by name.
+        include:
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/debian:stretch", "arm64-debian-stretch", "stretch aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/debian:buster", "arm64-debian-buster", "buster aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/debian:bullseye", "arm64-debian-bullseye", "bullseye aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/debian:bookworm", "arm64-debian-bookworm", "bookworm aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/ubuntu:xenial", "arm64-ubuntu-xenial", "ubuntu16.04 aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/ubuntu:bionic", "arm64-ubuntu-bionic", "ubuntu18.04 aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/ubuntu:focal", "arm64-ubuntu-focal", "ubuntu20.04 aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/ubuntu:jammy", "arm64-ubuntu-jammy", "ubuntu22.04 aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/ubuntu:noble", "arm64-ubuntu-noble", "ubuntu24.04 aarch64"]
+          - runner: ubuntu-24.04-arm
+            container: ["arm64v8/ubuntu:latest", "arm64-ubuntu-latest", "ubuntu_latest aarch64"]
+    steps:
+      - name: Setup container
+        run: |
+          docker pull ${{ matrix.container[0] }}
+          docker run --name build-container -d -e GITHUB_ACTIONS=true -v ${{ github.workspace }}:/workspace ${{ matrix.container[0] }} tail -f /dev/null
+      - name: Fix old debian apt
+        if: endsWith(matrix.container[0], 'debian:stretch') || endsWith(matrix.container[0], 'debian:buster') || endsWith(matrix.container[0], 'debian:bullseye')
+        env:
+          SCRIPT: |
+            case "${{ matrix.container[0] }}" in
+              *bullseye)
+                sed -i 's|//deb.debian.org/debian-security|//snapshot.debian.org/archive/debian-security/20260901T000000Z|g' /etc/apt/sources.list
+                sed -i 's|//security.debian.org/debian-security|//snapshot.debian.org/archive/debian-security/20260901T000000Z|g' /etc/apt/sources.list
+                sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list
+                echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until
+                ;;
+              *)
+                sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list
+                sed -i 's/security.debian.org/archive.debian.org/g' /etc/apt/sources.list
+                sed -i '/stretch-updates/d' /etc/apt/sources.list
+                ;;
+            esac
+        run: docker exec build-container bash -c "$SCRIPT"
+      - name: dependencies
+        env:
+          SCRIPT: |
+            apt-get update -y
+            DEBIAN_FRONTEND=noninteractive apt-get install --force-yes -y cmake git build-essential pkg-config gettext libavahi-client-dev libssl-dev zlib1g-dev wget bzip2 git-core liburiparser-dev libdvbcsa-dev python3 python3-requests debhelper ccache lsb-release
+        run: docker exec build-container bash -c "$SCRIPT"
+      - name: pcre-dependency
+        env:
+          SCRIPT: |
+            DEBIAN_FRONTEND=noninteractive apt-get install --force-yes -y libpcre3-dev || DEBIAN_FRONTEND=noninteractive apt-get install --force-yes -y libpcre2-dev
+        run: docker exec build-container bash -c "$SCRIPT"
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Download Vue UI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.vue.outputs.artifact_name }}
+          path: ${{ github.workspace }}/.vuecache
+      - name: Workaround safe directory
+        env:
+          SCRIPT: |
+            git config --global --add safe.directory /workspace
+        run: docker exec build-container bash -c "$SCRIPT"
+      - name: Cache static dependencies
+        uses: actions/cache@v4
+        with:
+          path: .staticlib
+          key: staticlib-${{ matrix.container[1] }}-${{ github.sha }}
+          restore-keys: |
+            staticlib-${{ matrix.container[1] }}-
+      - name: build
+        env:
+          SCRIPT: |
+            cd /workspace
+            mkdir -p .staticlib
+            export STATICLIB_CACHE=/workspace/.staticlib
+            export VUE_FILE_CACHE=/workspace/.vuecache
+            AUTOBUILD_CONFIGURE_EXTRA="--enable-ccache --enable-ffmpeg_static --enable-hdhomerun_static --python=python3 --enable-vue_cache --disable-vue_build" ./Autobuild.sh ${{ (startsWith(matrix.container[0], 'i386') && '-a i386') || '' }}
+        run: docker exec -e PCLOUD_TOKEN build-container bash -c "$SCRIPT"
+      - name: copy-result
+        env:
+          SCRIPT: |
+            cp tvheadend*.deb workspace/
+        run: docker exec build-container bash -c "$SCRIPT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tvheadend-${{ matrix.container[1] }}
+          path: tvheadend*.deb
+          if-no-files-found: error
+      - name: upload-cloudsmith
+        env:
+          CLOUDSMITH_ORG: ${{ vars.CLOUDSMITH_ORG }}
+          CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO }}
+          CLOUDSMITH_OWNER: ${{ secrets.CLOUDSMITH_OWNER }}
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_KEY }}
+          SCRIPT: |
+            cd /workspace
+            support/cloudsmith.sh -f 'tvheadend*.deb'
+        run: docker exec -e CLOUDSMITH_ORG -e CLOUDSMITH_REPO -e CLOUDSMITH_OWNER -e CLOUDSMITH_API_KEY build-container bash -c "$SCRIPT"
+
+  build-rpm-native:
+    needs: vue
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    name: Build on native fedora:${{ matrix.releasever }}
+    env:
+      PCLOUD_TOKEN: ${{ secrets.PCLOUD_TOKEN }}
+    strategy:
+      matrix:
+        releasever: ["37", "38", "39", "40", "41", "42", "43", "44", "rawhide"]
+    container:
+      image: "fedora:${{ matrix.releasever }}"
+    steps:
+      - name: rpmfusion-free
+        run: |
+          dnf install -y "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${{ matrix.releasever }}.noarch.rpm"
+      - name: dependencies
+        run: |
+          dnf install -y gcc-c++ gcc-c++ which rpm-build rpmdevtools git make cmake gettext-devel dbus-devel avahi-devel openssl-devel zlib-devel libdvbcsa-devel wget bzip2 uriparser-devel pcre2-devel python python-requests ccache systemd-units systemd-devel
+          dnf install -y openssl-devel-engine || true
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          tags: true
+      - name: Download Vue UI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.vue.outputs.artifact_name }}
+          path: .vuecache
+      - name: Workaround safe directory
+        run: git config --global --add safe.directory "$(pwd)"
+      - name: Cache static dependencies
+        uses: actions/cache@v4
+        with:
+          path: .staticlib
+          key: staticlib-fedora-${{ matrix.releasever }}-${{ github.sha }}
+          restore-keys: |
+            staticlib-fedora-${{ matrix.releasever }}-
+      - name: build
+        run: |
+          mkdir -p .staticlib
+          export STATICLIB_CACHE="$PWD/.staticlib"
+          export VUE_FILE_CACHE="$PWD/.vuecache"
+          export TVH_EXTRA_CONFIGURE="--enable-vue_cache --disable-vue_build"
+          ./configure --disable-dvbscan --disable-libfdkaac_static --disable-ffmpeg_static --disable-hdhomerun_static --disable-libfdkaac_static --disable-libopus_static --disable-libtheora_static --disable-libvorbis_static --disable-libvpx_static --disable-libx264_static --disable-libx265_static --enable-libfdkaac --enable-hdhomerun_client --enable-libsystemd_daemon --python=/usr/bin/python3 $TVH_EXTRA_CONFIGURE && make -C rpm build -j$(nproc) || (echo "PARALLEL BUILD FAILED, DOING SINGLE THREADED BUILD" && make -C rpm build)
+      - name: copy-result
+        run: cp rpm/RPMS/*/tvheadend*.rpm .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tvheadend-Fedora-${{ matrix.releasever }}
+          path: tvheadend*.rpm
+          if-no-files-found: error
+      - name: upload-cloudsmith
+        run: support/cloudsmith.sh -f 'tvheadend*.rpm'
+        env:
+          CLOUDSMITH_ORG: ${{ vars.CLOUDSMITH_ORG }}
+          CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO }}
+          CLOUDSMITH_OWNER: ${{ secrets.CLOUDSMITH_OWNER }}
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_KEY }}
+
+  build-el-rpm-native:
+    needs: vue
+    continue-on-error: true
+    name: Build on native almalinux:${{ matrix.releasever }} ${{ matrix.runner == 'ubuntu-latest' && 'x86_64' || 'aarch64' }}
+    strategy:
+      matrix:
+        releasever: ["9", "10"]
+        runner: ["ubuntu-latest", "ubuntu-24.04-arm"]
+    runs-on: ${{ matrix.runner }}
+    env:
+      PCLOUD_TOKEN: ${{ secrets.PCLOUD_TOKEN }}
+    container:
+      image: "almalinux:${{ matrix.releasever }}"
+    steps:
+      - name: rpmfusion-free
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf config-manager --set-enabled crb
+          dnf install -y "https://download1.rpmfusion.org/free/el/rpmfusion-free-release-${{ matrix.releasever }}.noarch.rpm"
+      - name: dependencies
+        run: |
+          dnf install -y gcc-c++ gcc-c++ which rpm-build rpmdevtools git make cmake gettext-devel dbus-devel avahi-devel openssl-devel zlib-devel libdvbcsa-devel wget bzip2 uriparser-devel pcre2-devel python python-requests ccache systemd-units systemd-devel
+          dnf install -y openssl-devel-engine || true
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          tags: true
+      - name: Download Vue UI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.vue.outputs.artifact_name }}
+          path: .vuecache
+      - name: Workaround safe directory
+        run: git config --global --add safe.directory "$(pwd)"
+      - name: Cache static dependencies
+        uses: actions/cache@v4
+        with:
+          path: .staticlib
+          key: staticlib-el-${{ matrix.releasever }}-${{ matrix.runner }}-${{ github.sha }}
+          restore-keys: |
+            staticlib-el-${{ matrix.releasever }}-${{ matrix.runner }}-
+      - name: build
+        run: |
+          mkdir -p .staticlib
+          export STATICLIB_CACHE="$PWD/.staticlib"
+          export VUE_FILE_CACHE="$PWD/.vuecache"
+          export TVH_EXTRA_CONFIGURE="--enable-vue_cache --disable-vue_build"
+          ./configure --disable-dvbscan --disable-libfdkaac_static --disable-ffmpeg_static --disable-hdhomerun_static --disable-libfdkaac_static --disable-libopus_static --disable-libtheora_static --disable-libvorbis_static --disable-libvpx_static --disable-libx264_static --disable-libx265_static --enable-libfdkaac --enable-hdhomerun_client --enable-libsystemd_daemon --python=/usr/bin/python3 $TVH_EXTRA_CONFIGURE && make -C rpm build -j$(nproc)
+      - name: copy-result
+        run: cp rpm/RPMS/*/tvheadend*.rpm .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tvheadend-el-${{ matrix.releasever }}-${{ matrix.runner == 'ubuntu-latest' && 'x86_64' || 'aarch64' }}
+          path: tvheadend*.rpm
+          if-no-files-found: error
+      - name: upload-cloudsmith
+        run: support/cloudsmith.sh -f 'tvheadend*.rpm'
+        env:
+          CLOUDSMITH_ORG: ${{ vars.CLOUDSMITH_ORG }}
+          CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO }}
+          CLOUDSMITH_OWNER: ${{ secrets.CLOUDSMITH_OWNER }}
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_KEY }}

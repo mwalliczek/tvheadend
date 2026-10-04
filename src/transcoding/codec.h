@@ -59,7 +59,7 @@ struct tvh_codec {
     const char *name;
     size_t size;
     const codec_profile_class_t *idclass;
-    AVCodec *codec;
+    const AVCodec *codec;
     const AVProfile *profiles;
     int (*profile_init)(TVHCodecProfile *, htsmsg_t *conf);
     void (*profile_destroy)(TVHCodecProfile *);
@@ -111,7 +111,7 @@ tvh_codec_profile_get_name(TVHCodecProfile *self);
 const char *
 tvh_codec_profile_get_title(TVHCodecProfile *self);
 
-AVCodec *
+const AVCodec *
 tvh_codec_profile_get_avcodec(TVHCodecProfile *self);
 
 
@@ -133,6 +133,9 @@ tvh_codec_profile_video_destroy(TVHCodecProfile *_self);
 int
 tvh_codec_profile_video_get_hwaccel(TVHCodecProfile *self);
 
+int
+tvh_codec_profile_video_get_hwaccel_details(TVHCodecProfile *self);
+
 const enum AVPixelFormat *
 tvh_codec_profile_video_get_pix_fmts(TVHCodecProfile *self);
 
@@ -150,8 +153,13 @@ tvh_codec_profile_audio_get_sample_fmts(TVHCodecProfile *self);
 const int *
 tvh_codec_profile_audio_get_sample_rates(TVHCodecProfile *self);
 
+#if LIBAVCODEC_VERSION_MAJOR > 59
+const AVChannelLayout *
+tvh_codec_profile_audio_get_channel_layouts(TVHCodecProfile *self);
+#else
 const uint64_t *
 tvh_codec_profile_audio_get_channel_layouts(TVHCodecProfile *self);
+#endif
 
 
 /* module level ============================================================= */
@@ -163,7 +171,11 @@ htsmsg_t *
 codec_get_profiles_list(enum AVMediaType media_type);
 
 void
+#if ENABLE_VAAPI
+codec_init(int vainfo_probe_enabled);
+#else
 codec_init(void);
+#endif
 
 void
 codec_done(void);

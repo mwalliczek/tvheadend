@@ -52,8 +52,6 @@
 #define NV_ENC_HEVC_PROFILE_MAIN_10 			    1
 #define NV_ENC_HEVC_PROFILE_REXT			        2
 
-#define NV_ENC_PROFILE_UNKNOWN                      FF_PROFILE_UNKNOWN
-
 #define NV_ENC_LEVEL_AUTOSELECT                     0
 
 #define NV_ENC_LEVEL_H264_1                         10
@@ -91,7 +89,7 @@
 #define NV_ENC_LEVEL_HEVC_62                        186
 
 #define AV_DICT_SET_CQ(d, v, a) \
-    AV_DICT_SET_INT((d), "cq", (v) ? (v) : (a), AV_DICT_DONT_OVERWRITE)
+    AV_DICT_SET_INT(LST_NVENC, (d), "cq", (v) ? (v) : (a), AV_DICT_DONT_OVERWRITE)
 
 
 /* nvenc ==================================================================== */
@@ -134,19 +132,19 @@ tvh_codec_profile_nvenc_open(tvh_codec_profile_nvenc_t *self,
     };
     const char *s;
 
-    AV_DICT_SET_INT(opts, "gpu", MINMAX(self->devicenum, 0, 15), 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "gpu", MINMAX(self->devicenum, 0, 15), 0);
     if (self->preset != PRESET_DEFAULT &&
         (s = val2str(self->profile, presettab)) != NULL) {
-        AV_DICT_SET(opts, "preset", s, 0);
+        AV_DICT_SET(LST_NVENC, opts, "preset", s, 0);
     }
     if (self->rc != NV_ENC_PARAMS_RC_AUTO &&
         (s = val2str(self->rc, rctab)) != NULL) {
-        AV_DICT_SET(opts, "rc", s, 0);
+        AV_DICT_SET(LST_NVENC, opts, "rc", s, 0);
     }
     if (self->bit_rate) {
-        AV_DICT_SET_BIT_RATE(opts, self->bit_rate);
+        AV_DICT_SET_BIT_RATE(LST_NVENC, opts, self->bit_rate);
     }
-    AV_DICT_SET_INT(opts, "quality", self->quality, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "quality", self->quality, 0);
     return 0;
 }
 
@@ -217,7 +215,7 @@ static const codec_profile_class_t codec_profile_nvenc_class = {
                 .get_opts = codec_profile_class_profile_get_opts,
                 .off      = offsetof(tvh_codec_profile_nvenc_t, nvenc_profile),
                 .list     = codec_profile_nvenc_class_profile_list,
-                .def.i    = NV_ENC_PROFILE_UNKNOWN,
+                .def.i    = FF_AV_PROFILE_UNKNOWN,
             },
             {
                 .type     = PT_INT,
@@ -255,6 +253,17 @@ static const codec_profile_class_t codec_profile_nvenc_class = {
             },
             {
                 .type     = PT_INT,
+                .id       = "gop_size",     // Don't change
+                .name     = N_("GOP size"),
+                .desc     = N_("Sets the Group of Pictures (GOP) size in frame (default 0 is 3 sec.)"),
+                .group    = 3,
+                .get_opts = codec_profile_class_get_opts,
+                .off      = offsetof(TVHVideoCodecProfile, gop_size),
+                .intextra = INTEXTRA_RANGE(0, 1000, 1),
+                .def.i    = 0,
+            },
+            {
+                .type     = PT_INT,
                 .id       = "rc",
                 .name     = N_("Rate control"),
                 .group    = 3,
@@ -279,7 +288,7 @@ static const AVProfile nvenc_h264_profiles[] = {
     { NV_ENC_H264_PROFILE_MAIN,                 "Main" },
     { NV_ENC_H264_PROFILE_HIGH,                 "High" },
     { NV_ENC_H264_PROFILE_HIGH_444P,            "High 444P" },
-    { NV_ENC_PROFILE_UNKNOWN },
+    { FF_AV_PROFILE_UNKNOWN },
 };
 
 static int
@@ -320,23 +329,22 @@ tvh_codec_profile_nvenc_h264_open(tvh_codec_profile_nvenc_t *self,
 
     if (self->level != NV_ENC_LEVEL_AUTOSELECT &&
         (s = val2str(self->level, leveltab)) != NULL) {
-        AV_DICT_SET(opts, "level", s, 0);
+        AV_DICT_SET(LST_NVENC, opts, "level", s, 0);
     }
 
-    if (self->nvenc_profile != NV_ENC_PROFILE_UNKNOWN &&
+    if (self->nvenc_profile != FF_AV_PROFILE_UNKNOWN &&
         (s = val2str(self->nvenc_profile, profiletab)) != NULL) {
-        AV_DICT_SET(opts, "profile", s, 0);
+        AV_DICT_SET(LST_NVENC, opts, "profile", s, 0);
     }
     
     // ------ Set Defaults ---------
-    AV_DICT_SET_INT(opts, "qmin", -1, 0);
-    AV_DICT_SET_INT(opts, "qmax", -1, 0);
-    AV_DICT_SET_INT(opts, "qdiff", -1, 0);
-    AV_DICT_SET_INT(opts, "qblur", -1, 0);
-    AV_DICT_SET_INT(opts, "qcomp", -1, 0);
-    AV_DICT_SET_INT(opts, "g", 250, 0);
-    AV_DICT_SET_INT(opts, "bf", 0, 0);
-    AV_DICT_SET_INT(opts, "refs", 0, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qmin", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qmax", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qdiff", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qblur", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qcomp", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "bf", 0, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "refs", 0, 0);
     return 0;
 }
 
@@ -406,7 +414,7 @@ static const AVProfile nvenc_hevc_profiles[] = {
     { NV_ENC_HEVC_PROFILE_MAIN,    "Main" },
     { NV_ENC_HEVC_PROFILE_MAIN_10, "Main 10" },
     { NV_ENC_HEVC_PROFILE_REXT, "Rext" },
-    { NV_ENC_PROFILE_UNKNOWN },
+    { FF_AV_PROFILE_UNKNOWN },
 };
 
 static int
@@ -440,23 +448,22 @@ tvh_codec_profile_nvenc_hevc_open(tvh_codec_profile_nvenc_t *self,
 
     if (self->level != NV_ENC_LEVEL_AUTOSELECT &&
         (s = val2str(self->level, leveltab)) != NULL) {
-        AV_DICT_SET(opts, "level", s, 0);
+        AV_DICT_SET(LST_NVENC, opts, "level", s, 0);
         }
 
-    if (self->nvenc_profile != NV_ENC_PROFILE_UNKNOWN &&
+    if (self->nvenc_profile != FF_AV_PROFILE_UNKNOWN &&
         (s = val2str(self->nvenc_profile, profiletab)) != NULL) {
-        AV_DICT_SET(opts, "profile", s, 0);
+        AV_DICT_SET(LST_NVENC, opts, "profile", s, 0);
         }
     
     // ------ Set Defaults ---------
-    AV_DICT_SET_INT(opts, "qmin", -1, 0);
-    AV_DICT_SET_INT(opts, "qmax", -1, 0);
-    AV_DICT_SET_INT(opts, "qdiff", -1, 0);
-    AV_DICT_SET_INT(opts, "qblur", -1, 0);
-    AV_DICT_SET_INT(opts, "qcomp", -1, 0);
-    AV_DICT_SET_INT(opts, "g", 250, 0);
-    AV_DICT_SET_INT(opts, "bf", 0, 0);
-    AV_DICT_SET_INT(opts, "refs", 0, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qmin", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qmax", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qdiff", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qblur", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "qcomp", -1, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "bf", 0, 0);
+    AV_DICT_SET_INT(LST_NVENC, opts, "refs", 0, 0);
     return 0;
 }
 

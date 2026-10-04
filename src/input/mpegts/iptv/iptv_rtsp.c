@@ -18,6 +18,7 @@
  */
 
 #include "tvheadend.h"
+#include "config.h"
 #include "iptv_private.h"
 #include "iptv_rtcp.h"
 #include "http.h"
@@ -75,7 +76,6 @@ iptv_rtsp_header ( http_client_t *hc )
 {
   iptv_mux_t *im = hc->hc_aux;
   rtsp_priv_t *rp;
-  url_t url;
   int r;
   char *p;
 
@@ -101,7 +101,11 @@ iptv_rtsp_header ( http_client_t *hc )
     return 0;
   }
 
-  if (hc->hc_cmd == RTSP_CMD_DESCRIBE && hc->hc_code != HTTP_STATUS_OK && hc->hc_code != HTTP_STATUS_SEE_OTHER) {
+  if (hc->hc_cmd == RTSP_CMD_DESCRIBE && hc->hc_code != HTTP_STATUS_OK &&
+      !(hc->hc_code == HTTP_STATUS_MOVED ||
+      hc->hc_code == HTTP_STATUS_FOUND ||
+      hc->hc_code == HTTP_STATUS_SEE_OTHER ||
+      hc->hc_code == HTTP_STATUS_NOT_MODIFIED)) {
     tvherror(LS_IPTV, "DESCRIBE request returned an invalid error code (%d) for '%s', "
              "fall back to GET_PARAMETER in keep alive loop.", hc->hc_code, im->mm_iptv_url_raw);
     hc->hc_rtsp_keep_alive_cmd = RTSP_CMD_GET_PARAMETER;
@@ -114,42 +118,28 @@ iptv_rtsp_header ( http_client_t *hc )
 
   switch (hc->hc_cmd) {
   case RTSP_CMD_DESCRIBE:
-    if(rp->play) {
+    if (rp->play) {
       // Already active, most probably a keep-alive response
       break;
     }
-    if (hc->hc_code == HTTP_STATUS_SEE_OTHER) {
+    if (hc->hc_code == HTTP_STATUS_MOVED ||
+        hc->hc_code == HTTP_STATUS_FOUND ||
+        hc->hc_code == HTTP_STATUS_SEE_OTHER ||
+        hc->hc_code == HTTP_STATUS_NOT_MODIFIED) {
+      // Redirect from RTSP server
       if (!hc->hc_handle_location) {
-        tvherror(LS_IPTV, "received code 303 from RTSP server but redirects disabled '%s'",
-            im->mm_iptv_url_raw);
+        tvherror(LS_IPTV, "received code %d from RTSP server but redirects disabled '%s'",
+            hc->hc_code, im->mm_iptv_url_raw);
         return -1;
       }
-      // Redirect from RTSP server, parse new location and use that instead
       p = http_arg_get(&hc->hc_args, "Location");
       if (p == NULL) {
-        tvherror(LS_IPTV, "received code 303 from RTSP server but no new location given for '%s'",
-            im->mm_iptv_url_raw);
+        tvherror(LS_IPTV, "received code %d from RTSP server but no new location given for '%s'",
+            hc->hc_code, im->mm_iptv_url_raw);
         return -1;
       }
-      tvhinfo(LS_IPTV, "received new location from RTSP server '%s' was '%s'", p,
-          im->mm_iptv_url_raw);
-      urlinit(&url);
-      if (urlparse(p, &url) || strncmp(url.scheme, "rtsp", 4) != 0) {
-        tvherror(LS_IPTV, "%s - invalid URL [%s]", im->mm_nicename, p);
-        return -1;
-      }
-      if(rp->path)
-        free(rp->path);
-      if(rp->query)
-        free(rp->query);
-      rp->path = strdup(url.path ? : "");
-      rp->query = strdup(url.query ? : "");
-      urlreset(&url);
-      r = rtsp_describe(hc, rp->path, rp->query);
-      if (r < 0) {
-        tvherror(LS_IPTV, "rtsp: DESCRIBE failed");
-        return -1;
-      }
+      tvhinfo(LS_IPTV, "received new location from RTSP server (code: %d) '%s' was '%s'",
+          hc->hc_code, p, im->mm_iptv_url_raw);
     }
     break;
   case RTSP_CMD_SETUP:
@@ -274,6 +264,8 @@ iptv_rtsp_start
   http_client_t *hc;
   udp_connection_t *rtp, *rtcp;
   int r;
+  int rtp_port;
+  int max_rtp_port;
 
   if (!(hc = http_client_connect(im, RTSP_VERSION_1_0, u->scheme,
                                  u->host, u->port, NULL)))
@@ -283,13 +275,36 @@ iptv_rtsp_start
     hc->hc_rtsp_user = strdup(u->user);
   if (u->pass)
     hc->hc_rtsp_pass = strdup(u->pass);
+  
+  rtp_port = config.rtsp_udp_min_port;
+  max_rtp_port = config.rtsp_udp_max_port;
 
-  if (udp_bind_double(&rtp, &rtcp,
-                      LS_IPTV, "rtp", "rtcp",
-                      NULL, 0, NULL,
-                      128*1024, 16384, 4*1024, 4*1024) < 0) {
+  if (!max_rtp_port) {
+    rtp_port = 0;
+  }
+
+  if (rtp_port > max_rtp_port)
+  {
+    tvherror(LS_IPTV, "UDP minimum port is set higher than the UDP maximum port");
     http_client_close(hc);
     return SM_CODE_TUNING_FAILED;
+  }
+
+  while (udp_bind_double(&rtp, &rtcp,
+                          LS_IPTV, "rtp", "rtcp",
+                          NULL, rtp_port, NULL,
+                          128 * 1024, 16384, 4 * 1024, 4 * 1024, 1) < 0)
+  {
+    if (!rtp_port) {
+      tvherror(LS_IPTV, "could not bind a random UDP port for RTP");
+      http_client_close(hc);
+      return SM_CODE_TUNING_FAILED;
+    } else if (max_rtp_port && rtp_port >= max_rtp_port - 2) {
+      tvherror(LS_IPTV, "all the UDP ports allocated are used, please reduce the number of simultaneous IPTV streams or increase the number of ports in the global settings");
+      http_client_close(hc);
+      return SM_CODE_TUNING_FAILED;
+    }
+    rtp_port += 2;
   }
 
   hc->hc_hdr_received        = iptv_rtsp_header;
@@ -396,154 +411,6 @@ iptv_rtsp_read ( iptv_input_t *mi, iptv_mux_t *im )
   return r;
 }
 
-/*
- * Send the status message
- */
-#if ENABLE_TIMESHIFT
-static void rtsp_timeshift_fill_status(rtsp_st_t *ts, rtsp_priv_t *rp,
-    timeshift_status_t *status) {
-  int64_t start, end, current;
-
-  if (rp == NULL) {
-    start = 0;
-    end = 3600;
-    current = 0;
-  } else {
-    start = 0;
-    end = rp->range_end - rp->range_start;
-    current = rp->position - rp->range_start;
-  }
-  status->full = 0;
-
-  tvhdebug(LS_TIMESHIFT,
-      "remote ts status start %"PRId64" end %"PRId64 " current %"PRId64, start, end,
-      current);
-
-  status->shift = ts_rescale_inv(current, 1);
-  status->pts_start = ts_rescale_inv(start, 1);
-  status->pts_end = ts_rescale_inv(end, 1);
-}
-
-static void rtsp_timeshift_status
-  ( rtsp_st_t *pd, rtsp_priv_t *rp )
-{
-  streaming_message_t *tsm, *tsm2;
-  timeshift_status_t *status;
-
-  status = calloc(1, sizeof(timeshift_status_t));
-  rtsp_timeshift_fill_status(pd, rp, status);
-  tsm = streaming_msg_create_data(SMT_TIMESHIFT_STATUS, status);
-  tsm2 = streaming_msg_clone(tsm);
-  streaming_target_deliver2(pd->output, tsm);
-  streaming_target_deliver2(pd->tsfix, tsm2);
-}
-
-void *rtsp_status_thread(void *p) {
-  int64_t mono_now, mono_last_status = 0;
-  rtsp_st_t *pd = p;
-  rtsp_priv_t *rp;
-
-  while (pd->run) {
-    mono_now  = getfastmonoclock();
-    if(pd->im == NULL)
-      continue;
-    rp = (rtsp_priv_t*) pd->im->im_data;
-    if(rp == NULL || !pd->rtsp_input_start)
-      continue;
-    if (mono_now >= (mono_last_status + sec2mono(1))) {
-      // In case no buffer updates available assume the buffer is being filled
-      if(rp->hc && rp->hc->hc_rtsp_keep_alive_cmd != RTSP_CMD_DESCRIBE)
-        rp->range_end++;
-      rtsp_timeshift_status(pd, rp);
-      mono_last_status = mono_now;
-    }
-  }
-  return NULL;
-}
-
-static void rtsp_input(void *opaque, streaming_message_t *sm) {
-  rtsp_st_t *pd = (rtsp_st_t*) opaque;
-  iptv_mux_t *mux;
-  streaming_skip_t *data;
-  rtsp_priv_t *rp;
-
-  if(pd == NULL || sm == NULL)
-    return;
-
-  switch (sm->sm_type) {
-  case SMT_GRACE:
-    if (sm->sm_s != NULL)
-      pd->im = (iptv_mux_t*) ((mpegts_service_t*) sm->sm_s)->s_dvb_mux;
-    streaming_target_deliver2(pd->output, sm);
-    break;
-  case SMT_START:
-    pd->rtsp_input_start = 1;
-    streaming_target_deliver2(pd->output, sm);
-    break;
-  case SMT_SKIP:
-    mux = (iptv_mux_t*) pd->im;
-    if (mux == NULL || mux->im_data == NULL)
-      break;
-    rp = (rtsp_priv_t*) mux->im_data;
-    if (rp->start_position == 0)
-      rp->start_position = rp->hc->hc_rtsp_stream_start;
-    rtsp_pause(rp->hc, rp->path, rp->query);
-    mux->mm_iptv_rtp_seq = -1;
-    data = (streaming_skip_t*) sm->sm_data;
-    rtsp_set_position(rp->hc,
-        rp->range_start + ts_rescale(data->time, 1));
-    tvhinfo(LS_IPTV, "rtsp: skip: %" PRItime_t " + %" PRId64, rp->range_start,
-        ts_rescale(data->time, 1));
-    streaming_msg_free(sm);
-    break;
-  case SMT_SPEED:
-    mux = (iptv_mux_t*) pd->im;
-    if (mux == NULL || mux->im_data == NULL)
-      break;
-    rp = (rtsp_priv_t*) mux->im_data;
-    tvhinfo(LS_IPTV, "rtsp: set speed: %i", sm->sm_code);
-    if (sm->sm_code == 0) {
-      rtsp_pause(rp->hc, rp->path, rp->query);
-    } else {
-      rtsp_set_speed(rp->hc, sm->sm_code / 100);
-    }
-    streaming_msg_free(sm);
-    break;
-  case SMT_EXIT:
-    pd->run = 0;
-    streaming_target_deliver2(pd->output, sm);
-    break;
-  default:
-    streaming_target_deliver2(pd->output, sm);
-  }
-}
-
-static htsmsg_t*
-rtsp_input_info(void *opaque, htsmsg_t *list) {
-  return list;
-}
-
-static streaming_ops_t rtsp_input_ops =
-{ .st_cb = rtsp_input, .st_info = rtsp_input_info };
-
-streaming_target_t* rtsp_st_create(streaming_target_t *out, profile_chain_t *prch) {
-  rtsp_st_t *h = calloc(1, sizeof(rtsp_st_t));
-
-  h->output = out;
-  h->tsfix = prch->prch_share;
-  h->run = 1;
-  tvh_thread_create(&h->st_thread, NULL, rtsp_status_thread, h, "rtsp-st");
-  streaming_target_init(&h->input, &rtsp_input_ops, h, 0);
-
-  return &h->input;
-}
-
-void rtsp_st_destroy(streaming_target_t *st) {
-  rtsp_st_t *h = (rtsp_st_t*)st;
-  h->run = 0;
-  free(st);
-}
-#endif
 /*
  * Initialise RTSP handler
  */

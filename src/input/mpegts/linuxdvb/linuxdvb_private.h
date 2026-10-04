@@ -150,6 +150,7 @@ struct linuxdvb_frontend
   int                       lfe_lna;
   uint32_t                  lfe_sig_multiplier;
   uint32_t                  lfe_snr_multiplier;
+  uint32_t                  lfe_grace_period;
 
   /*
    * Satconf (DVB-S only)
@@ -351,11 +352,15 @@ struct linuxdvb_en50494
 {
   linuxdvb_diseqc_t;
 
+  /* wait times */
+  uint32_t  le_powerup_time;  /* time to wait for power up in milliseconds */
+  uint32_t  le_cmd_time;      /* time to wait for command to complete in milliseconds */
+
   /* en50494 configuration */
-  uint16_t  le_position;  /* satelitte A(0) or B(1) */
-  uint16_t  le_frequency; /* user band frequency in MHz */
-  uint16_t  le_id;        /* user band id 0-7 */
-  uint16_t  le_pin;       /* 0-255 or LINUXDVB_EN50494_NOPIN */
+  uint16_t  le_id;            /* user band ID (0-7 for EN50494, 0-31 for EN50607) */
+  uint16_t  le_frequency;     /* user band frequency in MHz */
+  uint16_t  le_pin;           /* 0-255 or LINUXDVB_EN50494_NOPIN */
+  uint16_t  le_position;      /* satelitte position (0-1 for EN50494, 0-63 for EN50607) */
 
   /* runtime */
   uint32_t  le_tune_freq; /* the real frequency to tune to */

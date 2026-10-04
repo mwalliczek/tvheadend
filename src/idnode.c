@@ -113,6 +113,7 @@ idnode_insert(idnode_t *in, const char *uuid, const idclass_t *class, int flags)
 
     if (uuid_set(&u, uuid)) {
       in->in_class = NULL;
+      idnode_unlock();
       return -1;
     }
     uuid_duplicate(&in->in_uuid, &u);
@@ -391,6 +392,7 @@ idnode_get_u32
       ptr = ((void*)self) + p->off;
     switch (p->type) {
       case PT_INT:
+      case PT_DYN_INT:
       case PT_BOOL:
         *u32 = *(int*)ptr;
         return 0;
@@ -425,6 +427,7 @@ idnode_get_s64
       ptr = ((void*)self) + p->off;
     switch (p->type) {
       case PT_INT:
+      case PT_DYN_INT:
       case PT_BOOL:
         *s64 = *(int*)ptr;
         return 0;
@@ -495,6 +498,7 @@ idnode_get_dbl
       ptr = ((void*)self) + p->off;
     switch (p->type) {
       case PT_INT:
+      case PT_DYN_INT:
       case PT_BOOL:
         *dbl = *(int*)ptr;
         return 0;
@@ -761,6 +765,7 @@ idnode_cmp_sort
       }
       break;
     case PT_INT:
+    case PT_DYN_INT:
     case PT_U16:
     case PT_BOOL:
     case PT_PERM:
@@ -862,30 +867,48 @@ idnode_filter_init
   }
 }
 
+/* Shared ordered-comparison outcome: `cmp` is the three-way result
+ * (<0 / 0 / >0) of comparing the row value against the filter value;
+ * returns 1 when the row FAILS the filter. */
+static int
+idnode_filter_cmp_fails ( int cmp, idnode_filter_comp_t comp )
+{
+  switch (comp) {
+    case IC_EQ: return cmp != 0;
+    case IC_LT: return cmp >= 0;
+    case IC_GT: return cmp <= 0;
+    case IC_GE: return cmp < 0;
+    case IC_LE: return cmp > 0;
+    case IC_NE: return cmp == 0;
+    case IC_IN:
+    case IC_RE: return 0; // Note: invalid for ordered comparisons
+  }
+  return 0;
+}
+
 int
 idnode_filter
   ( idnode_t *in, idnode_filter_t *filter, const char *lang )
 {
   idnode_filter_ele_t *f;
-  
+
   LIST_FOREACH(f, filter, link) {
     if (!f->checked)
       idnode_filter_init(in, filter);
     if (f->type == IF_STR) {
       const char *str;
       char *strdisp;
-      int r = 1;
+      int r;
       str = strdisp = idnode_get_display(in, idnode_find_prop(in, f->key), lang);
       if (!str)
         if (!(str = idnode_get_str(in, f->key)))
           return 1;
-      switch(f->comp) {
-        case IC_IN: r = strstr(str, f->u.s) == NULL; break;
-        case IC_EQ: r = strcmp(str, f->u.s) != 0; break;
-        case IC_LT: r = strcmp(str, f->u.s) > 0; break;
-        case IC_GT: r = strcmp(str, f->u.s) < 0; break;
-        case IC_RE: r = !!regexec(&f->u.re, str, 0, NULL, 0); break;
-      }
+      if (f->comp == IC_IN)
+        r = strstr(str, f->u.s) == NULL;
+      else if (f->comp == IC_RE)
+        r = !!regexec(&f->u.re, str, 0, NULL, 0);
+      else
+        r = idnode_filter_cmp_fails(strcmp(str, f->u.s), f->comp);
       if (strdisp)
         free(strdisp);
       if (r)
@@ -895,45 +918,15 @@ idnode_filter
       if (idnode_get_s64(in, f->key, &a))
         return 1;
       b = (f->type == IF_NUM) ? f->u.n.n : f->u.b;
-      switch (f->comp) {
-        case IC_IN:
-        case IC_RE:
-          break; // Note: invalid
-        case IC_EQ:
-          if (a != b)
-            return 1;
-          break;
-        case IC_LT:
-          if (a > b)
-            return 1;
-          break;
-        case IC_GT:
-          if (a < b)
-            return 1;
-          break;
-      }
+      if (idnode_filter_cmp_fails((a > b) - (a < b), f->comp))
+        return 1;
     } else if (f->type == IF_DBL) {
       double a, b;
       if (idnode_get_dbl(in, f->key, &a))
         return 1;
       b = f->u.dbl;
-      switch (f->comp) {
-        case IC_IN:
-        case IC_RE:
-          break; // Note: invalid
-        case IC_EQ:
-          if (a != b)
-            return 1;
-          break;
-        case IC_LT:
-          if (a > b)
-            return 1;
-          break;
-        case IC_GT:
-          if (a < b)
-            return 1;
-          break;
-      }
+      if (idnode_filter_cmp_fails((a > b) - (a < b), f->comp))
+        return 1;
     }
   }
 
@@ -950,6 +943,7 @@ idnode_filter_add_str
   ele->comp = comp;
   if (comp == IC_RE) {
     if (regcomp(&ele->u.re, val, REG_ICASE | REG_EXTENDED | REG_NOSUB)) {
+      free(ele->key);
       free(ele);
       return;
     }
@@ -1922,7 +1916,7 @@ idnode_notify_title_changed (void *in)
 {
   htsmsg_t *m = htsmsg_create_map();
   htsmsg_add_uuid(m, "uuid", &((idnode_t *)in)->in_uuid);
-  notify_by_msg("title", m, NOTIFY_REWRITE_TITLE);
+  notify_by_msg("title", m, 0, NOTIFY_REWRITE_TITLE);
   idnode_notify_changed(in);
 }
 

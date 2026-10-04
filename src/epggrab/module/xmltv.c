@@ -14,6 +14,15 @@
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *  Notes - DMC April 2024.
+ *
+ *  The XMLTV data received is first converted to a htsmsg format.
+ *  Various tags and attributes are then extracted from the htsmsg
+ *  and saved as EPG data.
+ *
+ *  PLEASE NOTE: TVHeadEnd only processes a subset of the XMLTV schema,
+ *               plus a non-standard tag <summary>.
  */
 
 #include <assert.h>
@@ -43,6 +52,16 @@
 
 #define XMLTV_FIND "tv_find_grabbers"
 #define XMLTV_GRAB "tv_grab_"
+
+/*
+ * Global variables for XPaths
+ */
+htsmsg_t                            *xmltv_xpath_category_code = NULL;
+htsmsg_t                            *xmltv_xpath_unique = NULL;
+htsmsg_t                            *xmltv_xpath_series = NULL;
+htsmsg_t                            *xmltv_xpath_episode = NULL;
+int                                 xmltv_xpath_series_fallback = 0;
+int                                 xmltv_xpath_episode_fallback = 0;
 
 /* **************************************************************************
  * Parsing
@@ -412,7 +431,7 @@ static int _xmltv_parse_star_rating
 
   a = strtod(s1, &s1end);
   b = strtod(s2 + 1, &s2end);
-  if ( a == 0.0f || b == 0.0f) return 0;
+  if ( a == 0.0 || b == 0.0) return 0;
 
   return epg_broadcast_set_star_rating(ebc, (100 * a) / b, changes);
 }
@@ -448,45 +467,100 @@ static int _xmltv_parse_star_rating
 static int _xmltv_parse_age_rating
   ( epg_broadcast_t *ebc, htsmsg_t *body, epg_changes_t *changes )
 {
-  uint8_t age;
-  htsmsg_t *rating, *tags;
+  uint8_t age = 0;
+  htsmsg_t *rating, *tags, *attrib;
   const char *s1;
 
   if (!ebc || !body) return 0;
 
   htsmsg_field_t *f;
-  HTSMSG_FOREACH(f, body) {
-    if (!strcmp(htsmsg_field_name(f), "rating") && (rating = htsmsg_get_map_by_field(f))) {
-      if ((tags  = htsmsg_get_map(rating, "tags"))) {
-        if ((s1 = htsmsg_xml_get_cdata_str(tags, "value"))) {
-          /* We map some common ratings since some movies only
-           * have one of these flags rather than an age rating.
-           */
-          if (!strcmp(s1, "TV-G") || !strcmp(s1, "U"))
-            age = 3;
-          else if (!strcmp(s1, "TV-Y7") || !strcmp(s1, "PG"))
-            age = 7;
-          else if (!strcmp(s1, "TV-14"))
-            age = 14;
-          else if (!strcmp(s1, "TV-MA"))
-            age = 17;
-          else
-            age = atoi(s1);
-          /* Since age is uint8_t it means some rating systems can
-           * underflow and become very large, for example CSA has age
-           * rating of -10.
-           */
-          if (age > 0 && age < 22)
-            return epg_broadcast_set_age_rating(ebc, age, changes);
+
+  const char        *rating_system;   //System attribute from the 'rating' tag : <rating system="ACMA">
+  ratinglabel_t     *rl = NULL;
+
+  //Clear the rating label.
+  //If the event is already in the EPG DB with another
+  //rating label, this will clear the existing rating lable
+  //prior to setting the new one -if- the new one
+  //just happens to be null.
+  ebc->rating_label = rl;
+
+  //Only look for rating labels if enabled.
+  if(epggrab_conf.epgdb_processparentallabels){
+    HTSMSG_FOREACH(f, body) {
+      if (!strcmp(htsmsg_field_name(f), "rating") && (rating = htsmsg_get_map_by_field(f))) {
+        //Look for a 'system' attribute of the 'rating' tag
+        rating_system = NULL;
+        if ((attrib = htsmsg_get_map(rating, "attrib"))){
+          rating_system = htsmsg_get_str(attrib, "system");
+        }//END get the attributes for the rating tag.
+        
+        //Look for sub-tags of the 'rating' tag
+        if ((tags  = htsmsg_get_map(rating, "tags"))) {
+          //Look the the 'value' tag containing the actual rating text
+          if ((s1 = htsmsg_xml_get_cdata_str(tags, "value"))) {
+
+            rl = ratinglabel_find_from_xmltv(rating_system, s1);
+
+            if(rl){
+              tvhtrace(LS_RATINGLABELS, "Found label: '%s' / '%s' / '%s' / '%d'", rl->rl_authority, rl->rl_label, rl->rl_country, rl->rl_age);
+              ebc->rating_label = rl;
+              if (rl->rl_display_age >= 0 && rl->rl_display_age < 22){
+                return epg_broadcast_set_age_rating(ebc, rl->rl_display_age, changes);
+              }//END age sanity test
+            }//END we matched a rating label
+          }//END we got a value to inspect
+        }//END get sub-tags of the rating tag.
+      }//END got the 'rating' tag.
+    }//END loop through each XML tag
+  }//END rating labels enabled
+  else
+  //Perform the existing XMLTV lookup
+  {
+    HTSMSG_FOREACH(f, body) {
+      if (!strcmp(htsmsg_field_name(f), "rating") && (rating = htsmsg_get_map_by_field(f))) {
+        if ((tags  = htsmsg_get_map(rating, "tags"))) {
+          if ((s1 = htsmsg_xml_get_cdata_str(tags, "value"))) {
+            /* We map some common ratings since some movies only
+             * have one of these flags rather than an age rating.
+             */
+            if (!strcmp(s1, "TV-G") || !strcmp(s1, "U"))
+              age = 3;
+            else if (!strcmp(s1, "TV-Y7") || !strcmp(s1, "PG"))
+              age = 7;
+            else if (!strcmp(s1, "TV-14"))
+              age = 14;
+            else if (!strcmp(s1, "TV-MA"))
+              age = 17;
+            else
+              age = atoi(s1);
+            /* Since age is uint8_t it means some rating systems can
+             * underflow and become very large, for example CSA has age
+             * rating of -10.
+             */
+            if (age > 0 && age < 22)
+              return epg_broadcast_set_age_rating(ebc, age, changes);
+          }
         }
       }
     }
   }
+
+
   return 0;
 }
 
 /*
  * Parse category list
+ * <category lang="en" code="0xaf">Leisure hobbies</category>
+ * <category lang="en" code="0x45">Cricket</category>
+ * NOTE:
+ * TVH seems to refer to the ETSI code as the 'genre' and to the
+ * text description as the 'category'.
+ * There is no ETSI code for 'Cricket', the closest is 0x45 'Team Sports'.
+ * In the above example, the genre is saved as 0x45, however, if scraping
+ * for 'extra information' is enabled, the text 'Cricket' will be added to
+ * the 'category' list.
  */
 static epg_genre_list_t
 *_xmltv_parse_categories ( htsmsg_t *tags )
@@ -494,10 +568,60 @@ static epg_genre_list_t
   htsmsg_t *e;
   htsmsg_field_t *f;
   epg_genre_list_t *egl = NULL;
+  const char *cat_name;
+  uint8_t cat_val;
+  int cat_flag = 0;
+  const char *cat_etsi;
+
   HTSMSG_FOREACH(f, tags) {
     if (!strcmp(htsmsg_field_name(f), "category") && (e = htsmsg_get_map_by_field(f))) {
-      if (!egl) egl = calloc(1, sizeof(epg_genre_list_t));
-      epg_genre_list_add_by_str(egl, htsmsg_get_str(e, "cdata"), NULL);
+
+      cat_name = htsmsg_get_str(e, "cdata");
+
+      cat_etsi = NULL;
+      //If we have an XPath expression to search
+      if(xmltv_xpath_category_code)
+      {
+        cat_etsi = htsmsg_xml_xpath_search(e, xmltv_xpath_category_code);
+
+        cat_flag = 0;
+
+        //If we got a category code, use that instead of the text.
+        //https://www.etsi.org/deliver/etsi_en/300400_300499/300468/01.17.01_20/en_300468v011701a.pdf
+        //Table 29
+        if(cat_etsi && (strlen(cat_etsi) > 2))
+        {
+          tvhdebug(LS_XMLTV, "Identified XPath Category Code: '%s'", cat_etsi);
+          cat_val = 0;
+          if(cat_etsi[0] == '0' && (cat_etsi[1] == 'x' || cat_etsi[1] == 'X'))  //If the code starts with '0x', look for HEX values.
+          {
+            sscanf(cat_etsi+2, "%hhx", &cat_val);
+
+            if(cat_val != 0)
+            {
+              tvhdebug(LS_XMLTV, "XPath category code '%s' recognised as ETSI '0x%02x'.", cat_etsi, cat_val);
+              if (!egl) egl = calloc(1, sizeof(epg_genre_list_t));
+              cat_flag = epg_genre_list_add_by_eit (egl, cat_val);
+            }
+            else
+            {
+              tvhdebug(LS_XMLTV, "XPath category code '%s' failed.  Invalid hex.", cat_etsi);
+              cat_flag = 0;
+            }
+          }
+        }//END we have a category code
+        else
+        {
+          tvhdebug(LS_XMLTV, "XPath category code '%s' unusable, matching text '%s' instead.", cat_etsi, cat_name);
+        }
+      }//END we have a category XPath
+
+      //If a hex value was not found or is invalid, use the text value instead.
+      if(!cat_flag)
+      {
+        if (!egl) egl = calloc(1, sizeof(epg_genre_list_t));
+        epg_genre_list_add_by_str(egl, cat_name, NULL);
+      }
     }
   }
   return egl;
@@ -589,13 +713,13 @@ _xmltv_parse_credits(htsmsg_t **out_credits, htsmsg_t *tags)
       char *s, *str2 = NULL, *saveptr = NULL;
       if (str == NULL) continue;
       if (strstr(str, "|") == 0) {
-      
+
         if (strlen(str) > 255) {
           str2 = strdup(str);
           str2[255] = '\0';
           str = str2;
         }
-      
+
         if (!credits_names) credits_names = string_list_create();
         string_list_insert(credits_names, str);
 
@@ -671,7 +795,7 @@ static int _xmltv_parse_programme_tags
   const int use_category_not_genre = ((epggrab_module_int_t *)mod)->xmltv_use_category_not_genre;
   int save = 0;
   epg_changes_t changes = 0;
-  epg_broadcast_t *ebc;
+  epg_broadcast_t *ebc = NULL;
   epg_genre_list_t *egl;
   epg_episode_num_t epnum;
   epg_set_t *set;
@@ -683,6 +807,10 @@ static int _xmltv_parse_programme_tags
   time_t first_aired = 0;
   int8_t bw = -1;
 
+  const char  *temp_unique = htsmsg_get_str(tags, "@@UNIQUE");
+  const char  *temp_series = htsmsg_get_str(tags, "@@SERIES");
+  const char  *temp_episode = htsmsg_get_str(tags, "@@EPISODE");
+
   if (epg_channel_ignore_broadcast(ch, start))
     return 0;
 
@@ -691,13 +819,55 @@ static int _xmltv_parse_programme_tags
   /*
    * Broadcast
    */
-  ebc = epg_broadcast_find_by_time(ch, mod, start, stop, 1, &save, &changes);
+
+  //If we got a unique XPath field, try to match an existing event based on that,
+  //if not, use the normal match based on start time only.
+  if(temp_unique)
+  {
+    tvhtrace(LS_XMLTV, "Searching for EPG event using XPath unique ID '%s'.", temp_unique);
+    ebc = epg_broadcast_find_by_xmltv_eid(ch, mod, start, stop, 1, &save, &changes, temp_unique);
+    //NULL will be returned if there is no match found.
+    if(ebc)
+    {
+      tvhtrace(LS_XMLTV, "Matched ID '%s' start '%"PRItime_t"/%"PRItime_t"' stop '%"PRItime_t"/%"PRItime_t"'.", temp_unique, ebc->start, start, ebc->stop, stop);
+      ebc->start = start;
+      ebc->stop = stop;
+    }
+    else
+    {
+      tvhtrace(LS_XMLTV, "No match for EPG event using XPath unique ID '%s'.", temp_unique);
+    }
+  }
+  
+  //If the broadcast event is still null, then either there was no XMLTV unique ID
+  //or there was, but it failed to match.  The later is an edge case when this feature
+  //has been newly enabled with existing events already present.  They will not match
+  //they expire.
+  if(!ebc)
+  {
+    tvhtrace(LS_XMLTV, "Searching for EPG event using start/stop.");
+    ebc = epg_broadcast_find_by_time(ch, mod, start, stop, 1, &save, &changes);
+    if(ebc){
+      tvhtrace(LS_XMLTV, "Matched EPG event using start/stop.");
+    }
+    else
+    {
+      tvhtrace(LS_XMLTV, "No match for EPG event using start/stop.");
+    }
+  }
+
   if (!ebc)
     return 0;
   stats->broadcasts.total++;
   if (save && (changes & EPG_CHANGED_CREATE))
     stats->broadcasts.created++;
 
+  /* Save the unique ID string */
+  if(temp_unique)
+  {
+    save |= epg_broadcast_set_xmltv_eid(ebc, temp_unique, &changes);
+  }
+  
   /* Description/summary (wait for episode first) */
   _xmltv_parse_lang_str(&desc, tags, "desc");
   _xmltv_parse_lang_str(&summary, tags, "summary");
@@ -764,6 +934,53 @@ static int _xmltv_parse_programme_tags
    */
   get_episode_info(mod, tags, &uri, &suri, &epnum);
 
+  if(temp_series)
+  {
+    if(suri)
+    {
+      free(suri);
+    }
+    suri = strdup(temp_series);
+  }
+  else
+  {
+    //If there was an XPath for series, but nothing was found
+    //AND we are NOT falling back to the standard method,
+    //then erase the crid that TVH manufactured from the module/series/episode.
+    if(xmltv_xpath_series && !xmltv_xpath_series_fallback)
+    {
+      if(suri)
+      {
+        free(suri);
+        suri = NULL;
+      }
+    }
+
+  }
+
+  if(temp_episode)
+  {
+    if(uri)
+    {
+      free(uri);
+    }
+    uri = strdup(temp_episode);
+  }
+  else
+  {
+    //If there was an XPath for episode, but nothing was found
+    //AND we are NOT falling back to the standard method,
+    //then erase the crid that TVH manufactured from the module/series/episode.
+    if(xmltv_xpath_episode && !xmltv_xpath_episode_fallback)
+    {
+      if(uri)
+      {
+        free(uri);
+        uri = NULL;
+      }
+    }
+
+  }
   /*
    * Series Link
    */
@@ -786,6 +1003,10 @@ static int _xmltv_parse_programme_tags
   if (uri) {
     set = ebc->episodelink;
     save |= epg_broadcast_set_episodelink_uri(ebc, uri, &changes);
+    //DMC 28-Mar-2024.
+    //This free() was added because compared to the series link above
+    //it looked like not having it would lead to a memory leak.
+    free(uri);
     stats->episodes.total++;
     if (changes & EPG_CHANGED_EPISODE) {
       if (set == NULL)
@@ -870,6 +1091,7 @@ static int _xmltv_parse_programme
     stats->channels.modified++;
   }
   if (!LIST_FIRST(&ec->channels)) return 0;
+
   if((s       = htsmsg_get_str(attribs, "start"))   == NULL) return 0;
   start = _xmltv_str2time(s);
   if((s       = htsmsg_get_str(attribs, "stop"))    == NULL) return 0;
@@ -878,6 +1100,47 @@ static int _xmltv_parse_programme
   if((subtag  = htsmsg_get_map(tags,    "icon"))   != NULL &&
      (attribs = htsmsg_get_map(subtag,  "attrib")) != NULL)
     icon = htsmsg_get_str(attribs, "src");
+
+  const char  *temp_unique;
+  const char  *temp_series;
+  const char  *temp_episode;
+
+  //NOTE - DMC April 2024
+  //The XPath values need to be searched for here, before the rest of the processing,
+  //because the attributes of the root <programme> node are not available past
+  //this point.  Only sub-nodes of <programme> are passed on to the next function.
+  //If XPath values are found here, add them to the htsmsg using special '@@'
+  //field names which can then be passed to the next function for further processing.
+
+  //Search the current programme for XPath matches
+  if(xmltv_xpath_unique)
+  {
+    temp_unique = htsmsg_xml_xpath_search(body, xmltv_xpath_unique);
+    //If an XPath ID has been found, stash it in htsmsg so that it can
+    //be retrieved by the next function.
+    if(temp_unique)
+    {
+      htsmsg_add_str(tags, "@@UNIQUE", temp_unique);
+    }
+  }//END stash the XPath unique ID
+
+  if(xmltv_xpath_series)
+  {
+    temp_series = htsmsg_xml_xpath_search(body, xmltv_xpath_series);
+    if(temp_series)
+    {
+      htsmsg_add_str(tags, "@@SERIES", temp_series);
+    }
+  }
+
+  if(xmltv_xpath_episode)
+  {
+    temp_episode = htsmsg_xml_xpath_search(body, xmltv_xpath_episode);
+    if(temp_episode)
+    {
+      htsmsg_add_str(tags, "@@EPISODE", temp_episode);
+    }
+  }
 
   if(stop <= start || stop <= gclk()) return 0;
 
@@ -955,6 +1218,13 @@ static int _xmltv_parse_channel
           /* Skip extra spaces between channel number and actual name */
           while (*cur == ' ') ++cur;
         }
+        else
+        {
+          //If the 'space separator' test fails, reset the name position.
+          //Without this, the '4Music' example above will be recognised as 'Music'
+          //because *cur no longer points to the beginning of the name.
+          cur = name;
+        }
       }
 
       if (cur && *cur)
@@ -982,7 +1252,16 @@ static int _xmltv_parse_channel
 }
 
 /**
- *
+ *<tv>
+ *  <channel>
+ *     ...channel data
+ *  <\channel>
+ *  ...multiple channels
+ *  <programme>
+ *     ...programme data
+ *  <\programme>
+ *  ...multiple programmes
+ *</tv>
  */
 static int _xmltv_parse_tv
   (epggrab_module_t *mod, htsmsg_t *body, epggrab_stats_t *stats)
@@ -993,6 +1272,82 @@ static int _xmltv_parse_tv
 
   if((tags = htsmsg_get_map(body, "tags")) == NULL)
     return 0;
+
+  //Pre-process the XPaths
+  //Only done once per XMLTV session.
+  if(((epggrab_module_int_t *)mod)->xmltv_xpath_category_code)
+  {
+    tvhtrace(LS_XMLTV, "Parsing Category Code XPath: '%s'.", ((epggrab_module_int_t *)mod)->xmltv_xpath_category_code);
+    xmltv_xpath_category_code = htsmsg_xml_parse_xpath(((epggrab_module_int_t *)mod)->xmltv_xpath_category_code);
+
+    if(htsmsg_is_empty(xmltv_xpath_category_code))
+    {
+      tvhtrace(LS_XMLTV, "Failed to parse Category Code XPath '%s'.", ((epggrab_module_int_t *)mod)->xmltv_xpath_category_code);
+    }
+  }
+  else
+  {
+    tvhtrace(LS_XMLTV, "Category Code XPath not found.");
+  }
+
+  if(((epggrab_module_int_t *)mod)->xmltv_xpath_unique_id)
+  {
+    tvhtrace(LS_XMLTV, "Parsing Unique ID XPath: '%s'.", ((epggrab_module_int_t *)mod)->xmltv_xpath_unique_id);
+    xmltv_xpath_unique = htsmsg_xml_parse_xpath(((epggrab_module_int_t *)mod)->xmltv_xpath_unique_id);
+
+    if(htsmsg_is_empty(xmltv_xpath_unique))
+    {
+      tvhtrace(LS_XMLTV, "Failed to parse Unique ID XPath '%s'.", ((epggrab_module_int_t *)mod)->xmltv_xpath_unique_id);
+    }
+  }
+  else
+  {
+    tvhtrace(LS_XMLTV, "Unique ID XPath not found.");
+  }
+
+  if(((epggrab_module_int_t *)mod)->xmltv_xpath_series_link)
+  {
+    tvhtrace(LS_XMLTV, "Parsing SeriesLink XPath: '%s'.", ((epggrab_module_int_t *)mod)->xmltv_xpath_series_link);
+    xmltv_xpath_series = htsmsg_xml_parse_xpath(((epggrab_module_int_t *)mod)->xmltv_xpath_series_link);
+
+    if(htsmsg_is_empty(xmltv_xpath_series))
+    {
+      tvhtrace(LS_XMLTV, "Failed to parse SeriesLink XPath '%s'.", ((epggrab_module_int_t *)mod)->xmltv_xpath_series_link);
+    }
+  }
+  else
+  {
+    tvhtrace(LS_XMLTV, "SeriesLink XPath not found.");
+  }
+
+  if(((epggrab_module_int_t *)mod)->xmltv_xpath_episode_link)
+  {
+    tvhtrace(LS_XMLTV, "Parsing EpisodeLink XPath: '%s'.", ((epggrab_module_int_t *)mod)->xmltv_xpath_episode_link);
+    xmltv_xpath_episode = htsmsg_xml_parse_xpath(((epggrab_module_int_t *)mod)->xmltv_xpath_episode_link);
+
+    if(htsmsg_is_empty(xmltv_xpath_episode))
+    {
+      tvhtrace(LS_XMLTV, "Failed to parse EpisodeLink XPath '%s'.", ((epggrab_module_int_t *)mod)->xmltv_xpath_episode_link);
+    }
+  }
+  else
+  {
+    tvhtrace(LS_XMLTV, "EpisodeLink XPath not found.");
+  }
+
+  //Set the fallback flags.
+  xmltv_xpath_series_fallback = 0;
+  if(((epggrab_module_int_t *)mod)->xmltv_xpath_series_use_standard)
+  {
+    xmltv_xpath_series_fallback = 1;
+  }
+
+  xmltv_xpath_episode_fallback = 0;
+  if(((epggrab_module_int_t *)mod)->xmltv_xpath_episode_use_standard)
+  {
+    xmltv_xpath_episode_fallback = 1;
+  }
+  //Finished pre-processing the XPath stuff.
 
   tvh_mutex_lock(&global_lock);
   epggrab_channel_begin_scan(mod);
@@ -1017,6 +1372,23 @@ static int _xmltv_parse_tv
   epggrab_channel_end_scan(mod);
   tvh_mutex_unlock(&global_lock);
 
+  //If XPaths were used, release the parsed paths.
+  if(xmltv_xpath_unique)
+  {
+    htsmsg_destroy(xmltv_xpath_unique);
+  }
+  if(xmltv_xpath_series)
+  {
+    htsmsg_destroy(xmltv_xpath_series);
+  }
+  if(xmltv_xpath_episode)
+  {
+    htsmsg_destroy(xmltv_xpath_episode);
+  }
+  if(xmltv_xpath_category_code)
+  {
+    htsmsg_destroy(xmltv_xpath_category_code);
+  }
   return gsave;
 }
 
@@ -1076,6 +1448,42 @@ static int _xmltv_parse
      "If this option is not ticked then we continue to map " \
      "xmltv categories to genres and supply both to clients.")
 
+#define XPATH_CATEGORY_CODE N_("Category Code XPath")
+#define XPATH_CATEGORY_CODE_DESC \
+  N_("The XPath-like expression used to extract the category "\
+     "ETSI code from the XMLTV data. Root node = 'category'.")
+
+#define XPATH_UNIQUE_ID_NAME N_("Unique Event ID XPath")
+#define XPATH_UNIQUE_ID_DESC \
+  N_("The XPath-like expression used to extract a unique event "\
+     "identifier from the XMLTV data.  This ID is used to "\
+     "match existing EPG events so that they can be updated " \
+     "rather than replaced. Root node = 'programme'.")
+
+#define XPATH_SERIES_LINK_NAME N_("SeriesLink XPath")
+#define XPATH_SERIES_LINK_DESC \
+  N_("The XPath-like expression used to extract a SeriesLink "\
+     "identifier from the XMLTV data.  This ID is used "\
+     "to identify multiple occurrences of the same series. "\
+     " Root node = 'programme'.")
+
+#define XPATH_EPISODE_LINK_NAME N_("EpisodeLink XPath")
+#define XPATH_EPISODE_LINK_DESC \
+  N_("The XPath-like expression used to extract an EpisodeLink "\
+     "identifier from the XMLTV data.  This ID is used "\
+     "to identify multiple occurrences of the same episode. "\
+     " Root node = 'programme'.")
+
+#define XPATH_SERIES_USE_STANDARD_NAME N_("SeriesLink XPath fallback")
+#define XPATH_SERIES_USE_STANDARD_DESC \
+  N_("If a SeriesLink XPath is not found, use the standard TVH "\
+     "method for creating a SeriesLink.")
+
+#define XPATH_EPISODE_USE_STANDARD_NAME N_("EpisodeLink XPath fallback")
+#define XPATH_EPISODE_USE_STANDARD_DESC \
+  N_("If an EpisodeLink XPath is not found, use the standard TVH "\
+     "method for creating an EpisodeLink.")
+
 static htsmsg_t *
 xmltv_dn_chnum_list ( void *o, const char *lang )
 {
@@ -1091,6 +1499,17 @@ const idclass_t epggrab_mod_int_xmltv_class = {
   .ic_super      = &epggrab_mod_int_class,
   .ic_class      = "epggrab_mod_int_xmltv",
   .ic_caption    = N_("EPG - Internal XMLTV EPG Grabber"),
+  .ic_groups     = (const property_group_t[]) {
+      {
+         .name   = N_("General Settings"),
+         .number = 1,
+      },
+      {
+         .name   = N_("XPath Settings"),
+         .number = 2,
+      },
+    {}
+  },
   .ic_properties = (const property_t[]){
     {
       .type   = PT_INT,
@@ -1126,6 +1545,54 @@ const idclass_t epggrab_mod_int_xmltv_class = {
       .off    = offsetof(epggrab_module_int_t, xmltv_use_category_not_genre),
       .group  = 1
     },
+    {
+      .type   = PT_STR,
+      .id     = "xpath_category_code",
+      .name   = XPATH_CATEGORY_CODE,
+      .desc   = XPATH_CATEGORY_CODE_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_category_code),
+      .group  = 2
+    },
+    {
+      .type   = PT_STR,
+      .id     = "xpath_unique",
+      .name   = XPATH_UNIQUE_ID_NAME,
+      .desc   = XPATH_UNIQUE_ID_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_unique_id),
+      .group  = 2
+    },
+    {
+      .type   = PT_STR,
+      .id     = "xpath_serieslink",
+      .name   = XPATH_SERIES_LINK_NAME,
+      .desc   = XPATH_SERIES_LINK_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_series_link),
+      .group  = 2
+    },
+    {
+      .type   = PT_STR,
+      .id     = "xpath_episodelink",
+      .name   = XPATH_EPISODE_LINK_NAME,
+      .desc   = XPATH_EPISODE_LINK_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_episode_link),
+      .group  = 2
+    },
+    {
+      .type   = PT_BOOL,
+      .id     = "xpath_series_use_standard",
+      .name   = XPATH_SERIES_USE_STANDARD_NAME,
+      .desc   = XPATH_SERIES_USE_STANDARD_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_series_use_standard),
+      .group  = 2
+    },
+    {
+      .type   = PT_BOOL,
+      .id     = "xpath_episode_use_standard",
+      .name   = XPATH_EPISODE_USE_STANDARD_NAME,
+      .desc   = XPATH_EPISODE_USE_STANDARD_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_episode_use_standard),
+      .group  = 2
+    },
     {}
   }
 };
@@ -1134,6 +1601,17 @@ const idclass_t epggrab_mod_ext_xmltv_class = {
   .ic_super      = &epggrab_mod_ext_class,
   .ic_class      = "epggrab_mod_ext_xmltv",
   .ic_caption    = N_("EPG - External XMLTV EPG Grabber"),
+  .ic_groups     = (const property_group_t[]) {
+      {
+         .name   = N_("General Settings"),
+         .number = 1,
+      },
+      {
+         .name   = N_("XPath Settings"),
+         .number = 2,
+      },
+    {}
+  },
   .ic_properties = (const property_t[]){
     {
       .type   = PT_BOOL,
@@ -1167,6 +1645,54 @@ const idclass_t epggrab_mod_ext_xmltv_class = {
       .desc   = USE_CATEGORY_NOT_GENRE_DESC,
       .off    = offsetof(epggrab_module_int_t, xmltv_use_category_not_genre),
       .group  = 1
+    },
+    {
+      .type   = PT_STR,
+      .id     = "xpath_category_code",
+      .name   = XPATH_CATEGORY_CODE,
+      .desc   = XPATH_CATEGORY_CODE_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_category_code),
+      .group  = 2
+    },
+    {
+      .type   = PT_STR,
+      .id     = "xpath_unique",
+      .name   = XPATH_UNIQUE_ID_NAME,
+      .desc   = XPATH_UNIQUE_ID_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_unique_id),
+      .group  = 2
+    },
+    {
+      .type   = PT_STR,
+      .id     = "xpath_serieslink",
+      .name   = XPATH_SERIES_LINK_NAME,
+      .desc   = XPATH_SERIES_LINK_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_series_link),
+      .group  = 2
+    },
+    {
+      .type   = PT_STR,
+      .id     = "xpath_episodelink",
+      .name   = XPATH_EPISODE_LINK_NAME,
+      .desc   = XPATH_EPISODE_LINK_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_episode_link),
+      .group  = 2
+    },
+    {
+      .type   = PT_BOOL,
+      .id     = "xpath_series_use_standard",
+      .name   = XPATH_SERIES_USE_STANDARD_NAME,
+      .desc   = XPATH_SERIES_USE_STANDARD_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_series_use_standard),
+      .group  = 2
+    },
+    {
+      .type   = PT_BOOL,
+      .id     = "xpath_episode_use_standard",
+      .name   = XPATH_EPISODE_USE_STANDARD_NAME,
+      .desc   = XPATH_EPISODE_USE_STANDARD_DESC,
+      .off    = offsetof(epggrab_module_int_t, xmltv_xpath_episode_use_standard),
+      .group  = 2
     },
     {}
   }

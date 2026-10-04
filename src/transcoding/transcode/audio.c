@@ -79,6 +79,96 @@ _audio_context_sample_rate(TVHContext *self, AVDictionary **opts)
 }
 
 
+#if LIBAVCODEC_VERSION_MAJOR > 59
+static void
+_audio_context_channel_layout(TVHContext *self, AVDictionary **opts, AVChannelLayout *dst)
+{
+    const AVChannelLayout *channel_layouts = tvh_codec_profile_audio_get_channel_layouts(self->profile);
+    AVChannelLayout ilayout = {0};
+    AVChannelLayout olayout;
+    av_channel_layout_default(&olayout, 0);
+    AVChannelLayout altlayout;
+    av_channel_layout_default(&altlayout, 0);
+    int ch_layout_u_mask = 0, i = 0;
+    char obuf[64], abuf[64], ibuf[64];
+    // setup ilayout
+    if (av_channel_layout_copy(&ilayout, &self->iavctx->ch_layout)){
+        tvh_context_log(self, LOG_ERR, "unable to copy ch_layout from input stream");
+        goto _audio_context_channel_layout_exit;
+    }
+    // setup olayout
+    if (!tvh_context_get_int_opt(opts, "ch_layout_u_mask", &ch_layout_u_mask) &&
+        // only if value selected is not auto
+        ch_layout_u_mask &&
+        av_channel_layout_from_mask(&olayout, ch_layout_u_mask)){
+        tvh_context_log(self, LOG_ERR, "unable to initialize output layout from bitmask");
+        goto _audio_context_channel_layout_exit;
+    }
+
+    if (!channel_layouts) {
+        tvh_context_log(self, LOG_ERR, "channel_layouts is not available");
+        if (av_channel_layout_copy(&olayout, &ilayout)){
+            tvh_context_log(self, LOG_ERR, "unable to copy ch_layout from input layout to output layout");
+            goto _audio_context_channel_layout_exit;
+        }
+    }
+    // match input with output based on number of channels
+    if (olayout.nb_channels >= ilayout.nb_channels) {
+        // input layout will fit in output layout
+        if (av_channel_layout_copy(&olayout, &ilayout)){
+            tvh_context_log(self, LOG_ERR, "unable to copy ch_layout from input layout to output layout");
+            goto _audio_context_channel_layout_exit;
+        }
+    }
+    // order of selection: 
+    // 1. try olayout
+    if (olayout.order == AV_CHANNEL_ORDER_UNSPEC){
+        // prepare the alternative layout
+        while (channel_layouts && channel_layouts[i].nb_channels != 0) {
+            if (channel_layouts[i].nb_channels <= ilayout.nb_channels) {
+                //altlayout = channel_layouts[i];
+                if (av_channel_layout_copy(&altlayout, &channel_layouts[i])){
+                    tvh_context_log(self, LOG_ERR, "unable to copy ch_layout from channel_layouts to alternative layout");
+                    goto _audio_context_channel_layout_exit;
+                }
+            }
+            i++;
+        }
+        // 2. try altlayout
+        if (altlayout.order == AV_CHANNEL_ORDER_UNSPEC){
+            // 3. default to stereo
+            if (av_channel_layout_copy(&olayout, &(AVChannelLayout)AV_CHANNEL_LAYOUT_STEREO)){
+                tvh_context_log(self, LOG_ERR, "unable to setup ch_layout stereo layout");
+            }
+        }
+        else
+            // use altlayout
+            if (av_channel_layout_copy(&olayout, &altlayout)){
+                tvh_context_log(self, LOG_ERR, "unable to copy ch_layout from alternative layout to output layout");
+            }
+    }
+
+_audio_context_channel_layout_exit:
+    // logging
+    if (tvhtrace_enabled()) {
+        strcpy(obuf, "none");
+        av_channel_layout_describe(&olayout, obuf, sizeof(obuf));
+        strcpy(abuf, "none");
+        av_channel_layout_describe(&altlayout, abuf, sizeof(abuf));
+        strcpy(ibuf, "none");
+        av_channel_layout_describe(&ilayout, ibuf, sizeof(ibuf));
+        tvh_context_log(self, LOG_TRACE, "audio layout selection: in %s, alt %s, out %s",
+                                                                     ibuf,   abuf,   obuf);
+    }
+    if (av_channel_layout_copy(dst, &olayout)){
+        tvh_context_log(self, LOG_ERR, "unable to copy ch_layout from output layout to destination layout");
+    }
+    // clean
+    av_channel_layout_uninit(&ilayout);
+    av_channel_layout_uninit(&altlayout);
+    av_channel_layout_uninit(&olayout);
+}
+#else
 static uint64_t
 _audio_context_channel_layout(TVHContext *self, AVDictionary **opts)
 {
@@ -113,6 +203,7 @@ _audio_context_channel_layout(TVHContext *self, AVDictionary **opts)
     }
     return olayout ? olayout : (altlayout ? altlayout : AV_CH_LAYOUT_STEREO);
 }
+#endif
 
 
 static int
@@ -139,6 +230,14 @@ tvh_audio_context_open_encoder(TVHContext *self, AVDictionary **opts)
     self->oavctx->time_base = av_make_q(1, self->oavctx->sample_rate);
     self->sri = rate_to_sri(self->oavctx->sample_rate);
     // channel_layout
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    _audio_context_channel_layout(self, opts, &self->oavctx->ch_layout);
+    if (self->oavctx->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC) {
+        tvh_context_log(self, LOG_ERR,
+                        "audio encoder has no suitable channel layout");
+        return -1;
+    }
+#else
     self->oavctx->channel_layout = _audio_context_channel_layout(self, opts);
     if (!self->oavctx->channel_layout) {
         tvh_context_log(self, LOG_ERR,
@@ -147,6 +246,7 @@ tvh_audio_context_open_encoder(TVHContext *self, AVDictionary **opts)
     }
     self->oavctx->channels =
         av_get_channel_layout_nb_channels(self->oavctx->channel_layout);
+#endif
     return 0;
 }
 
@@ -161,7 +261,11 @@ tvh_audio_context_open_filters(TVHContext *self, AVDictionary **opts)
 
     // source args
     memset(source_args, 0, sizeof(source_args));
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    av_channel_layout_describe(&self->iavctx->ch_layout, layout, sizeof(layout));
+#else
     av_get_channel_layout_string(layout, sizeof(layout), self->iavctx->channels, self->iavctx->channel_layout);
+#endif
     if (str_snprintf(source_args, sizeof(source_args),
             "time_base=%d/%d:sample_rate=%d:sample_fmt=%s:channel_layout=%s",
             self->iavctx->time_base.num,
@@ -183,6 +287,25 @@ tvh_audio_context_open_filters(TVHContext *self, AVDictionary **opts)
         return -1;
     }
 
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    char ch_layout[64];
+    av_channel_layout_describe(&self->oavctx->ch_layout, ch_layout, sizeof(ch_layout));
+    
+    int ret = tvh_context_open_filters(self,
+        "abuffer", source_args,                           // source
+        filters,                                          // filters
+        "abuffersink",                                    // sink
+        "ch_layouts",   AV_OPT_SET_STRING,                // sink option: channel_layout
+        sizeof(ch_layout),
+        ch_layout,
+        "sample_fmts",  AV_OPT_SET_BIN,                   // sink option: sample_fmt
+        sizeof(self->oavctx->sample_fmt),
+        &self->oavctx->sample_fmt,
+        "sample_rates", AV_OPT_SET_BIN,                   // sink option: sample_rate
+        sizeof(self->oavctx->sample_rate),
+        &self->oavctx->sample_rate,
+        NULL);                                            // _IMPORTANT!_
+#else
     int ret = tvh_context_open_filters(self,
         "abuffer", source_args,                           // source
         filters,                                          // filters
@@ -194,6 +317,7 @@ tvh_audio_context_open_filters(TVHContext *self, AVDictionary **opts)
         "sample_rates", &self->oavctx->sample_rate,       // sink option: sample_rate
         sizeof(self->oavctx->sample_rate),
         NULL);                                            // _IMPORTANT!_
+#endif
     if (!ret) {
         av_buffersink_set_frame_size(self->oavfltctx, self->oavctx->frame_size);
     }
@@ -261,7 +385,11 @@ static int
 tvh_audio_context_wrap(TVHContext *self, AVPacket *avpkt, th_pkt_t *pkt)
 {
     pkt->pkt_duration   = avpkt->duration;
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    pkt->a.pkt_channels = self->oavctx->ch_layout.nb_channels;
+#else
     pkt->a.pkt_channels = self->oavctx->channels;
+#endif
     pkt->a.pkt_sri      = self->sri;
     return 0;
 }

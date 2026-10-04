@@ -82,7 +82,54 @@ mpegts_service_pref_capid_lock_list ( void *o, const char *lang )
    return strtab2htsmsg(tab, 1, lang);
 }
 
+static htsmsg_t *
+mpegts_service_subtitle_procesing ( void *o, const char *lang )
+{
+  static const struct strtab tab[] = {
+    { N_("None"),                         SVC_PROCESS_SUBTITLE_NONE    }, //No processing.
+    { N_("Save in Description"),          SVC_PROCESS_SUBTITLE_DESC    }, //Save the sub-title in the desc if desc is empty.
+    { N_("Append to Description"),        SVC_PROCESS_SUBTITLE_APPEND  }, //Append, but if the desc is empty, just replace.
+    { N_("Prepend to Description"),       SVC_PROCESS_SUBTITLE_PREPEND }, //Prepend, but if the desc is empty, just replace.
+  };
+   return strtab2htsmsg(tab, 1, lang);
+}
+
+static htsmsg_t *
+mpegts_service_eit_processing_list ( void *o, const char *lang )
+{
+  static const struct strtab tab[] = {
+    { N_("Default (use global setting)"), EIT_PROCESSING_DEFAULT     },
+    { N_("None"),                         EIT_PROCESSING_NONE        }, //Ignore EIT for this service.
+    { N_("Actual transport stream only"), EIT_PROCESSING_ACTUAL_ONLY },
+    { N_("Other transport stream only"),  EIT_PROCESSING_OTHER_ONLY  },
+    { N_("Either"),                       EIT_PROCESSING_EITHER      },
+    { N_("Adaptive"),                     EIT_PROCESSING_ADAPTIVE    }, //Drop other-TS once actual-TS schedule has been seen.
+  };
+  return strtab2htsmsg(tab, 1, lang);
+}
+
+/* Translate the legacy dvb_ignore_eit bool into dvb_eit_processing on
+ * first load of an existing config. true → None (ignore EIT for this
+ * service), false → Default (defer to the global setting). Only run
+ * when the new key is absent, so already-migrated configs are
+ * untouched; the old key naturally disappears on next save (no
+ * matching prop on the class). */
+static void
+mpegts_service_class_load(struct idnode *self, htsmsg_t *c)
+{
+  mpegts_service_t *s = (mpegts_service_t *)self;
+  int b;
+
+  service_load((service_t *)self, c);
+
+  if (!htsmsg_field_find(c, "dvb_eit_processing") &&
+      !htsmsg_get_bool(c, "dvb_ignore_eit", &b))
+    s->s_dvb_eit_processing = b ? EIT_PROCESSING_NONE
+                                : EIT_PROCESSING_DEFAULT;
+}
+
 CLASS_DOC(mpegts_service)
+PROP_DOC(eit_processing)
 
 const idclass_t mpegts_service_class =
 {
@@ -91,6 +138,7 @@ const idclass_t mpegts_service_class =
   .ic_caption    = N_("DVB Inputs - Services"),
   .ic_doc        = tvh_doc_mpegts_service_class,
   .ic_order      = "enabled,channel,svcname",
+  .ic_load       = mpegts_service_class_load,
   .ic_properties = (const property_t[]){
     {
       .type     = PT_STR,
@@ -191,12 +239,37 @@ const idclass_t mpegts_service_class =
       .off      = offsetof(mpegts_service_t, s_dvb_servicetype),
     },
     {
+      .type     = PT_INT,
+      .id       = "dvb_eit_processing",
+      .name     = N_("EIT processing"),
+      .desc     = N_("Which EIT sub-tables are accepted for this "
+                     "service. Default defers to the global setting. "
+                     "See Help for the full policy descriptions."),
+      .doc      = prop_doc_eit_processing,
+      .off      = offsetof(mpegts_service_t, s_dvb_eit_processing),
+      .opts     = PO_EXPERT | PO_DOC_NLIST,
+      .list     = mpegts_service_eit_processing_list,
+    },
+    {
+      .type     = PT_INT,
+      .id       = "dvb_subtitle_processing",
+      .name     = N_("DVB Sub-title Processing"),
+      .desc     = N_("Select action to be taken with the Sub-title "
+                     "provided by the broadcaster: None; Save in Description; "
+                     "Append to Description; Prepend to Description. "
+                     "If the Description is empty, save, "
+                     "append and prepend will replace the Description."),
+      .off      = offsetof(mpegts_service_t, s_dvb_subtitle_processing),
+      .opts     = PO_EXPERT | PO_DOC_NLIST,
+      .list     = mpegts_service_subtitle_procesing,
+    },
+    {
       .type     = PT_BOOL,
-      .id       = "dvb_ignore_eit",
-      .name     = N_("Ignore EPG (EIT)"),
-      .desc     = N_("Enable or disable ignoring of Event Information "
-                     "Table (EIT) data for this service."),
-      .off      = offsetof(mpegts_service_t, s_dvb_ignore_eit),
+      .id       = "dvb_ignore_matching_subtitle",
+      .name     = N_("Skip Sub-title matches Title"),
+      .desc     = N_("If the Sub-title and the Title contain identical content, "
+                     "ignore the Sub-title and only save the Title."),
+      .off      = offsetof(mpegts_service_t, s_dvb_ignore_matching_subtitle),
       .opts     = PO_EXPERT,
     },
     {

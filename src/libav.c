@@ -116,6 +116,10 @@ streaming_component_type2codec_id(streaming_component_type_t type)
   case SCT_EAC3:
     codec_id = AV_CODEC_ID_EAC3;
     break;
+  // Enable once supported, see https://trac.ffmpeg.org/ticket/8349
+  // case SCT_AC4:
+  //   codec_id = AV_CODEC_ID_AC4;
+  //   break;
   case SCT_MP4A:
   case SCT_AAC:
     codec_id = AV_CODEC_ID_AAC;
@@ -179,6 +183,10 @@ codec_id2streaming_component_type(enum AVCodecID id)
   case AV_CODEC_ID_EAC3:
     type = SCT_EAC3;
     break;
+  // Enable once supported, see https://trac.ffmpeg.org/ticket/8349
+  // case AV_CODEC_ID_AC4:
+  //   type = SCT_AC4;
+  //   break;
   case AV_CODEC_ID_AAC:
     type = SCT_AAC;
     break;
@@ -217,19 +225,6 @@ codec_id2streaming_component_type(enum AVCodecID id)
 /**
  *
  */
-int
-libav_is_encoder(AVCodec *codec)
-{
-#if LIBAVCODEC_VERSION_INT >= ((54<<16)+(7<<8)+0)
-  return av_codec_is_encoder(codec);
-#else
-  return codec->encode || codec->encode2;
-#endif
-}
-
-/**
- *
- */
 #if ENABLE_VAAPI
 #ifdef VA_FOURCC_I010
 static void libav_va_log(int severity, const char *msg)
@@ -243,7 +238,7 @@ static void libav_va_log(int severity, const char *msg)
   l = strlen(s);
   if (s[l-1] == '\n')
     s[l-1] = '\0';
-  tvhlog(severity, LS_VAAPI, "%s", s);
+  tvhlog(severity, LS_LIBAV, "%s", s);
 }
 
 #if VA_CHECK_VERSION(1, 0, 0)
@@ -317,9 +312,7 @@ libav_init(void)
   libav_vaapi_init();
   libav_set_loglevel();
   av_log_set_callback(libav_log_callback);
-  av_register_all();
   avformat_network_init();
-  avfilter_register_all();
   transcode_init();
 }
 

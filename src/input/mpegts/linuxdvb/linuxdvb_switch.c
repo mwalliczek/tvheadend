@@ -45,7 +45,7 @@ typedef struct linuxdvb_switch
   int ls_uncommitted;
   int ls_uncommitted_first;
   uint32_t ls_powerup_time; /* in ms */
-  uint32_t ls_sleep_time;   /* in ms */
+  uint32_t ls_cmd_time;     /* in ms */
 
 } linuxdvb_switch_t;
 
@@ -119,6 +119,22 @@ const idclass_t linuxdvb_switch_class =
   .ic_get_title   = linuxdvb_switch_class_get_title,
   .ic_properties  = (const property_t[]) {
     {
+      .type    = PT_U32,
+      .id      = "powerup_time",
+      .name    = N_("Power up time (ms) (10-500)"),
+      .desc    = N_("Time (in milliseconds) for the switch to power up."),
+      .off     = offsetof(linuxdvb_switch_t, ls_powerup_time),
+      .def.u32 = 100,
+    },
+    {
+      .type    = PT_U32,
+      .id      = "cmd_time",
+      .name    = N_("Command time (ms) (10-300)"),
+      .desc    = N_("Time (in milliseconds) for a command to complete."),
+      .off     = offsetof(linuxdvb_switch_t, ls_cmd_time),
+      .def.u32 = 25
+    },
+    {
       .type    = PT_INT,
       .id      = "committed",
       .name    = N_("Committed"),
@@ -145,20 +161,6 @@ const idclass_t linuxdvb_switch_class =
       .name    = N_("Uncommitted first"),
       .off     = offsetof(linuxdvb_switch_t, ls_uncommitted_first),
     },
-    {
-      .type    = PT_U32,
-      .id      = "poweruptime",
-      .name    = N_("Power-up time (ms) (15-200)"),
-      .off     = offsetof(linuxdvb_switch_t, ls_powerup_time),
-      .def.u32 = 100,
-    },
-    {
-      .type    = PT_U32,
-      .id      = "sleeptime",
-      .name    = N_("Command delay time (ms) (10-200)"),
-      .off     = offsetof(linuxdvb_switch_t, ls_sleep_time),
-      .def.u32 = 25
-    },
     {}
   }
 };
@@ -183,11 +185,11 @@ linuxdvb_switch_tune
 
     lsp->ls_last_switch = NULL;
 
-    if (linuxdvb_satconf_start(lsp, MINMAX(ls->ls_powerup_time, 15, 200), pol))
+    if (linuxdvb_satconf_start(lsp, MINMAX(ls->ls_powerup_time, 10, 500), pol))
       return -1;
 
     com = 0xF0 | (ls->ls_committed << 2) | (pol << 1) | band;
-    slp = MINMAX(ls->ls_sleep_time, 25, 200) * 1000;
+    slp = MINMAX(ls->ls_cmd_time, 10, 300) * 1000;
 
     /* Repeats */
     for (i = 0; i <= lsp->ls_diseqc_repeats; i++) {
@@ -234,7 +236,7 @@ linuxdvb_switch_tune
   if (ls->ls_toneburst >= 0 &&
       (lsp->ls_diseqc_full || lsp->ls_last_toneburst != ls->ls_toneburst + 1)) {
 
-    if (linuxdvb_satconf_start(lsp, MINMAX(ls->ls_powerup_time, 15, 200), vol))
+    if (linuxdvb_satconf_start(lsp, MINMAX(ls->ls_powerup_time, 10, 500), vol))
       return -1;
 
     lsp->ls_last_toneburst = 0;
@@ -285,8 +287,8 @@ linuxdvb_switch_create0
       }
       if (ld->ls_powerup_time == 0)
         ld->ls_powerup_time = 100;
-      if (ld->ls_sleep_time == 0)
-        ld->ls_sleep_time = 25;
+      if (ld->ls_cmd_time == 0)
+        ld->ls_cmd_time = 25;
     }
   }
 

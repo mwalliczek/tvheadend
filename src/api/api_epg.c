@@ -26,6 +26,7 @@
 #include "dvr/dvr.h"
 #include "lang_codes.h"
 #include "string_list.h"
+#include "epggrab.h"  //Needed to be able to test for epggrab_conf.epgdb_processparentallabels
 
 static htsmsg_t *
 api_epg_get_list ( const char *s )
@@ -79,7 +80,7 @@ static htsmsg_t *
 api_epg_entry ( epg_broadcast_t *eb, const char *lang, const access_t *perm, const char **blank )
 {
   const char *s, *blank2 = NULL;
-  char buf[32];
+  char buf[128];
   channel_t *ch = eb->channel;
   htsmsg_t *m, *m2;
   epg_episode_num_t epnum;
@@ -98,14 +99,20 @@ api_epg_entry ( epg_broadcast_t *eb, const char *lang, const access_t *perm, con
 
   /* EPG IDs */
   htsmsg_add_u32(m, "eventId", eb->id);
+
+  if(eb->xmltv_eid)  //This is the optional external reference provided by XMLTV.
+  {
+    htsmsg_add_str(m, "eventId_xmltv", eb->xmltv_eid);
+  }
+
   if (eb->episodelink && strncasecmp(eb->episodelink->uri, "tvh://", 6))
     htsmsg_add_str(m, "episodeUri", eb->episodelink->uri);
   if (eb->serieslink)
     htsmsg_add_str(m, "serieslinkUri", eb->serieslink->uri);
-  
+
   /* Channel Info */
   api_epg_add_channel(m, ch, *blank);
-  
+
   /* Time */
   htsmsg_add_s64(m, "start", eb->start);
   htsmsg_add_s64(m, "stop", eb->stop);
@@ -187,6 +194,24 @@ api_epg_entry ( epg_broadcast_t *eb, const char *lang, const access_t *perm, con
   if (eb->age_rating)
     htsmsg_add_u32(m, "ageRating", eb->age_rating);
 
+  if(epggrab_conf.epgdb_processparentallabels)
+  {
+    if (eb->rating_label)
+      {
+        if(eb->rating_label->rl_display_label){
+          htsmsg_add_str(m, "ratingLabel", eb->rating_label->rl_display_label);
+        }
+        if(eb->rating_label->rl_icon){
+          s = eb->rating_label->rl_icon;
+          if (!strempty(s)) {
+            s = imagecache_get_propstr(s, buf, sizeof(buf));
+            if (s)
+              htsmsg_add_str(m, "ratingLabelIcon", s);
+          }//END we got an imagecache
+        }//END rating label icon is not null
+      }//END rating label is not null
+  }//END parental labels enabled.
+
   if (eb->first_aired)
     htsmsg_add_s64(m, "first_aired", eb->first_aired);
   if (eb->copyright_year)
@@ -220,7 +245,7 @@ api_epg_entry ( epg_broadcast_t *eb, const char *lang, const access_t *perm, con
   /* Next event */
   if ((eb = epg_broadcast_get_next(eb)))
     htsmsg_add_u32(m, "nextEventId", eb->id);
-  
+
   return m;
 }
 
@@ -347,6 +372,7 @@ api_epg_grid
   if (str)
     eq.stitle = strdup(str);
   eq.fulltext = htsmsg_get_bool_or_default(args, "fulltext", 0);
+  eq.mergetext = htsmsg_get_bool_or_default(args, "mergetext", 0);
   eq.new_only = htsmsg_get_bool_or_default(args, "new", 0);
   str = htsmsg_get_str(args, "channel");
   if (str)
@@ -635,7 +661,7 @@ api_epg_related
   char *lang, *title_esc, *title_anchor;
   epg_set_t *serieslink = NULL;
   const char *title = NULL;
-  
+
   if (htsmsg_get_u32(args, "eventId", &id))
     return EINVAL;
 

@@ -21,6 +21,10 @@
 #include <sys/stat.h>
 #include <libavformat/avformat.h>
 #include <libavutil/mathematics.h>
+#if LIBAVCODEC_VERSION_MAJOR > 58
+#include <libavcodec/bsf.h>
+#include <libavcodec/avcodec.h>
+#endif
 
 #include "tvheadend.h"
 #include "streaming.h"
@@ -35,8 +39,10 @@
 typedef struct lav_muxer {
   muxer_t;
   AVFormatContext *lm_oc;
-  AVBitStreamFilterContext *lm_h264_filter;
-  AVBitStreamFilterContext *lm_hevc_filter;
+  AVBSFContext *ctx;
+  const AVBitStreamFilter *bsf_h264_filter;
+  const AVBitStreamFilter *bsf_hevc_filter;
+  const AVBitStreamFilter *bsf_vp9_filter;
   int lm_fd;
   int lm_init;
 } lav_muxer_t;
@@ -49,8 +55,13 @@ static const AVRational mpeg_tc = {1, 90000};
 /**
  * Callback function for libavformat
  */
-static int 
+#if LIBAVFORMAT_VERSION_MAJOR > 60
+static int
+lav_muxer_write(void *opaque, const uint8_t *buf, int buf_size)
+#else
+static int
 lav_muxer_write(void *opaque, uint8_t *buf, int buf_size)
+#endif
 {
   int r;
   lav_muxer_t *lm = (lav_muxer_t*)opaque;
@@ -80,14 +91,16 @@ lav_muxer_add_stream(lav_muxer_t *lm,
 {
   AVStream *st;
   AVCodecContext *c;
+  const AVCodec *codec; 
+  int rc = -1;
 
   st = avformat_new_stream(lm->lm_oc, NULL);
   if (!st)
     return -1;
 
   st->id = ssc->es_index;
-  c = st->codec;
-  c->codec_id = streaming_component_type2codec_id(ssc->es_type);
+  codec = avcodec_find_encoder(streaming_component_type2codec_id(ssc->es_type));
+  c = avcodec_alloc_context3(codec);
 
   switch(lm->m_config.m_type) {
   case MC_MATROSKA:
@@ -138,7 +151,11 @@ lav_muxer_add_stream(lav_muxer_t *lm,
     c->sample_fmt    = AV_SAMPLE_FMT_S16;
 
     c->sample_rate   = sri_to_rate(ssc->es_sri);
+#if LIBAVUTIL_VERSION_MAJOR > 57
+    c->ch_layout.nb_channels = ssc->es_channels;
+#else
     c->channels      = ssc->es_channels;
+#endif
 
 #if 0
     c->time_base.num = 1;
@@ -147,6 +164,7 @@ lav_muxer_add_stream(lav_muxer_t *lm,
     c->time_base     = st->time_base;
 #endif
 
+    avcodec_parameters_from_context(st->codecpar, c);
     av_dict_set(&st->metadata, "language", ssc->es_lang, 0);
 
   } else if(SCT_ISVIDEO(ssc->es_type)) {
@@ -166,18 +184,58 @@ lav_muxer_add_stream(lav_muxer_t *lm,
       c->sample_aspect_ratio = av_mul_q(c->sample_aspect_ratio, ratio);
     }
 
+    avcodec_parameters_from_context(st->codecpar, c);
     st->sample_aspect_ratio.num = c->sample_aspect_ratio.num;
     st->sample_aspect_ratio.den = c->sample_aspect_ratio.den;
 
+    if (ssc->es_type == SCT_H264) {
+      if (av_bsf_alloc(lm->bsf_h264_filter, &lm->ctx)) {
+        tvherror(LS_LIBAV,  "Failed to alloc AVBitStreamFilter for h264_mp4toannexb");
+        goto fail;
+      }
+    }
+    else if (ssc->es_type == SCT_HEVC) {
+      if (av_bsf_alloc(lm->bsf_hevc_filter, &lm->ctx)) {
+        tvherror(LS_LIBAV,  "Failed to alloc AVBitStreamFilter for hevc_mp4toannexb");
+        goto fail;
+      }
+    }
+    else if (ssc->es_type == SCT_VP9) {
+      if (av_bsf_alloc(lm->bsf_vp9_filter, &lm->ctx)) {
+        tvherror(LS_LIBAV,  "Failed to alloc AVBitStreamFilter for vp9_superframe ");
+        goto fail;
+      }
+    }
+    else {
+      if (av_bsf_alloc(lm->bsf_h264_filter, &lm->ctx)) {
+        tvherror(LS_LIBAV,  "Failed to alloc AVBitStreamFilter for h264_mp4toannexb");
+        goto fail;
+      }
+    }
+    if(avcodec_parameters_copy(lm->ctx->par_in, st->codecpar)) {
+      tvherror(LS_LIBAV,  "Failed to copy paramters to AVBSFContext");
+      goto fail;
+    }
+    lm->ctx->time_base_in = st->time_base;
+    if (av_bsf_init(lm->ctx)) {
+      tvherror(LS_LIBAV,  "Failed to init AVBSFContext");
+      goto fail;
+    }
   } else if(SCT_ISSUBTITLE(ssc->es_type)) {
     c->codec_type = AVMEDIA_TYPE_SUBTITLE;
+    avcodec_parameters_from_context(st->codecpar, c);
     av_dict_set(&st->metadata, "language", ssc->es_lang, 0);
   }
 
   if(lm->lm_oc->oformat->flags & AVFMT_GLOBALHEADER)
     c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+  rc = 0;
 
-  return 0;
+fail:
+  av_freep(&c->extradata);
+  avcodec_free_context(&c);
+
+  return rc;
 }
 
 
@@ -216,6 +274,7 @@ lav_muxer_support_stream(muxer_container_type_t mc,
     ret |= (type == SCT_AAC);
     ret |= (type == SCT_MP4A);
     ret |= (type == SCT_EAC3);
+    ret |= (type == SCT_AC4);
 
     //Some pids lack pts, disable for now
     //ret |= (type == SCT_TELETEXT);
@@ -238,6 +297,7 @@ lav_muxer_support_stream(muxer_container_type_t mc,
     ret |= (type == SCT_AAC);
     ret |= (type == SCT_MP4A);
     ret |= (type == SCT_EAC3);
+    ret |= (type == SCT_AC4);
     break;
 
   default:
@@ -296,18 +356,70 @@ lav_muxer_init(muxer_t* m, struct streaming_start *ss, const char *name)
   AVDictionary *opts = NULL;
   lav_muxer_t *lm = (lav_muxer_t*)m;
   char app[128];
+  char mpegts_info[8];
+#if LIBAVCODEC_VERSION_MAJOR > 58
+  const AVOutputFormat *fmt;
+#else
+  AVOutputFormat *fmt;
+#endif
+  const char *muxer_name;
+  int rc = -1;
 
   snprintf(app, sizeof(app), "Tvheadend %s", tvheadend_version);
 
   oc = lm->lm_oc;
 
+  switch(lm->m_config.m_type) {
+  case MC_MPEGPS:
+    muxer_name = "dvd";
+    break;
+  case MC_MPEGTS:
+    muxer_name = "mpegts";
+    break;
+  case MC_MATROSKA:
+  case MC_AVMATROSKA:
+    muxer_name = "matroska";
+    break;
+  case MC_WEBM:
+  case MC_AVWEBM:
+    muxer_name = "webm";
+    break;
+  case MC_AVMP4:
+    muxer_name = "mp4";
+    break;
+  default:
+    muxer_name = muxer_container_type2txt(lm->m_config.m_type);
+    break;
+  }
+  fmt = lm->lm_oc->oformat;
+  if(avformat_alloc_output_context2(&oc, fmt, muxer_name, NULL) < 0) {
+    tvherror(LS_LIBAV,  "Can't find the '%s' muxer", muxer_name);
+    return -1;
+  }
   av_dict_set(&oc->metadata, "title", name, 0);
-  av_dict_set(&oc->metadata, "service_name", name, 0);
-  av_dict_set(&oc->metadata, "service_provider", app, 0);
+  av_dict_set(&lm->lm_oc->metadata, "title", name, 0);
+  if (ss->ss_si.si_service){
+    av_dict_set(&lm->lm_oc->metadata, "service_name", ss->ss_si.si_service, 0);
+    tvhdebug(LS_LIBAV,  "service_name = %s", ss->ss_si.si_service);
+  } else
+    av_dict_set(&oc->metadata, "service_name", name, 0);
+  if (ss->ss_si.si_provider){
+    av_dict_set(&lm->lm_oc->metadata, "service_provider", ss->ss_si.si_provider, 0);
+    tvhdebug(LS_LIBAV,  "service_provider = %s", ss->ss_si.si_provider);
+  } else
+    av_dict_set(&oc->metadata, "service_provider", app, 0);
 
-  if(lm->m_config.m_type == MC_MPEGTS) {
-    lm->lm_h264_filter = av_bitstream_filter_init("h264_mp4toannexb");
-    lm->lm_hevc_filter = av_bitstream_filter_init("hevc_mp4toannexb");
+  lm->bsf_h264_filter = av_bsf_get_by_name("h264_mp4toannexb");
+  if (lm->bsf_h264_filter == NULL) {
+    tvhwarn(LS_LIBAV,  "Failed to get BSF: h264_mp4toannexb");
+  }
+  lm->bsf_hevc_filter = av_bsf_get_by_name("hevc_mp4toannexb");
+  if (lm->bsf_hevc_filter == NULL) {
+    tvhwarn(LS_LIBAV,  "Failed to get BSF: hevc_mp4toannexb");
+  }
+  lm->bsf_vp9_filter = av_bsf_get_by_name("vp9_superframe");
+  if (lm->bsf_vp9_filter == NULL) {
+    tvhwarn(LS_LIBAV,  "Failed to get BSF: vp9_superframe ");
   }
 
   oc->max_delay = 0.7 * AV_TIME_BASE;
@@ -339,23 +451,80 @@ lav_muxer_init(muxer_t* m, struct streaming_start *ss, const char *name)
     av_dict_set(&opts, "ism_lookahead", "0", 0);
   }
 
+  if(lm->m_config.m_type == MC_MPEGTS) {
+    // parameters are required to make mpeg-ts output compliant with mpeg-ts standard
+    // implemented using documentation: https://ffmpeg.org/ffmpeg-formats.html#mpegts-1
+    if (lm->m_config.u.transcode.m_rewrite_sid > 0) {
+      // override from profile requested by the user
+      snprintf(mpegts_info, sizeof(mpegts_info), "0x%04x", lm->m_config.u.transcode.m_rewrite_sid);
+      tvhdebug(LS_LIBAV,  "MPEGTS: mpegts_service_id = %s", mpegts_info);
+      av_dict_set(&opts, "mpegts_service_id", mpegts_info, 0);
+      // if override requested by the user we let ffmpeg default to decide (0x1000)
+      if (!lm->m_config.u.transcode.m_rewrite_pmt) {
+        snprintf(mpegts_info, sizeof(mpegts_info), "0x%04x", ss->ss_pmt_pid);
+        tvhdebug(LS_LIBAV,  "MPEGTS: mpegts_pmt_start_pid = %s", mpegts_info);
+        av_dict_set(&opts, "mpegts_pmt_start_pid", mpegts_info, 0);
+      }
+      if (!lm->m_config.u.transcode.m_rewrite_nit) {
+        av_dict_set(&opts, "mpegts_flags", "nit", 0);
+      }
+    }
+    else {
+      // we transfer as many parameters as possible
+      if (ss->ss_si.si_tsid) {
+        snprintf(mpegts_info, sizeof(mpegts_info), "0x%04x", ss->ss_si.si_tsid);
+        tvhdebug(LS_LIBAV,  "MPEGTS: mpegts_transport_stream_id = %s", mpegts_info);
+        av_dict_set(&opts, "mpegts_transport_stream_id", mpegts_info, 0);
+      }
+      if (ss->ss_si.si_type) {
+        snprintf(mpegts_info, sizeof(mpegts_info), "0x%04x", ss->ss_si.si_type);
+        tvhdebug(LS_LIBAV,  "MPEGTS: mpegts_service_type = %s", mpegts_info);
+        av_dict_set(&opts, "mpegts_service_type", mpegts_info, 0);
+      }
+      if (ss->ss_pmt_pid) {
+        snprintf(mpegts_info, sizeof(mpegts_info), "0x%04x", ss->ss_pmt_pid);
+        tvhdebug(LS_LIBAV,  "MPEGTS: mpegts_pmt_start_pid = %s", mpegts_info);
+        av_dict_set(&opts, "mpegts_pmt_start_pid", mpegts_info, 0);
+      }
+      if (ss->ss_pcr_pid) {
+        snprintf(mpegts_info, sizeof(mpegts_info), "0x%04x", ss->ss_pcr_pid);
+        tvhdebug(LS_LIBAV,  "MPEGTS: mpegts_start_pid = %s", mpegts_info);
+        av_dict_set(&opts, "mpegts_start_pid", mpegts_info, 0);
+      }
+      if (ss->ss_service_id) {
+        snprintf(mpegts_info, sizeof(mpegts_info), "0x%04x", ss->ss_service_id);
+        tvhdebug(LS_LIBAV,  "MPEGTS: mpegts_service_id = %s", mpegts_info);
+        av_dict_set(&opts, "mpegts_service_id", mpegts_info, 0);
+      }
+      if (ss->ss_si.si_onid) {
+        snprintf(mpegts_info, sizeof(mpegts_info), "0x%04x", ss->ss_si.si_onid);
+        tvhdebug(LS_LIBAV,  "MPEGTS: mpegts_original_network_id = %s", mpegts_info);
+        av_dict_set(&opts, "mpegts_original_network_id", mpegts_info, 0);
+      }
+      av_dict_set(&opts, "mpegts_flags", "nit", 0);
+      av_dict_set(&opts, "mpegts_copyts", "1", 0);
+    }
+  }
+  
   if(!lm->lm_oc->nb_streams) {
     tvherror(LS_LIBAV,  "No supported streams available");
     lm->m_errors++;
-    return -1;
+    goto fail;
   } else if(avformat_write_header(lm->lm_oc, &opts) < 0) {
     tvherror(LS_LIBAV,  "Failed to write %s header", 
 	     muxer_container_type2txt(lm->m_config.m_type));
     lm->m_errors++;
-    return -1;
+    goto fail;
   }
 
+  lm->lm_init = 1;
+  rc = 0;
+
+fail:
   if (opts)
     av_dict_free(&opts);
 
-  lm->lm_init = 1;
-
-  return 0;
+  return rc;
 }
 
 
@@ -404,7 +573,6 @@ lav_muxer_open_file(muxer_t *m, const char *filename)
 
   lm->lm_fd = -1;
   oc = lm->lm_oc;
-  snprintf(oc->filename, sizeof(oc->filename), "%s", filename);
 
   if((r = avio_open(&oc->pb, filename, AVIO_FLAG_WRITE)) < 0) {
     av_strerror(r, buf, sizeof(buf));
@@ -463,30 +631,11 @@ lav_muxer_write_pkt(muxer_t *m, streaming_message_type_t smt, void *data)
       continue;
 
     tofree = NULL;
-    av_init_packet(&packet);
-    codec_id = st->codec->codec_id;
+    memset(&packet, 0, sizeof(packet));
+    packet.pos = -1;
+    codec_id = st->codecpar->codec_id;
 
-    if((lm->lm_h264_filter && codec_id == AV_CODEC_ID_H264) ||
-       (lm->lm_hevc_filter && codec_id == AV_CODEC_ID_HEVC)) {
-      pkt = avc_convert_pkt(opkt = pkt);
-      pkt_ref_dec(opkt);
-      if(av_bitstream_filter_filter(st->codec->codec_id == AV_CODEC_ID_H264 ?
-                                      lm->lm_h264_filter : lm->lm_hevc_filter,
-				    st->codec, 
-				    NULL, 
-				    &packet.data, 
-				    &packet.size, 
-				    pktbuf_ptr(pkt->pkt_payload), 
-				    pktbuf_len(pkt->pkt_payload), 
-				    SCT_ISVIDEO(pkt->pkt_type) ? pkt->v.pkt_frametype < PKT_P_FRAME : 1) < 0) {
-	tvhwarn(LS_LIBAV,  "Failed to filter bitstream");
-	if (packet.data != pktbuf_ptr(pkt->pkt_payload))
-	  av_free(packet.data);
-	break;
-      } else {
-        tofree = packet.data;
-      }
-    } else if (codec_id == AV_CODEC_ID_AAC) {
+    if (codec_id == AV_CODEC_ID_AAC) {
       /* remove ADTS header */
       packet.data = pktbuf_ptr(pkt->pkt_payload) + 7;
       packet.size = pktbuf_len(pkt->pkt_payload) - 7;
@@ -593,15 +742,15 @@ lav_muxer_destroy(muxer_t *m)
   int i;
   lav_muxer_t *lm = (lav_muxer_t*)m;
 
-  if(lm->lm_h264_filter)
-    av_bitstream_filter_close(lm->lm_h264_filter);
-
-  if(lm->lm_hevc_filter)
-    av_bitstream_filter_close(lm->lm_hevc_filter);
+  if(lm->ctx){
+    if (av_bsf_send_packet(lm->ctx, NULL))
+      tvhwarn(LS_LIBAV,  "Failed to send packet to AVBSFContext (close)");
+    av_bsf_free(&lm->ctx);
+  }
 
   if (lm->lm_oc) {
     for(i=0; i<lm->lm_oc->nb_streams; i++)
-      av_freep(&lm->lm_oc->streams[i]->codec->extradata);
+      av_freep(&lm->lm_oc->streams[i]->codecpar->extradata);
   }
 
   if(lm->lm_oc) {
@@ -624,7 +773,11 @@ lav_muxer_create(const muxer_config_t *m_cfg,
 {
   const char *mux_name;
   lav_muxer_t *lm;
+#if LIBAVCODEC_VERSION_MAJOR > 58
+  const AVOutputFormat *fmt;
+#else
   AVOutputFormat *fmt;
+#endif
 
   switch(m_cfg->m_type) {
   case MC_MPEGPS:

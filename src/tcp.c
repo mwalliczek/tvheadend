@@ -94,7 +94,7 @@ ip_check_is_local_address
     if (!ifaddr || !ifnetmask) continue;
     if (ifaddr->ss_family != local->ss_family) continue;
     if (!any_address && !ip_check_equal(ifaddr, local)) continue;
-    ret = !!ip_check_in_network_v4(ifaddr, ifnetmask, peer);
+    ret = !!ip_check_in_network(ifaddr, ifnetmask, peer);
     if (ret) {
       if (used_local)
         memcpy(used_local, ifaddr, sizeof(struct sockaddr));
@@ -583,7 +583,18 @@ try_again:
   sused = 0;
   LIST_FOREACH(tsl, &tcp_server_active, alink) {
     if (tsl->fd == fd) {
-      res = tsl;
+      /*
+       * tcp_server_active is newest first, and the kernel reuses a
+       * descriptor number only after its previous owner closed it.
+       * The first entry with this fd is therefore the caller's own
+       * connection. An older entry with the same fd belongs to a
+       * connection that already closed its socket and is about to be
+       * freed by tcp_server_loop(); it must not be returned.
+       */
+      if (res == NULL)
+        res = tsl;
+      else
+        tvhwarn(LS_TCP, "ignoring stale connection entry for fd %d", fd);
       if (!aa->aa_conn_limit && !aa->aa_conn_limit_streaming)
         break;
       continue;
@@ -1051,9 +1062,9 @@ tcp_default_ip_addr ( struct sockaddr_storage *deflt, int family )
   }
 
   if (ss.ss_family == AF_INET)
-    IP_AS_V4(ss, port) = 0;
+    IP_AS_V4(&ss, port) = 0;
   else
-    IP_AS_V6(ss, port) = 0;
+    IP_AS_V6(&ss, port) = 0;
 
   memset(deflt, 0, sizeof(*deflt));
   memcpy(deflt, &ss, ss_len);
@@ -1092,9 +1103,9 @@ tcp_server_bound ( void *server, struct sockaddr_storage *bound, int family )
   if (tcp_default_ip_addr(bound, family) < 0)
     return -1;
   if (bound->ss_family == AF_INET)
-    IP_AS_V4(*bound, port) = port;
+    IP_AS_V4(bound, port) = port;
   else
-    IP_AS_V6(*bound, port) = port;
+    IP_AS_V6(bound, port) = port;
   return 0;
 }
 
@@ -1156,6 +1167,23 @@ tcp_server_connections ( void )
   return m;
 }
 
+/*
+ * Connections count
+ */
+int
+tcp_server_connections_count ( void )
+{
+  tcp_server_launch_t *tsl;
+  int c = 0;
+  
+  /* Count connections */
+  LIST_FOREACH(tsl, &tcp_server_launches, link) {
+    if (!tsl->status) continue;
+    c++;
+  }
+
+  return c;
+}
 /**
  *
  */

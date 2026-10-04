@@ -22,6 +22,102 @@
 
 #include <libavutil/pixdesc.h>
 
+static htsmsg_t *
+scaling_mode_get_list( void *o, const char *lang )
+{
+    static const struct strtab tab[] = {
+        { N_("Up & Down"),      0 },
+        { N_("Up (only)"),      1 },
+        { N_("Down (only)"),    2 },
+    };
+    return strtab2htsmsg(tab, 1, lang);
+}
+
+static htsmsg_t *
+hwaccel_get_list( void *o, const char *lang )
+{
+    static const struct strtab tab[] = {
+        { N_("auto (recommended)"),                 HWACCEL_AUTO},
+#if ENABLE_VAAPI
+        { N_("prioritize VAAPI"),                   HWACCEL_PRIORITIZE_VAAPI},
+#endif
+#if ENABLE_NVENC
+        { N_("prioritize NVDEC"),                   HWACCEL_PRIORITIZE_NVDEC},
+#endif
+#if ENABLE_MMAL
+        { N_("prioritize MMAL"),                    HWACCEL_PRIORITIZE_MMAL},
+#endif
+    };
+    return strtab2htsmsg(tab, 1, lang);
+}
+
+#if ENABLE_VAAPI
+static htsmsg_t *
+deinterlace_vaapi_mode_get_list( void *o, const char *lang )
+{
+    static const struct strtab tab[] = {
+        { N_("Default"),                                 VAAPI_DEINT_MODE_DEFAULT },
+        { N_("Bob Deinterlacing"),                       VAAPI_DEINT_MODE_BOB },
+        { N_("Weave Deinterlacing"),                     VAAPI_DEINT_MODE_WEAVE },
+        { N_("Motion Adaptive Deinterlacing (MADI)"),    VAAPI_DEINT_MODE_MADI },
+        { N_("Motion Compensated Deinterlacing (MCDI)"), VAAPI_DEINT_MODE_MCDI },
+    };
+    return strtab2htsmsg(tab, 1, lang);
+}
+#endif
+
+static htsmsg_t *
+deinterlace_field_rate_get_list( void *o, const char *lang )
+{
+    static const struct strtab tab[] = {
+        { N_("Frame Rate"),                         DEINT_RATE_FRAME },
+        { N_("Field Rate"),                         DEINT_RATE_FIELD },
+    };
+    return strtab2htsmsg(tab, 1, lang);
+}
+
+static htsmsg_t *
+deinterlace_enable_auto_get_list( void *o, const char *lang )
+{
+    static const struct strtab tab[] = {
+        { N_("Disable"),                            DEINT_AUTO_OFF },
+        { N_("Enable"),                             DEINT_AUTO_ON },
+    };
+    return strtab2htsmsg(tab, 1, lang);
+}
+
+/* Internal =================================================================  */
+
+static int
+_is_pix_fmt_available(TVHVideoCodec *self, int pix_fmt)
+{
+    const enum AVPixelFormat *p;
+
+    if (!self) {
+        tvhwarn(LS_CODEC, "tvh_codec_video is not available");
+        return 0;
+    }
+    // if 'auto' is selected we exit with 1
+    if (pix_fmt == AV_PIX_FMT_NONE) {
+        return 1;
+    }
+    // check if pix_fmt is in the supported list
+    if (self->pix_fmts) {
+        for (p = self->pix_fmts; *p != AV_PIX_FMT_NONE; p++) {
+            if (*p == pix_fmt) {
+                return 1;
+            }
+        }
+    }
+    // not found: we report and exit with 0
+    const char *pix_fmt_name = av_get_pix_fmt_name(pix_fmt);
+    if (pix_fmt_name) {
+        tvhwarn(LS_CODEC, "pixel format '%s' is not available", pix_fmt_name);
+    } else {
+        tvhwarn(LS_CODEC, "pixel format '%d' is not available", pix_fmt);
+    }
+    return 0;
+}
 
 /* TVHCodec ================================================================= */
 
@@ -63,11 +159,34 @@ tvh_codec_profile_video_setup(TVHVideoCodecProfile *self, tvh_ssc_t *ssc)
 {
     self->size.den = ssc->es_height;
     self->size.num = ssc->es_width;
-    if (self->height) {
-        self->size.den = self->height;
-        self->size.den += self->size.den & 1;
-        self->size.num = self->size.den * ((double)ssc->es_width / ssc->es_height);
-        self->size.num += self->size.num & 1;
+    switch (self->scaling_mode) {
+        case 0:
+            // scaling up and down
+            if (self->height) {
+                self->size.den = self->height;
+                self->size.den += self->size.den & 1;
+                self->size.num = (int)((double)self->size.den * ((double)ssc->es_width / (double)ssc->es_height));
+                self->size.num += self->size.num & 1;
+            }
+            break;
+        case 1:
+            // scaling up (only)
+            if ((self->height > 0) && (self->size.den < self->height)) {
+                self->size.den = self->height;
+                self->size.den += self->size.den & 1;
+                self->size.num = (int)((double)self->size.den * ((double)ssc->es_width / (double)ssc->es_height));
+                self->size.num += self->size.num & 1;
+            }
+            break;
+        case 2:
+            // scaling down (only)
+            if ((self->height > 0) && (self->size.den > self->height)) {
+                self->size.den = self->height;
+                self->size.den += self->size.den & 1;
+                self->size.num = (int)((double)self->size.den * ((double)ssc->es_width / (double)ssc->es_height));
+                self->size.num += self->size.num & 1;
+            }
+            break;
     }
     return 0;
 }
@@ -83,18 +202,19 @@ tvh_codec_profile_video_is_copy(TVHVideoCodecProfile *self, tvh_ssc_t *ssc)
 static int
 tvh_codec_profile_video_open(TVHVideoCodecProfile *self, AVDictionary **opts)
 {
-    AV_DICT_SET_INT(opts, "tvh_filter_deint", self->deinterlace, 0);
     // video_size
-    AV_DICT_SET_INT(opts, "width", self->size.num, 0);
-    AV_DICT_SET_INT(opts, "height", self->size.den, 0);
+    AV_DICT_SET_INT(LST_VIDEO, opts, "width", self->size.num, 0);
+    AV_DICT_SET_INT(LST_VIDEO, opts, "height", self->size.den, 0);
     // crf
     if (self->crf) {
-        AV_DICT_SET_INT(opts, "crf", self->crf, AV_DICT_DONT_OVERWRITE);
+        AV_DICT_SET_INT(LST_VIDEO, opts, "crf", self->crf, AV_DICT_DONT_OVERWRITE);
     }
     // pix_fmt
-    AV_DICT_SET_PIX_FMT(opts, self->pix_fmt, AV_PIX_FMT_YUV420P);
-    // max_b_frames
-    AV_DICT_SET_INT(opts, "bf", 3, AV_DICT_DONT_OVERWRITE);
+    TVHVideoCodec *codec = (TVHVideoCodec *)tvh_codec_profile_get_codec((TVHCodecProfile *)self);
+    if (!codec || !_is_pix_fmt_available(codec, self->pix_fmt)) {
+        return -1;
+    }
+    AV_DICT_SET_PIX_FMT(LST_VIDEO, opts, self->pix_fmt, AV_PIX_FMT_YUV420P);
     return 0;
 }
 
@@ -107,7 +227,7 @@ static int
 codec_profile_video_class_deinterlace_set(void *obj, const void *val)
 {
     TVHVideoCodecProfile *self = (TVHVideoCodecProfile *)obj;
-    AVCodec *avcodec = NULL;
+    const AVCodec *avcodec = NULL;
 
     if (self &&
         (avcodec = tvh_codec_profile_get_avcodec((TVHCodecProfile *)self))) {
@@ -145,16 +265,6 @@ const codec_profile_class_t codec_profile_video_class = {
         .ic_caption    = N_("video"),
         .ic_properties = (const property_t[]) {
             {
-                .type     = PT_BOOL,
-                .id       = "deinterlace",
-                .name     = N_("Deinterlace"),
-                .desc     = N_("Deinterlace."),
-                .group    = 2,
-                .off      = offsetof(TVHVideoCodecProfile, deinterlace),
-                .set      = codec_profile_video_class_deinterlace_set,
-                .def.i    = 1,
-            },
-            {
                 .type     = PT_INT,
                 .id       = "height",
                 .name     = N_("Height (pixels) (0=no scaling)"),
@@ -166,6 +276,16 @@ const codec_profile_class_t codec_profile_video_class = {
                 .def.i    = 0,
             },
             {
+                .type     = PT_INT,
+                .id       = "scaling_mode",
+                .name     = N_("Scaling mode"),
+                .desc     = N_("Allow control for scaling Up&Down, Up or Down"),
+                .group    = 2,
+                .off      = offsetof(TVHVideoCodecProfile, scaling_mode),
+                .list     = scaling_mode_get_list,
+                .def.i    = 0,
+            },
+            {
                 .type     = PT_BOOL,
                 .id       = "hwaccel",
                 .name     = N_("Hardware acceleration"),
@@ -173,6 +293,70 @@ const codec_profile_class_t codec_profile_video_class = {
                 .group    = 2,
                 .off      = offsetof(TVHVideoCodecProfile, hwaccel),
                 .def.i    = 0,
+            },
+            {
+                .type     = PT_INT,
+                .id       = "hwaccel_details",
+                .name     = N_("Hardware acceleration details"),
+                .desc     = N_("Force hardware acceleration."),
+                .group    = 2,
+                .off      = offsetof(TVHVideoCodecProfile, hwaccel_details),
+                .list     = hwaccel_get_list,
+                .def.i    = 0,
+            },
+            {
+                .type     = PT_BOOL,
+                .id       = "deinterlace",
+                .name     = N_("Deinterlace"),
+                .desc     = N_("Deinterlace."),
+                .group    = 2,
+                .off      = offsetof(TVHVideoCodecProfile, deinterlace),
+                .set      = codec_profile_video_class_deinterlace_set,
+                .def.i    = 1,
+            },
+#if ENABLE_VAAPI
+            {
+                .type     = PT_INT,
+                .id       = "deinterlace_vaapi_mode",
+                .name     = N_("VAAPI Deinterlace mode"),
+                .desc     = N_("Mode to use for VAAPI Deinterlacing. "
+                               "'Default' selects the most advanced deinterlacer, i.e. the mode appearing last in this list. "
+                               "Tip: MADI and MCDI usually yield the smoothest results, especially when used with field rate output."),
+                .group    = 2,
+                .opts     = PO_ADVANCED,
+                .off      = offsetof(TVHVideoCodecProfile, deinterlace_vaapi_mode),
+                .list     = deinterlace_vaapi_mode_get_list,
+                .def.i    = VAAPI_DEINT_MODE_DEFAULT,
+            },
+#endif
+            {
+                .type     = PT_INT,
+                .id       = "deinterlace_field_rate",
+                .name     = N_("Deinterlace rate type"),
+                .desc     = N_("Frame rate combines the two interlaced fields to create a single frame. "
+                               "Field rate processes each field independently, outputting as individual frames, "
+                               "which enables higher temporal resolution by producing one frame per field. "
+                               "Note: with field rate deinterlacing the resulting stream will have double "
+                               "frame-rate (for example 25i becomes 50p), which can result in smoother video "
+                               "since the original temporal properties of the interlaced video are retained."),
+                .group    = 2,
+                .opts     = PO_ADVANCED,
+                .off      = offsetof(TVHVideoCodecProfile, deinterlace_field_rate),
+                .list     = deinterlace_field_rate_get_list,
+                .def.i    = DEINT_RATE_FRAME,
+            },
+            {
+                .type     = PT_INT,
+                .id       = "deinterlace_enable_auto",
+                .name     = N_("Deinterlace fields only"),
+                .desc     = N_("Enable this option to only deinterlace fields, passing progressive frames "
+                               "unchanged. This is useful for mixed content, allowing progressive frames "
+                               "to bypass deinterlacing for improved efficiency and quality."),
+                .group    = 2,
+                .opts     = PO_EXPERT,
+                .off      = offsetof(TVHVideoCodecProfile, deinterlace_enable_auto),
+                .list     = deinterlace_enable_auto_get_list,
+                .def.i    = DEINT_AUTO_OFF,
             },
             {
                 .type     = PT_INT,
@@ -189,7 +373,7 @@ const codec_profile_class_t codec_profile_video_class = {
             {}
         }
     },
-    .setup       = (codec_profile_is_copy_meth)tvh_codec_profile_video_setup,
+    .setup       = (codec_profile_setup_meth)tvh_codec_profile_video_setup,
     .is_copy     = (codec_profile_is_copy_meth)tvh_codec_profile_video_is_copy,
     .open        = (codec_profile_open_meth)tvh_codec_profile_video_open,
 };

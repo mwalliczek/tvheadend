@@ -81,7 +81,7 @@ typedef struct htsmsg_field {
 #if ENABLE_SLOW_MEMORYINFO
   size_t hmf_edata_size;
 #endif
-  const char _hmf_name[0];
+  const char _hmf_name[];
 } htsmsg_field_t;
 
 #define hmf_s64     u.s64
@@ -212,6 +212,13 @@ void htsmsg_add_str_alloc(htsmsg_t *msg, const char *name, char *str);
  * Add a string field to a list only once.
  */
 void htsmsg_add_str_exclusive(htsmsg_t *msg, const char *str);
+
+/**
+ * Add a string using printf-style for the value.
+ */
+void
+htsmsg_add_str_printf(htsmsg_t *msg, const char *name, const char *fmt, ...)
+  __attribute__((format(printf,3,4)));;
 
 /**
  * Add/update a string field

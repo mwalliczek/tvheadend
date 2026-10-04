@@ -267,8 +267,15 @@ tvheadend.epgDetails = function(grid, index) {
         content += tvheadend.sortAndAddArray(event.category, _('Categories'));
       if (event.starRating)
         content += '<div class="x-epg-meta"><span class="x-epg-prefix">' + _('Star Rating') + ':</span><span class="x-epg-desc">' + event.starRating + '</span></div>';
+
+      if (event.ratingLabelIcon)
+        content += '<img class="x-epg-rlicon" src="' + event.ratingLabelIcon + '">';
+
       if (event.ageRating)
         content += '<div class="x-epg-meta"><span class="x-epg-prefix">' + _('Age Rating') + ':</span><span class="x-epg-desc">' + event.ageRating + '</span></div>';
+      if (event.ratingLabel)
+        content += '<div class="x-epg-meta"><span class="x-epg-prefix">' + _('Parental Rating') + ':</span><span class="x-epg-desc">' + event.ratingLabel + '</span></div>';
+
       if (event.genre) {
         var genre = [];
         Ext.each(event.genre, function(g) {
@@ -651,8 +658,18 @@ tvheadend.epg = function() {
             { name: 'category' },
             { name: 'keyword' },
             { name: 'ageRating' },
+            { name: 'ratingLabel' },
+            { name: 'ratingLabelIcon' },
             { name: 'copyright_year' },
             { name: 'new' },
+            { name: 'repeat' },
+            { name: 'hd' },
+            { name: 'widescreen' },
+            { name: 'aspect' },
+            { name: 'lines' },
+            { name: 'deafsigned' },
+            { name: 'subtitled' },
+            { name: 'audiodesc' },
             { name: 'genre' },
             { name: 'dvrUuid' },
             { name: 'dvrState' },
@@ -851,6 +868,14 @@ tvheadend.epg = function() {
             },
             {
                 width: 50,
+                id: 'ratingLabel',
+                header: _("Rating"),
+                tooltip: _("Parental Rating"),
+                dataIndex: 'ratingLabel',
+                renderer: renderInt
+            },
+            {
+                width: 50,
                 id: 'ageRating',
                 header: _("Age"),
                 tooltip: _("Age"),
@@ -892,6 +917,7 @@ tvheadend.epg = function() {
             { type: 'string',   dataIndex: 'episodeOnscreen' },
             { type: 'intsplit', dataIndex: 'channelNumber', intsplit: 1000000 },
             { type: 'string',   dataIndex: 'channelName' },
+            { type: 'string',   dataIndex: 'ratingLabel' },
             { type: 'numeric',  dataIndex: 'starRating' },
             { type: 'numeric',  dataIndex: 'ageRating' }
         ]
@@ -926,6 +952,10 @@ tvheadend.epg = function() {
     });
 
     var epgFilterFulltext = new Ext.form.Checkbox({
+        width: 20
+    });
+
+    let epgFilterMergetext = new Ext.form.Checkbox({
         width: 20
     });
 
@@ -1118,6 +1148,11 @@ tvheadend.epg = function() {
         epgFilterFulltext.setValue(0);
     };
 
+    let clearMergetextFilter = function() {
+        delete epgStore.baseParams.mergetext;
+        epgFilterMergetext.setValue(0);
+    };
+
     clearNewOnlyFilter = function() {
         delete epgStore.baseParams.newOnly;
         epgFilterNewOnly.setValue(0);
@@ -1153,6 +1188,7 @@ tvheadend.epg = function() {
         clearModeFilter();
         clearTitleFilter();
         clearFulltextFilter();
+        clearMergetextFilter();
         clearNewOnlyFilter();
         clearChannelFilter();
         clearChannelTagsFilter();
@@ -1249,6 +1285,13 @@ tvheadend.epg = function() {
         }
     });
 
+    epgFilterMergetext.on('check', function(c, value) {
+        if (epgStore.baseParams.mergetext !== value) {
+            epgStore.baseParams.mergetext = value;
+            epgView.reset();
+        }
+    });
+
     epgFilterNewOnly.on('check', function(c, value) {
         if (epgStore.baseParams.new !== value) {
             epgStore.baseParams.new = value;
@@ -1280,7 +1323,7 @@ tvheadend.epg = function() {
 
     var tbar = [
         epgMode, '-',
-        epgFilterTitle, { text: _('Fulltext') }, epgFilterFulltext, { text: _('New only') }, epgFilterNewOnly, '-',
+        epgFilterTitle, { text: _('Fulltext') }, epgFilterFulltext, { text: _('Mergetext') }, epgFilterMergetext, { text: _('New only') }, epgFilterNewOnly, '-',
         epgPrevChannel, epgFilterChannels, epgNextChannel, '-',
         epgFilterChannelTags, '-',
         epgFilterContentGroup, '-',
@@ -1458,6 +1501,9 @@ tvheadend.epg = function() {
         var fulltext = epgStore.baseParams.fulltext ?
                 " <i>(" + _("Fulltext") + ")</i>"
                 : "";
+        let mergetext = epgStore.baseParams.mergetext ?
+                " <i>(" + _("Mergetext") + ")</i>"
+                : "";
         var newOnly = epgStore.baseParams.new ?
                 " <i>(" + _("New only") + ")</i>"
                 : "";
@@ -1483,7 +1529,7 @@ tvheadend.epg = function() {
         Ext.MessageBox.confirm(_('Auto Recorder'), _('This will create an automatic rule that '
                 + 'continuously scans the EPG for programs '
                 + 'to record that match this query') + ': ' + '<br><br>'
-                + '<div class="x-smallhdr">' + _('Title') + ':</div>' + title + fulltext + newOnly + '<br>'
+                + '<div class="x-smallhdr">' + _('Title') + ':</div>' + title + fulltext + mergetext + newOnly + '<br>'
                 + '<div class="x-smallhdr">' + _('Channel') + ':</div>' + channel + '<br>'
                 + '<div class="x-smallhdr">' + _('Tag') + ':</div>' + tag + '<br>'
                 + '<div class="x-smallhdr">' + _('Genre') + ':</div>' + contentType + '<br>'
@@ -1512,6 +1558,7 @@ tvheadend.epg = function() {
           conf.comment = conf.title + _(' - ') + conf.comment;
         }
         if (params.fulltext) conf.fulltext = params.fulltext;
+        if (params.mergetext) conf.mergetext = params.mergetext;
         if (params.new) conf.btype = 3; // DVR_AUTOREC_BTYPE_NEW in dvr.h has value 3.
         if (params.channel) conf.channel = params.channel;
         if (params.channelTag) conf.tag = params.channelTag;

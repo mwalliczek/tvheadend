@@ -244,6 +244,18 @@ const idclass_t linuxdvb_frontend_class =
       .opts     = PO_ADVANCED,
       .off      = offsetof(linuxdvb_frontend_t, lfe_old_status),
     },
+    {
+      .type     = PT_U32,
+      .id       = "grace_period",
+      .name     = N_("Scan grace period (seconds)"),
+      .desc     = N_("The maximum amount of time to allow this adapter "
+                     "to complete a scan of a mux. If you're getting "
+                     "failed or incomplete scans (for example, missing "
+                     "services) despite a strong signal, try increasing "
+                     "this value. Ignored for DVB-S."),
+      .opts     = PO_ADVANCED,
+      .off      = offsetof(linuxdvb_frontend_t, lfe_grace_period),
+    },
     {}
   }
 };
@@ -593,10 +605,7 @@ static int
 linuxdvb_frontend_get_grace ( mpegts_input_t *mi, mpegts_mux_t *mm )
 {
   linuxdvb_frontend_t *lfe = (linuxdvb_frontend_t*)mi;
-  int r = 5;
-  if (lfe->lfe_satconf)
-    r = linuxdvb_satconf_get_grace(lfe->lfe_satconf, mm);
-  return r;
+  return lfe->lfe_satconf ? linuxdvb_satconf_get_grace(lfe->lfe_satconf, mm) : lfe->lfe_grace_period;
 }
 
 static int
@@ -1622,6 +1631,28 @@ linuxdvb_frontend_tune0
 #if DVB_VER_ATLEAST(5,0)
     { .t = DVB_FEC_9_10,                .l = FEC_9_10  },
 #endif
+#if DVB_VER_ATLEAST(5,12)
+    { .t = DVB_FEC_1_3,                 .l = FEC_1_3   },
+    { .t = DVB_FEC_1_4,                 .l = FEC_1_4   },
+    { .t = DVB_FEC_4_15,                .l = FEC_4_15  },
+    { .t = DVB_FEC_5_9,                 .l = FEC_5_9   },
+    { .t = DVB_FEC_7_9,                 .l = FEC_7_9   },
+    { .t = DVB_FEC_7_15,                .l = FEC_7_15  },
+    { .t = DVB_FEC_8_15,                .l = FEC_8_15  },
+    { .t = DVB_FEC_9_20,                .l = FEC_9_20  },
+    { .t = DVB_FEC_11_15,               .l = FEC_11_15 },
+    { .t = DVB_FEC_11_20,               .l = FEC_11_20 },
+    { .t = DVB_FEC_11_45,               .l = FEC_11_45 },
+    { .t = DVB_FEC_13_18,               .l = FEC_13_18 },
+    { .t = DVB_FEC_13_45,               .l = FEC_13_45 },
+    { .t = DVB_FEC_14_45,               .l = FEC_14_45 },
+    { .t = DVB_FEC_23_36,               .l = FEC_23_36 },
+    { .t = DVB_FEC_25_36,               .l = FEC_25_36 },
+    { .t = DVB_FEC_26_45,               .l = FEC_26_45 },
+    { .t = DVB_FEC_28_45,               .l = FEC_28_45 },
+    { .t = DVB_FEC_32_45,               .l = FEC_32_45 },
+    { .t = DVB_FEC_77_90,               .l = FEC_77_90 },    
+#endif
     { .t = TABLE_EOD }
   };
   static linuxdvb_tbl_t mod_tbl[] = {
@@ -1645,6 +1676,15 @@ linuxdvb_frontend_tune0
 #endif
 #if DVB_VER_ATLEAST(5,7)
     { .t = DVB_MOD_QAM_4_NR,            .l = QAM_4_NR },
+#endif
+#if DVB_VER_ATLEAST(5,12)
+    { .t = DVB_MOD_QAM_1024,            .l = QAM_1024 },
+    { .t = DVB_MOD_QAM_4096,            .l = QAM_4096 },
+    { .t = DVB_MOD_APSK_8_L,            .l = APSK_8_L },
+    { .t = DVB_MOD_APSK_16_L,           .l = APSK_16_L},
+    { .t = DVB_MOD_APSK_32_L,           .l = APSK_32_L},
+    { .t = DVB_MOD_APSK_64,             .l = APSK_64  },
+    { .t = DVB_MOD_APSK_64_L,           .l = APSK_64_L},
 #endif
     { .t = TABLE_EOD }
   };
@@ -1689,7 +1729,7 @@ linuxdvb_frontend_tune0
     { .t = DVB_HIERARCHY_4,             .l = HIERARCHY_4    },
     { .t = TABLE_EOD }
   };
-#if DVB_API_VERSION >= 5
+#if DVB_VER_ATLEAST(5,0)
   static linuxdvb_tbl_t pilot_tbl[] = {
     { .t = DVB_PILOT_AUTO,              .l = PILOT_AUTO },
     { .t = DVB_PILOT_ON,                .l = PILOT_ON   },
@@ -1698,6 +1738,11 @@ linuxdvb_frontend_tune0
   };
   static linuxdvb_tbl_t rolloff_tbl[] = {
     { .t = DVB_HIERARCHY_AUTO,          .l = ROLLOFF_AUTO },
+#if DVB_VER_ATLEAST(5,12)
+    { .t = DVB_ROLLOFF_5,               .l = ROLLOFF_5    },
+    { .t = DVB_ROLLOFF_10,              .l = ROLLOFF_10   },
+    { .t = DVB_ROLLOFF_15,              .l = ROLLOFF_15   },    
+#endif
     { .t = DVB_ROLLOFF_20,              .l = ROLLOFF_20   },
     { .t = DVB_ROLLOFF_25,              .l = ROLLOFF_25   },
     { .t = DVB_ROLLOFF_35,              .l = ROLLOFF_35   },
@@ -2021,7 +2066,7 @@ linuxdvb_frontend_wizard_set( tvh_input_t *ti, htsmsg_t *conf, const char *lang 
     return;
   mpegts_network_wizard_create(ntype, &nlist, lang);
   mn = linuxdvb_frontend_wizard_network(lfe);
-  if (ntype && (mn == NULL || mn->mn_wizard)) {
+  if (nlist && ntype && (mn == NULL || mn->mn_wizard)) {
     if (lfe->lfe_satconf) {
       htsmsg_t *conf = htsmsg_create_map();
       htsmsg_t *elems = htsmsg_create_list();
@@ -2131,6 +2176,7 @@ linuxdvb_frontend_create
   lfe->lfe_pids_use_all = 1;
   lfe->lfe_sig_multiplier = 100;
   lfe->lfe_snr_multiplier = 100;
+  lfe->lfe_grace_period = 5;
   lfe = (linuxdvb_frontend_t*)mpegts_input_create0((mpegts_input_t*)lfe, idc, uuid, conf);
   if (!lfe) return NULL;
 

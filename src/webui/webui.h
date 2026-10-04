@@ -34,6 +34,15 @@ void simpleui_start(void);
 
 void extjs_start(void);
 
+/* The Vue UI is embedded whenever it was built locally (vue_build) or
+ * fetched prebuilt (vue_cache) — both bundle src/webui/static-vue/dist
+ * (Makefile BUNDLES-$(CONFIG_VUE_BUILD)/$(CONFIG_VUE_CACHE)). Serving and
+ * the root redirect gate on this, not ENABLE_VUE_BUILD alone, or a cache
+ * build bundles the UI but serves the fallback stub. */
+#define ENABLE_VUE_UI (ENABLE_VUE_BUILD || ENABLE_VUE_CACHE)
+
+void vue_init(void);
+
 size_t html_escaped_len(const char *src);
 const char* html_escape(char *dst, const char *src, size_t len);
 
@@ -48,6 +57,8 @@ http_serve_file(http_connection_t *hc, const char *fname,
                 void *opaque);
 
 int page_static_file(http_connection_t *hc, const char *remain, void *opaque);
+int page_static_file_maxage(http_connection_t *hc, const char *remain,
+                            const char *base, int maxage);
 int page_xmltv(http_connection_t *hc, const char *remain, void *opaque);
 int page_markdown(http_connection_t *hc, const char *remain, void *opaque);
 
@@ -65,10 +76,15 @@ void comet_init(void);
 
 void comet_done(void);
 
-void comet_mailbox_add_message(htsmsg_t *m, int isdebug, int rewrite);
+void comet_mailbox_add_message(htsmsg_t *m, int isdebug, int isrestricted, int rewrite);
 
 void comet_mailbox_add_logmsg(const char *txt, int isdebug, int rewrite);
 
 void comet_flush(void);
+
+/* Session access/UI-preference info message — shared by the comet
+ * "accessUpdate" notification and api/access/whoami. */
+struct access;
+htsmsg_t *comet_access_info_build(struct access *aa, const char *peer_ipstr);
 
 #endif /* WEBUI_H_ */

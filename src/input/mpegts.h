@@ -374,6 +374,7 @@ struct mpegts_network
   int      mn_autodiscovery;
   int      mn_skipinitscan;
   int      mn_bouquet;
+  int      mn_epgauto_default;
   char    *mn_charset;
   int      mn_idlescan;
   int      mn_ignore_chnum;
@@ -545,6 +546,11 @@ struct mpegts_mux
 #define PREFCAPID_ON       1
 #define PREFCAPID_FORCE    2
 
+#define SVC_PROCESS_SUBTITLE_NONE     0
+#define SVC_PROCESS_SUBTITLE_DESC     1
+#define SVC_PROCESS_SUBTITLE_APPEND   2
+#define SVC_PROCESS_SUBTITLE_PREPEND  3
+
 /* Service */
 struct mpegts_service
 {
@@ -573,7 +579,9 @@ struct mpegts_service
   char    *s_dvb_provider;
   char    *s_dvb_cridauth;
   uint16_t s_dvb_servicetype;
-  int      s_dvb_ignore_eit;
+  int      s_dvb_eit_processing;            //EIT processing policy (EIT_PROCESSING_* in epggrab.h); Default defers to the global setting
+  int      s_dvb_subtitle_processing;       //Various options for replacing/augmenting the desc from the sub-title
+  int      s_dvb_ignore_matching_subtitle;  //Ignore the sub-title if same as title
   char    *s_dvb_charset;
   uint16_t s_dvb_prefcapid;
   int      s_dvb_prefcapid_lock;
@@ -586,6 +594,11 @@ struct mpegts_service
    */
 
   int      s_dvb_eit_enable;
+  /* Runtime flag: this service's own actual-TS schedule EIT
+   * (table_id 0x50-0x5f) has been received this session. Used by
+   * the EIT_PROCESSING_ADAPTIVE policy to start dropping other-TS
+   * once detailed actual-TS data is available. Not persisted. */
+  int      s_dvb_eit_actual_seen;
   uint64_t s_dvb_opentv_chnum;
   uint16_t s_dvb_opentv_id;
   uint16_t s_atsc_source_id;

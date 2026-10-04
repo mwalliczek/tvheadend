@@ -37,15 +37,15 @@ static int
 tvh_codec_profile_libvpx_open(tvh_codec_profile_libvpx_t *self,
                               AVDictionary **opts)
 {
-    AV_DICT_SET_TVH_REQUIRE_META(opts, 0);
-    AV_DICT_SET_BIT_RATE(opts, self->bit_rate ? self->bit_rate : 2560);
+    AV_DICT_SET_TVH_REQUIRE_META(LST_LIBVPX, opts, 0);
+    AV_DICT_SET_BIT_RATE(LST_LIBVPX, opts, self->bit_rate ? self->bit_rate : 2560);
     if (self->crf) {
-        AV_DICT_SET_CRF(opts, self->crf, 10);
+        AV_DICT_SET_CRF(LST_LIBVPX, opts, self->crf, 10);
     }
-    AV_DICT_SET_INT(opts, "deadline", self->deadline, 0);
-    AV_DICT_SET_INT(opts, "cpu-used", self->cpu_used, 0);
-    AV_DICT_SET_INT(opts, "tune", self->tune, 0);
-    AV_DICT_SET_INT(opts, "threads", 0, 0);
+    AV_DICT_SET_INT(LST_LIBVPX, opts, "deadline", self->deadline, 0);
+    AV_DICT_SET_INT(LST_LIBVPX, opts, "cpu-used", self->cpu_used, 0);
+    AV_DICT_SET_INT(LST_LIBVPX, opts, "tune", self->tune, 0);
+    AV_DICT_SET_INT(LST_LIBVPX, opts, "threads", 0, 0);
     return 0;
 }
 
@@ -135,6 +135,17 @@ static const codec_profile_class_t codec_profile_libvpx_class = {
                 .off      = offsetof(tvh_codec_profile_libvpx_t, tune),
                 .list     = codec_profile_libvpx_class_tune_list,
                 .def.i    = VP8_TUNE_PSNR,
+            },
+            {
+                .type     = PT_INT,
+                .id       = "gop_size",     // Don't change
+                .name     = N_("GOP size"),
+                .desc     = N_("Sets the Group of Pictures (GOP) size in frame (default 0 is 3 sec.)"),
+                .group    = 3,
+                .get_opts = codec_profile_class_get_opts,
+                .off      = offsetof(TVHVideoCodecProfile, gop_size),
+                .intextra = INTEXTRA_RANGE(0, 1000, 1),
+                .def.i    = 0,
             },
             {}
         }

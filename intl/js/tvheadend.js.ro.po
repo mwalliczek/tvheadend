@@ -10,7 +10,7 @@ msgstr ""
 "POT-Creation-Date: 2016-12-16 18:36+0100\n"
 "PO-Revision-Date: 2016-12-16 17:37+0000\n"
 "Last-Translator: Jaroslav Kysela\n"
-"Language-Team: Romanian (http://www.transifex.com/tvheadend-foundation-cic/tvheadend/language/ro/)\n"
+"Language-Team: Romanian (http://www.transifex.com/tvheadend/tvheadend/language/ro/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1228,8 +1228,8 @@ msgid "Parameters"
 msgstr ""
 
 #: src/webui/static/app/idnode.js:1939
-msgid "Parent disabled"
-msgstr ""
+msgid "Inactive services"
+msgstr "Servicii inactive"
 
 #: src/webui/static/app/acleditor.js:70
 msgid "Password"
@@ -2014,7 +2014,7 @@ msgstr ""
 #: src/webui/static/app/tvheadend.js:251
 msgid ""
 "or join the [IRC channel on "
-"freenode](https://kiwiirc.com/client/chat.freenode.net/?nick=tvhhelp|?#hts)."
+"Libera.Chat](https://web.libera.chat/#hts)."
 msgstr ""
 
 #: src/webui/static/app/i18n-post.js:217

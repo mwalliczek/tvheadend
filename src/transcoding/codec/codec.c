@@ -20,6 +20,9 @@
 
 #include "internals.h"
 
+#if ENABLE_VAAPI
+#include "vainfo.h"
+#endif
 
 struct TVHCodecs tvh_codecs;
 
@@ -79,21 +82,21 @@ extern TVHCodec tvh_codec_omx_h264;
 /* AVCodec ================================================================== */
 
 static enum AVMediaType
-codec_get_type(AVCodec *self)
+codec_get_type(const AVCodec *self)
 {
     return self->type;
 }
 
 
 static const char *
-codec_get_type_string(AVCodec *self)
+codec_get_type_string(const AVCodec *self)
 {
     return av_get_media_type_string(self->type);
 }
 
 
 const char *
-codec_get_title(AVCodec *self)
+codec_get_title(const AVCodec *self)
 {
     static __thread char codec_title[TVH_TITLE_LEN];
 
@@ -113,7 +116,7 @@ codec_get_title(AVCodec *self)
 /* TVHCodec ================================================================= */
 
 static void
-tvh_codec_video_init(TVHVideoCodec *self, AVCodec *codec)
+tvh_codec_video_init(TVHVideoCodec *self, const AVCodec *codec)
 {
     if (!self->pix_fmts) {
         self->pix_fmts = codec->pix_fmts;
@@ -121,7 +124,7 @@ tvh_codec_video_init(TVHVideoCodec *self, AVCodec *codec)
 }
 
 static void
-tvh_codec_audio_init(TVHAudioCodec *self, AVCodec *codec)
+tvh_codec_audio_init(TVHAudioCodec *self, const AVCodec *codec)
 {
     static int default_sample_rates[] = {
         44100, 48000, 96000, 192000, 0
@@ -136,13 +139,17 @@ tvh_codec_audio_init(TVHAudioCodec *self, AVCodec *codec)
             self->sample_rates = default_sample_rates;
     }
     if (!self->channel_layouts) {
+#if LIBAVCODEC_VERSION_MAJOR > 59
+        self->channel_layouts = codec->ch_layouts;
+#else
         self->channel_layouts = codec->channel_layouts;
+#endif
     }
 }
 
 
 static void
-tvh_codec_init(TVHCodec *self, AVCodec *codec)
+tvh_codec_init(TVHCodec *self, const AVCodec *codec)
 {
     if (!self->profiles) {
         self->profiles = codec->profiles;
@@ -164,7 +171,7 @@ static void
 tvh_codec_register(TVHCodec *self)
 {
     static const size_t min_size = sizeof(TVHCodecProfile);
-    AVCodec *codec = NULL;
+    const AVCodec *codec = NULL;
 
     if (tvh_str_default(self->name, NULL) == NULL ||
         self->size < min_size || !self->idclass) {
@@ -221,7 +228,7 @@ tvh_codec_get_type_string(TVHCodec *self)
 }
 
 
-AVCodec *
+const AVCodec *
 tvh_codec_get_codec(TVHCodec *self)
 {
     return self->codec;
@@ -250,7 +257,11 @@ tvh_codec_find(const char *name)
 
 
 void
+#if ENABLE_VAAPI
+tvh_codecs_register(int vainfo_probe_enabled)
+#else
 tvh_codecs_register()
+#endif
 {
     SLIST_INIT(&tvh_codecs);
     tvh_codec_register(&tvh_codec_mpeg2video);
@@ -287,10 +298,26 @@ tvh_codecs_register()
 #endif
 
 #if ENABLE_VAAPI
-    tvh_codec_register(&tvh_codec_vaapi_h264);
-    tvh_codec_register(&tvh_codec_vaapi_hevc);
-    tvh_codec_register(&tvh_codec_vaapi_vp8);
-    tvh_codec_register(&tvh_codec_vaapi_vp9);
+    if (vainfo_probe_enabled && !vainfo_init(VAINFO_SHOW_LOGS)) {
+        if (vainfo_encoder_isavailable(VAINFO_H264) || 
+            vainfo_encoder_isavailable(VAINFO_H264_LOW_POWER))
+            tvh_codec_register(&tvh_codec_vaapi_h264);
+        if (vainfo_encoder_isavailable(VAINFO_HEVC) || 
+            vainfo_encoder_isavailable(VAINFO_HEVC_LOW_POWER))
+            tvh_codec_register(&tvh_codec_vaapi_hevc);
+        if (vainfo_encoder_isavailable(VAINFO_VP8) || 
+            vainfo_encoder_isavailable(VAINFO_VP8_LOW_POWER))
+            tvh_codec_register(&tvh_codec_vaapi_vp8);
+        if (vainfo_encoder_isavailable(VAINFO_VP9) || 
+            vainfo_encoder_isavailable(VAINFO_VP9_LOW_POWER))
+            tvh_codec_register(&tvh_codec_vaapi_vp9);
+    }
+    else {
+        tvh_codec_register(&tvh_codec_vaapi_h264);
+        tvh_codec_register(&tvh_codec_vaapi_hevc);
+        tvh_codec_register(&tvh_codec_vaapi_vp8);
+        tvh_codec_register(&tvh_codec_vaapi_vp9);
+    }
 #endif
 
 #if ENABLE_NVENC

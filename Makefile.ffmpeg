@@ -33,7 +33,7 @@ unexport LDFLAGS
 # ##############################################################################
 
 EXTLIBS        =
-COMPONENTS     = avutil avcodec avformat swscale avresample swresample avfilter
+COMPONENTS     = avutil avcodec avformat swscale swresample avfilter
 PROTOCOLS      = file http https hls mmsh mmst rtmp rtmpe rtmps rtmpt rtmpte rtmpts \
                  ffrtmpcrypt ffrtmphttp rtp srtp tcp udp udplite unix crypto
 DECODERS       = mpeg2video mp2 aac vorbis ac3 eac3 aac_latm opus h264 hevc theora flac
@@ -44,41 +44,40 @@ BSFS           = h264_mp4toannexb hevc_mp4toannexb
 FILTERS        = yadif format hwupload hwdownload scale null aresample anull
 HWACCELS       =
 
-NASM_VER       = 2.15.05
+NASM_VER       = 2.16.03
 NASM           = nasm-$(NASM_VER)
 NASM_TB        = $(NASM).tar.gz
 NASM_URL       = https://www.nasm.us/pub/nasm/releasebuilds/$(NASM_VER)/$(NASM_TB)
-NASM_SHA1      = 8a2a60b01d563c32dd216f94a99a20e6e31fd8aa
+NASM_SHA1      = 432742c550039d202db6e34bb3efab646be74b56
 NASM_DIFFS     = remove-invalid-pure_func-qualifiers.diff
 
-LIBX264_VER    = d2907f67227cbf38ac957efed84c532b12ce19cc
+LIBX264_VER    = 7ed753b10a61d0be95f683289dfb925b800b0676
 LIBX264        = x264-$(LIBX264_VER)
-LIBX264_TB     = $(LIBX264).tar.bz2
-LIBX264_URL    = https://code.videolan.org/videolan/x264/-/archive/$(LIBX264_VER)/$(LIBX264_TB)
-LIBX264_SHA1   = 6b69f9af34ddfb9bc0bbfedb0b41a0b8b6c2771a
+LIBX264_TB     = $(LIBX264).tar.gz
+LIBX264_URL    = https://github.com/mirror/x264/archive/$(LIBX264_VER)/$(LIBX264_TB)
+LIBX264_SHA1   = f9e8d38178352c87e1a60adbbd249b661c0896de
 
-LIBX265_VER    = 3.5
+LIBX265_VER    = 4.1
 LIBX265        = x265_$(LIBX265_VER)
 LIBX265_TB     = $(LIBX265).tar.gz
-LIBX265_URL    = https://bitbucket.org/multicoreware/x265_git/downloads/$(LIBX265_TB)
-LIBX265_SHA1   = dc8e70f441991289a9a34fd37e1649d59435bfae
-ifeq ($(CONFIG_PIE),yes)
-LIBX265_DIFFS  = libx265.pie.diff
-else
+LIBX265_URL    = https://ftp.videolan.org/pub/videolan/x265/$(LIBX265_TB)
+LIBX265_SHA1   = 11880a3aa9e4ee618f539a2d6a8ece0ea442f505
 LIBX265_DIFFS  = libx265.pic.diff
-endif
+LIBX265_DIFFS  += libx265.CMake4.diff
 LIBX265_DIFFS  += libx265-silence.patch
+LIBX265_DIFFS  += libx265-substring.patch
+LIBX265_DIFFS  += libx265-armv9.patch
 
-LIBVPX_VER     = 1.9.0
+LIBVPX_VER     = 1.14.1
 LIBVPX         = libvpx-$(LIBVPX_VER)
 LIBVPX_TB      = $(LIBVPX).tar.gz
 LIBVPX_URL     = https://github.com/webmproject/libvpx/archive/v$(LIBVPX_VER)/$(LIBVPX_TB)
-LIBVPX_SHA1    = 2ab8203ad8922bdf3256e4a197d1348fa8db9a62
+LIBVPX_SHA1    = 04af9fed7d7e2d686dc164d78c85908499420dd4
 
-LIBOGG         = libogg-1.3.4
+LIBOGG         = libogg-1.3.5
 LIBOGG_TB      = $(LIBOGG).tar.gz
 LIBOGG_URL     = https://ftp.osuosl.org/pub/xiph/releases/ogg/$(LIBOGG_TB)
-LIBOGG_SHA1    = 851cef020b346d44893e5d1c3dab83c675d479d9
+LIBOGG_SHA1    = 56f24c585af430e6714f96d096c60ddf9539ebfd
 
 LIBTHEORA      = libtheora-1.2.0alpha1
 LIBTHEORA_TB   = $(LIBTHEORA).tar.gz
@@ -91,27 +90,27 @@ LIBVORBIS_URL  = https://ftp.osuosl.org/pub/xiph/releases/vorbis/$(LIBVORBIS_TB)
 LIBVORBIS_SHA1 = 2b415495f89b103138a23da5017a2a00837c6c94
 
 
-LIBFDKAAC_VER  = 2.0.2
+LIBFDKAAC_VER  = 2.0.3
 LIBFDKAAC      = fdk-aac-$(LIBFDKAAC_VER)
 LIBFDKAAC_TB   = v$(LIBFDKAAC_VER).tar.gz
 LIBFDKAAC_URL  = https://github.com/mstorsjo/fdk-aac/archive/refs/tags/$(LIBFDKAAC_TB)
-LIBFDKAAC_SHA1 = 8d711c298d1a562f8e5bedb0ca8dc39365efe93b
+LIBFDKAAC_SHA1 = a7f42c67c0b82cdb2cd773d3ec31042fb5647c0d
 
 LIBOPUS        = opus-1.3.1
 LIBOPUS_TB     = $(LIBOPUS).tar.gz
 LIBOPUS_URL    = https://archive.mozilla.org/pub/opus/$(LIBOPUS_TB)
 LIBOPUS_SHA1   = ed226536537861c9f0f1ef7ca79dffc225bc181b
 
-FFNVCODEC_VER  = 11.1.5.0
+FFNVCODEC_VER  = 12.1.14.0
 FFNVCODEC      = nv-codec-headers-$(FFNVCODEC_VER)
 FFNVCODEC_TB   = $(FFNVCODEC).tar.gz
 FFNVCODEC_URL  = https://github.com/FFmpeg/nv-codec-headers/releases/download/n$(FFNVCODEC_VER)/nv-codec-headers-$(FFNVCODEC_VER).tar.gz
-FFNVCODEC_SHA1 = 89bee0d3025b813c513084ad8546b0261623fbb0
+FFNVCODEC_SHA1 = 74231bb5572ebde98652a26ce98ede7895b4c730
 
-FFMPEG         = ffmpeg-4.4.1
+FFMPEG         = ffmpeg-6.1.1
 FFMPEG_TB      = $(FFMPEG).tar.bz2
 FFMPEG_URL     = https://ffmpeg.org/releases/$(FFMPEG_TB)
-FFMPEG_SHA1    = 49306f284475014b8e68bff886aaeeaf0723810c
+FFMPEG_SHA1    = 157e7b0f6521142e1ebd786175e363e9f1b59312
 
 
 # ##############################################################################
@@ -224,7 +223,7 @@ endif
 
 $(LIB_ROOT)/$(LIBX264)/.tvh_download:
 	$(call DOWNLOAD,$(LIBX264_URL),$(LIB_ROOT)/$(LIBX264_TB),$(LIBX264_SHA1))
-	$(call UNTAR,$(LIBX264_TB),j)
+	$(call UNTAR,$(LIBX264_TB),z)
 	@touch $@
 
 $(LIB_ROOT)/$(LIBX264)/.tvh_build: \
@@ -284,6 +283,7 @@ $(LIB_ROOT)/$(LIBX265)/.tvh_build: \
 	cd $(LIB_ROOT)/$(LIBX265)/build/linux && cmake -G "Unix Makefiles" \
 		-DCMAKE_INSTALL_PREFIX="/ffmpeg" \
 		-DENABLE_SHARED:BOOL=OFF \
+		$(EXTRA_X265_CMAKE_OPTS) \
 		../../source
 	DESTDIR=$(EBUILDIR) \
 		$(MAKE) -C $(LIB_ROOT)/$(LIBX265)/build/linux install
@@ -327,6 +327,7 @@ endif
 $(LIB_ROOT)/$(LIBVPX)/.tvh_download:
 	$(call DOWNLOAD,$(LIBVPX_URL),$(LIB_ROOT)/$(LIBVPX_TB),$(LIBVPX_SHA1))
 	$(call UNTAR,$(LIBVPX_TB),z)
+	$(call PATCH,$(LIBVPX)/build/make/,$(LIBVPX_DIFFS))
 	@touch $@
 
 $(LIB_ROOT)/$(LIBVPX)/.tvh_build: \
@@ -567,9 +568,10 @@ endif
 ifeq (yes,$(CONFIG_NVENC))
 
 ## YOU MUST INSTALL CUDA from NVIDIA for "libnpp" 
-EXTLIBS   += nvenc cuvid libnpp
+## https://developer.nvidia.com/blog/nvidia-ffmpeg-transcoding-guide/
+EXTLIBS   += cuda cuvid nvdec nvenc libnpp
 ENCODERS  += h264_nvenc hevc_nvenc
-DECODERS  += h264_cuvid hevc_cuvid
+DECODERS  += h264_cuvid hevc_cuvid vp8_cuvid vp9_cuvid mpeg2_cuvid
 HWACCELS  += h264_nvdec hevc_nvdec vp8_nvdec vp9_nvdec mjpeg_nvdec mpeg1_nvdec mpeg2_nvdec mpeg4_nvdec
 ECFLAGS   += -I/usr/local/cuda/include
 
@@ -613,8 +615,7 @@ ifeq (yes,$(CONFIG_VAAPI))
 EXTLIBS  += vaapi
 ENCODERS += h264_vaapi hevc_vaapi vp8_vaapi vp9_vaapi
 HWACCELS += mpeg2_vaapi h264_vaapi hevc_vaapi vp9_vaapi
-FILTERS  += deinterlace_vaapi scale_vaapi
-FFMPEG_DIFFS += ffmpeg.vaapi_encode.diff
+FILTERS  += deinterlace_vaapi scale_vaapi denoise_vaapi sharpness_vaapi
 
 endif
 

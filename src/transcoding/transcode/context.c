@@ -107,10 +107,48 @@ _context_filters_apply_sink_options(TVHContext *self, va_list ap)
 {
     const char *opt_name = NULL;
     const uint8_t *opt_val = NULL;
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    const char *opt_val_char = NULL;
+    av_opt_set_type opt_type = AV_OPT_SET_UNKNOWN;
+    char err_desciption[32];
+#endif
     int opt_size = 0;
     int ret = -1;
 
     while ((opt_name = va_arg(ap, const char *))) {
+#if LIBAVCODEC_VERSION_MAJOR > 59
+        opt_type = (av_opt_set_type) va_arg(ap, int);
+        opt_size = va_arg(ap, int);
+        if (opt_type == AV_OPT_SET_BIN) {
+            opt_val = va_arg(ap, const uint8_t *);
+            ret = av_opt_set_bin(self->oavfltctx, opt_name, opt_val, opt_size, AV_OPT_SEARCH_CHILDREN);}
+        else {
+            if (opt_type == AV_OPT_SET_STRING) {
+                opt_val_char = va_arg(ap, const char *);
+                ret = av_opt_set(self->oavfltctx, opt_name, opt_val_char, AV_OPT_SEARCH_CHILDREN);} 
+            else {
+                tvh_context_log(self, LOG_ERR, "filters: failed to set option: '%s' with error: 'AV_OPT_SET_UNKNOWN'", opt_name);
+                return ret;
+            }
+        }
+        if (ret) {
+            switch (ret) {
+                case AVERROR_OPTION_NOT_FOUND:
+                    str_snprintf(err_desciption, sizeof(err_desciption), "AVERROR_OPTION_NOT_FOUND");
+                    break;
+                case AVERROR(EINVAL):
+                    str_snprintf(err_desciption, sizeof(err_desciption), "AVERROR(EINVAL)");
+                    break;
+                case AVERROR(ENOMEM):
+                    str_snprintf(err_desciption, sizeof(err_desciption), "AVERROR(ENOMEM)");
+                    break;
+                default:
+                    str_snprintf(err_desciption, sizeof(err_desciption), "UNKNOWN ERROR");
+                    break;
+            }
+            tvh_context_log(self, LOG_ERR, "filters: failed to set option: '%s' with error: '%s'", opt_name, err_desciption);
+        }
+#else
         opt_val = va_arg(ap, const uint8_t *);
         opt_size = va_arg(ap, int);
         if ((ret = av_opt_set_bin(self->oavfltctx, opt_name, opt_val, opt_size,
@@ -119,6 +157,7 @@ _context_filters_apply_sink_options(TVHContext *self, va_list ap)
                             opt_name);
             break;
         }
+#endif
     }
     return ret;
 }
@@ -183,13 +222,12 @@ _context_wrap(TVHContext *self, AVPacket *avpkt, th_pkt_t *pkt)
 // creation
 
 static AVCodecContext *
-tvh_context_alloc_avctx(TVHContext *context, AVCodec *avcodec)
+tvh_context_alloc_avctx(TVHContext *context, const AVCodec *avcodec)
 {
     AVCodecContext *avctx = NULL;
 
     if ((avctx = avcodec_alloc_context3(avcodec))) {
         avctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-        avctx->refcounted_frames = 1;
         avctx->opaque = context;
     }
     return avctx;
@@ -197,7 +235,7 @@ tvh_context_alloc_avctx(TVHContext *context, AVCodec *avcodec)
 
 
 static int
-tvh_context_setup(TVHContext *self, AVCodec *iavcodec, AVCodec *oavcodec)
+tvh_context_setup(TVHContext *self, const AVCodec *iavcodec, const AVCodec *oavcodec)
 {
     enum AVMediaType media_type = iavcodec->type;
     const char *media_type_name = av_get_media_type_string(media_type);
@@ -233,10 +271,18 @@ tvh_context_open(TVHContext *self, TVHOpenPhase phase)
     switch (phase) {
         case OPEN_DECODER:
             avctx = self->iavctx;
+            if (!avctx->codec) {
+                tvh_context_log(self, LOG_ERR, "no decoder available");
+                return AVERROR(EINVAL);
+            }
             helper = tvh_decoder_helper_find(avctx->codec);
             break;
         case OPEN_ENCODER:
             avctx = self->oavctx;
+            if (!avctx->codec) {
+                tvh_context_log(self, LOG_ERR, "no encoder available");
+                return AVERROR(EINVAL);
+            }
             helper = self->helper = tvh_encoder_helper_find(avctx->codec);
             ret = tvh_codec_profile_open(self->profile, &opts);
             break;
@@ -313,7 +359,11 @@ tvh_context_receive_packet(TVHContext *self)
     AVPacket avpkt;
     int ret = -1;
 
-    av_init_packet(&avpkt);
+    memset(&avpkt, 0, sizeof(avpkt));
+    avpkt.pts = AV_NOPTS_VALUE;
+    avpkt.dts = AV_NOPTS_VALUE;
+    avpkt.pos = -1;
+
     while ((ret = avcodec_receive_packet(self->oavctx, &avpkt)) != AVERROR(EAGAIN)) {
         if (ret || (ret = tvh_context_ship(self, &avpkt))) {
             break;
@@ -432,7 +482,8 @@ tvh_context_decode(TVHContext *self, AVPacket *avpkt)
     if (!ret && !(ret = _context_decode(self, avpkt))) {
         ret = tvh_context_decode_packet(self, avpkt);
     }
-    return (ret == AVERROR(EAGAIN) || ret == AVERROR_INVALIDDATA) ? 0 : ret;
+    return (ret == AVERROR(EAGAIN) || ret == AVERROR_INVALIDDATA ||
+            ret == AVERROR(EIO)    || ret == AVERROR(EINVAL) ) ? 0 : ret;
 }
 
 
@@ -658,7 +709,10 @@ tvh_context_handle(TVHContext *self, th_pkt_t *pkt)
             ret = AVERROR(ENOMEM);
         }
         else {
-            av_init_packet(&avpkt);
+            memset(&avpkt, 0, sizeof(avpkt));
+            avpkt.pts = AV_NOPTS_VALUE;
+            avpkt.dts = AV_NOPTS_VALUE;
+            avpkt.pos = -1;
             if ((ret = av_packet_from_data(&avpkt, data, size))) { // takes ownership of data
                 tvh_context_log(self, LOG_ERR,
                                 "failed to allocate AVPacket buffer");
@@ -684,7 +738,7 @@ tvh_context_handle(TVHContext *self, th_pkt_t *pkt)
 
 TVHContext *
 tvh_context_create(TVHStream *stream, TVHCodecProfile *profile,
-                   AVCodec *iavcodec, AVCodec *oavcodec, pktbuf_t *input_gh)
+                   const AVCodec *iavcodec, const AVCodec *oavcodec, pktbuf_t *input_gh)
 {
     TVHContext *self = NULL;
 
@@ -710,7 +764,6 @@ void
 tvh_context_destroy(TVHContext *self)
 {
     if (self) {
-        tvh_context_close(self, 0);
         TVHPKT_CLEAR(self->src_pkt);
         if (self->avfltgraph) {
             avfilter_graph_free(&self->avfltgraph); // frees filter contexts

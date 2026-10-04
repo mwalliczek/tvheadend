@@ -88,11 +88,23 @@ static void
 tvh_transcoder_handle(TVHTranscoder *self, th_pkt_t *pkt)
 {
     TVHStream *stream = NULL;
+    int err = 0;
+    char averr_buf[256];
 
     SLIST_FOREACH(stream, &self->streams, link) {
         if (pkt->pkt_componentindex == stream->index) {
-            if (tvh_stream_handle(stream, pkt)) {
+            err = tvh_stream_handle(stream, pkt);
+            if (err) {
                 tvh_stream_stop(stream, 0);
+                if (av_strerror(err, averr_buf, sizeof(averr_buf)) < 0) {
+                    snprintf(averr_buf, sizeof(averr_buf), "unknown error");
+                }
+                tvh_context_log(stream->context, LOG_WARNING,
+                               "failed to transcode packet at pts: %"PRId64" error %d: %s",
+                                pkt->pkt_pts, err, averr_buf);
+                if (tvhtrace_enabled()) {
+                    pkt_trace(LS_TRANSCODE, pkt, "packet details");
+                }
             }
             break;
         }
@@ -196,6 +208,7 @@ tvh_transcoder_start(TVHTranscoder *self, tvh_ss_t *ss_src)
         ss->ss_pcr_pid = ss_src->ss_pcr_pid;
         ss->ss_pmt_pid = ss_src->ss_pmt_pid;
         service_source_info_copy(&ss->ss_si, &ss_src->ss_si);
+        ss->ss_service_id = ss_src->ss_service_id;
         for (j = k = 0; j < count; j++) {
             i = indexes[j];
             ssc_src = &ss_src->ss_components[i];
@@ -281,6 +294,7 @@ tvh_transcoder_stream(void *opaque, tvh_sm_t *msg)
             streaming_target_deliver2(self->output, msg);
             break;
         case SMT_STOP:
+            // this will trigger tvh_context_close_meth()
             tvh_transcoder_stop(self, 1);
             /* !!! FALLTHROUGH !!! */
         default:

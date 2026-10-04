@@ -142,6 +142,9 @@ typedef struct access_entry {
   int ae_htsp_output_format;
   int ae_change_htsp_output_format;
 
+  uint32_t ae_default_tab;
+  int ae_change_default_tab;
+
   int ae_dvr;
   int ae_htsp_dvr;
   int ae_all_dvr;
@@ -174,6 +177,8 @@ LIST_HEAD(access_entry_list, access_entry);
 
 extern const idclass_t access_entry_class;
 
+extern htsmsg_t *config_class_default_tab_list ( void *o, const char *lang );
+
 typedef struct access {
   char     *aa_username;
   char     *aa_representative;
@@ -198,6 +203,7 @@ typedef struct access {
   int       aa_uilevel_nochange;
   char     *aa_theme;
   char     *aa_auth;
+  uint32_t  aa_default_tab;
 } access_t;
 
 TAILQ_HEAD(access_ticket_queue, access_ticket);
@@ -366,6 +372,7 @@ void access_done(void);
 htsmsg_t *language_get_list ( void *obj, const char *lang );
 htsmsg_t *language_get_ui_list ( void *obj, const char *lang );
 htsmsg_t *theme_get_ui_list ( void *obj, const char *lang );
+htsmsg_t *page_size_get_ui_list ( void *obj, const char *lang );
 htsmsg_t *user_get_userlist ( void *obj, const char *lang );
 
 #endif /* ACCESS_H_ */

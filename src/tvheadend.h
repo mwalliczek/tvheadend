@@ -18,6 +18,8 @@
 #ifndef TVHEADEND_H
 #define TVHEADEND_H
 
+#define __STDC_WANT_LIB_EXT1__ 1
+
 #include "build.h"
 
 #include <stdlib.h>
@@ -154,6 +156,9 @@ void GTIMER_FCN(mtimer_arm_abs)
 
 void mtimer_disarm(mtimer_t *mti);
 
+static inline int mtimer_armed(const mtimer_t *mti)
+  { return mti->mti_callback != NULL; }
+
 
 
 /*
@@ -245,6 +250,8 @@ void tvh_pipe_close(th_pipe_t *pipe);
 
 int tvh_write(int fd, const void *buf, size_t len);
 
+int tvh_write_in_chunks(int fd, const void *buf, size_t len, size_t chunkSize);
+
 int tvh_nonblock_write(int fd, const void *buf, size_t len);
 
 FILE *tvh_fopen(const char *filename, const char *mode);
@@ -332,10 +339,12 @@ void tvh_qsort_r(void *base, size_t nmemb, size_t size, int (*compar)(const void
 # endif /* ULONG_MAX */
 #endif /* __WORDSIZE */
 
-#if __WORDSIZE == 32 && defined(PLATFORM_FREEBSD)
-#define PRItime_t       "d"
+#if CONFIG_TIME_LLD == 1
+# define PRItime_t "lld"
+#elif CONFIG_TIME_LD == 1
+# define PRItime_t "ld"
 #else
-#define PRItime_t       "ld"
+# error "CONFIG_TIME not properly defined"
 #endif
 
 /* transcoding */

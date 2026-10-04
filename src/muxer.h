@@ -41,7 +41,8 @@ typedef enum {
   MC_AC3         = 11,
   MC_AAC         = 12,
   MC_MP4A        = 13,
-  MC_VORBIS      = 14
+  MC_VORBIS      = 14,
+  MC_AC4         = 15
 } muxer_container_type_t;
 
 typedef enum {
@@ -64,6 +65,7 @@ typedef struct muxer_config {
    */
   int                  m_file_permissions;
   int                  m_directory_permissions; 
+  int                  m_output_chunk; /* > 0 if muxer output needs writing in chunks */   
 
   /*
    * type specific section
@@ -81,6 +83,13 @@ typedef struct muxer_config {
       int              m_killsig;
       int              m_killtimeout;
     } pass;
+#if ENABLE_LIBAV
+    struct {
+      uint16_t         m_rewrite_sid;
+      int              m_rewrite_pmt;
+      int              m_rewrite_nit;
+    } transcode;
+#endif
     struct {
       int              m_dvbsub_reorder;
     } mkv;

@@ -421,15 +421,26 @@ atsc_utf16_to_utf8(const uint8_t *src, int len, char *buf, int buflen)
   *buf = 0;
 }
 
+/* Decode and convert ATSC Multiple String Structures to UTF-8.
+ * 
+ * refer to "ATSC Standard: Program and System Information Protocol for Terrestrial Broadcast and Cable"
+ *          (Document A65/2013), Section 6.10, pages 79-82
+ */
+
 lang_str_t *
 atsc_get_string
   (const uint8_t *src, size_t srclen)
 {
+  const int bufferSize = 255*3+1; /* Max length of a text segment (255) *
+                                   * Max size of a UTF-8 for Unicode characters 0x0 .. 0x33FF (3) +
+                                   * NULL terminator (1) */
   lang_str_t *ls = NULL;
-  int i, j, stringcount, segmentcount;
+  int i, j, k, stringcount, segmentcount;
   int compressiontype, mode, bytecount;
   char langcode[4];
-  char buf[256];
+  char buf[bufferSize]; /* UTF-8 string */
+  int utf8size, remainingbufleft;
+  char *bufpointer;
 
   stringcount = src[0];
   tvhtrace(LS_MPEGTS, "atsc-str: %d strings", stringcount);
@@ -450,7 +461,9 @@ atsc_get_string
     src    += 4;
     srclen -= 4;
 
+    /* Step through the list of text segments, decoding each and append them all together. */
     for (j = 0; j < segmentcount && srclen >= 3; j++) {
+      /* Decode text segment header */
       compressiontype = src[0];
       mode            = src[1];
       bytecount       = src[2];
@@ -461,24 +474,80 @@ atsc_get_string
       if (bytecount > srclen)
         return ls;
 
-      if (mode == 0 && compressiontype == 0) {
+      /* Only supports compression type == 0 (none) and 
+       * text modes == 0x0 .. 0x6, 0x9 .. 0x10, 0x20 .. 0x27, 0x30 .. 0x33 */
+
+      if (compressiontype == 0 && (     /* No Compression and one of these: */
+           (mode >= 0x0 && mode <= 0x6) ||   /* Unicode range 0x0000 .. 0x06FF */
+           (mode >= 0x9 && mode <= 0x10) ||  /* Unicode range 0x0900 .. 0x10FF */
+           (mode >= 0x20 && mode <= 0x27) || /* Unicode range 0x2000 .. 0x27FF */
+           (mode >= 0x30 && mode <= 0x33)    /* Unicode range 0x3000 .. 0x33FF */
+         )) {
         tvhtrace(LS_MPEGTS, "atsc-str:    %d: comptype 0x%02x, mode 0x%02x, %d bytes: '%.*s'",
                  j, compressiontype, mode, bytecount, bytecount, src);
-        memcpy(buf, src, bytecount);
-        buf[bytecount] = '\0';
+
+        /* Convert each decoded Unicode character to UTF-8. */
+        for(k = 0, bufpointer = buf, remainingbufleft = bufferSize; k < bytecount; k++) {
+          /* Make sure there is enough buffer left for the next (or last) UTF-8 character
+           * [Max # bytes in a single UTF-8 character (3) + NULL terminator (1)] */
+          if(remainingbufleft > (3+1)) {
+            /* Construct the Unicode character and convert to UTF-8. */
+            utf8size = put_utf8(bufpointer, (mode << 8) | src[k]);
+            bufpointer += utf8size;
+            remainingbufleft -= utf8size;
+          } else {
+            /* We have run out of buffer space for this text segment, then stop and truncate.
+             * This can only happen if 'bufferSize' is too small. */
+            tvhtrace(LS_MPEGTS, "atsc_get_string: bufferSize is too small");
+            break;
+          }
+        }
+        *bufpointer = '\0';
+
+        if (ls == NULL)
+          ls = lang_str_create();
+        lang_str_append(ls, buf, langcode);
+      }	else if (compressiontype == 0 && mode == 0x3F) {
+        tvhtrace(LS_MPEGTS, "atsc-str:    %d: comptype 0x%02x, mode 0x%02x, %d bytes: '%.*s'",
+                 j, compressiontype, mode, bytecount, bytecount, src);
+
+        /* let the atsc_utf16_to_utf8 function do the conversion;
+         * bytecount/2: since the function is handling both utf16 bytes in one count only half the length is needed */
+      	atsc_utf16_to_utf8(src, bytecount/2, buf, bufferSize);
+
         if (ls == NULL)
           ls = lang_str_create();
         lang_str_append(ls, buf, langcode);
       } else {
+        /* Unsupported text segment types:
+         *
+         * - compression type == 0x1 (Huffman-like coding with a fixed codebook)
+         * - compression type == 0x2 (Huffman-like coding with another fixed codebook)
+         * - compression type == 0x3 .. 0xFF (reserved)
+         *
+         * - text mode == 0x3E (Standard Compression Scheme for Unicode)
+         * - text mode == 0x40, 0x41 (ATSC Standard for Taiwan)
+         * - text mode == 0x48 (ATSC Standard for South Korea)
+         *
+         * - text mode == 0x7, 0x8, 0x11 .. 0x1F, 0x28 .. 0x2F, 0x34 .. 0x3D, 0x42 .. 0x47, 0x49 .. 0xFF (reserved)
+         */
+
         tvhtrace(LS_MPEGTS, "atsc-str:    %d: comptype 0x%02x, mode 0x%02x, %d bytes",
                  j, compressiontype, mode, bytecount);
+
+        /* For text segments that are not supported, write a terse diagnostic text indicating
+         * the unsupported type instead of the text segment. */
+        snprintf(buf, bufferSize - 1, "[comptype=0x%02X,mode=0x%02X]", compressiontype, mode);
+        if (ls == NULL)
+          ls = lang_str_create();
+        lang_str_append(ls, buf, langcode);
       }
 
-      /* FIXME: read compressed bytes */
-      src += bytecount; srclen -= bytecount; // skip for now
+      /* Move on to the next text segment. */
+      src += bytecount;
+      srclen -= bytecount;
     }
   }
-
   return ls;
 }
 
@@ -675,6 +744,9 @@ const char *dvb_rolloff2str(int p)
 int dvb_str2rolloff(const char *p)
 {
   static int rolloff_table[] = {
+    DVB_ROLLOFF_5,
+    DVB_ROLLOFF_10,
+    DVB_ROLLOFF_15,
     DVB_ROLLOFF_20,
     DVB_ROLLOFF_25,
     DVB_ROLLOFF_35,
@@ -782,6 +854,7 @@ int dvb_str2fec(const char *p)
   static int fec_table[] = {
     DVB_FEC_1_2,
     DVB_FEC_1_3,
+    DVB_FEC_1_4,
     DVB_FEC_1_5,
     DVB_FEC_2_3,
     DVB_FEC_2_5,
@@ -842,6 +915,10 @@ static const struct strtab qamtab[] = {
   { "QAM128",    DVB_MOD_QAM_128 },
   { "QAM/256",   DVB_MOD_QAM_256 },
   { "QAM256",    DVB_MOD_QAM_256 },
+  { "QAM/1024",  DVB_MOD_QAM_1024 },
+  { "QAM1024",   DVB_MOD_QAM_1024 },
+  { "QAM/4096",  DVB_MOD_QAM_4096 },
+  { "QAM4096",   DVB_MOD_QAM_4096 },
   { "VSB/8",     DVB_MOD_VSB_8 },
   { "8VSB",      DVB_MOD_VSB_8 },
   { "VSB/16",    DVB_MOD_VSB_16 },

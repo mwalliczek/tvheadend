@@ -130,11 +130,11 @@ upnp_thread( void *aux )
 
   multicast = udp_bind(LS_UPNP, "upnp_thread_multicast",
                        "239.255.255.250", 1900, NULL,
-                       NULL, 32*1024, 32*1024);
+                       NULL, 32*1024, 32*1024, 0);
   if (multicast == NULL || multicast == UDP_FATAL_ERROR)
     goto error;
   unicast = udp_bind(LS_UPNP, "upnp_thread_unicast", bindaddr, 0, NULL,
-                     NULL, 32*1024, 32*1024);
+                     NULL, 32*1024, 32*1024, 0);
   if (unicast == NULL || unicast == UDP_FATAL_ERROR)
     goto error;
 
@@ -227,8 +227,8 @@ upnp_server_init(const char *bindaddr)
 
   memset(&upnp_ipv4_multicast, 0, sizeof(upnp_ipv4_multicast));
   upnp_ipv4_multicast.ss_family       = AF_INET;
-  IP_AS_V4(upnp_ipv4_multicast, port) = htons(1900);
-  r = inet_pton(AF_INET, "239.255.255.250", &IP_AS_V4(upnp_ipv4_multicast, addr));
+  IP_AS_V4(&upnp_ipv4_multicast, port) = htons(1900);
+  r = inet_pton(AF_INET, "239.255.255.250", &IP_AS_V4(&upnp_ipv4_multicast, addr));
   assert(r);
 
   tvh_mutex_init(&upnp_lock, NULL);

@@ -46,6 +46,7 @@ static const struct strtab typetab[] = {
   { "s64",     PT_S64_ATOMIC },
   { "dbl",     PT_DBL },
   { "time",    PT_TIME },
+  { "int",     PT_DYN_INT },
   { "langstr", PT_LANGSTR },
   { "perm",    PT_PERM },
 };
@@ -81,9 +82,11 @@ prop_write_values
   double dbl;
    int i;
   int64_t s64;
+  int32_t s32;
   uint32_t u32, opts;
   uint16_t u16;
   time_t tm;
+  int dyn_i;
 #define PROP_UPDATE(v, t)\
   snew = &v;\
   if (!p->set && (*((t*)cur) != *((t*)snew))) {\
@@ -143,12 +146,9 @@ prop_write_values
       }
       case PT_U32: {
         if (p->intextra && INTEXTRA_IS_SPLIT(p->intextra)) {
-          char *s;
           if (!(snew = htsmsg_field_get_str(f)))
             continue;
-          u32 = atol(snew) * p->intextra;
-          if ((s = strchr(snew, '.')) != NULL)
-            u32 += (atol(s + 1) % p->intextra);
+          u32 = (uint32_t)prop_intsplit_from_str(snew, p->intextra);
         } else {
           if (htsmsg_field_get_u32(f, &u32))
             continue;
@@ -212,6 +212,13 @@ prop_write_values
         PROP_UPDATE(tm, time_t);
         break;
       }
+      case PT_DYN_INT: {
+        if (htsmsg_field_get_s32(f, &s32))
+          continue;
+        dyn_i = s32;
+        PROP_UPDATE(dyn_i, int);
+        break;
+      }
       case PT_LANGSTR: {
         lang_str_t **lstr1 = cur;
         lang_str_t  *lstr2;
@@ -233,7 +240,11 @@ prop_write_values
       case PT_PERM: {
         if (!(snew = htsmsg_field_get_str(f)))
           continue;
-        u32 = (int)strtol(snew, NULL, 0);
+        /* Permissions are always octal. Base 8 (not auto-detect)
+         * so a serialized value whose leading zero was consumed by
+         * the "%04o" padding (e.g. setgid "2775") still reads back
+         * as the octal it was written from. */
+        u32 = (int)strtol(snew, NULL, 8);
         PROP_UPDATE(u32, uint32_t);
         break;
       }
@@ -241,7 +252,7 @@ prop_write_values
         break;
       }
     }
-  
+
     /* Setter */
     if (p->set && snew)
       save = p->set(obj, snew);
@@ -298,7 +309,7 @@ prop_read_value
     assert(p->get); /* requirement */
     if (val)
       htsmsg_add_msg(m, name, (htsmsg_t*)val);
-  
+
   /* Single */
   } else {
     switch(p->type) {
@@ -349,11 +360,17 @@ prop_read_value
     case PT_TIME:
       htsmsg_add_s64(m, name, *(time_t *)val);
       break;
+    case PT_DYN_INT:
+      htsmsg_add_s32(m, name, *(int *)val);
+      break;
     case PT_LANGSTR:
       lang_str_serialize(*(lang_str_t **)val, m, name);
       break;
     case PT_PERM:
-      snprintf(buf, sizeof(buf), "%04o", *(uint32_t *)val);
+      /* Explicit leading zero (not just zero-padding) so values
+       * with a special bit set (e.g. setgid 02775) keep an octal
+       * marker that any base-auto-detecting parser honours. */
+      snprintf(buf, sizeof(buf), "0%03o", *(const uint32_t *)val);
       htsmsg_add_str(m, name, buf);
       break;
     case PT_NONE:
@@ -380,7 +397,7 @@ prop_read_values
     const property_t *p;
     htsmsg_field_t *f;
     int b, total = 0, count = 0;
-    
+
     HTSMSG_FOREACH(f, list) {
       total++;
       if (!htsmsg_field_get_bool(f, &b)) {
@@ -481,11 +498,15 @@ prop_serialize_value
       case PT_TIME:
         htsmsg_add_s64(m, "default", pl->def.tm);
         break;
+      case PT_DYN_INT:
+        htsmsg_add_s32(m, "default", pl->def.dyn_i());
+        break;
       case PT_LANGSTR:
         /* TODO? */
         break;
       case PT_PERM:
-        snprintf(buf, sizeof(buf), "%04o", pl->def.u32);
+        /* Same explicit octal marker as the value serializer. */
+        snprintf(buf, sizeof(buf), "0%03o", pl->def.u32);
         htsmsg_add_str(m, "default", buf);
         break;
       case PT_NONE:
@@ -525,6 +546,8 @@ prop_serialize_value
     htsmsg_add_bool(m, "multiline", 1);
   if (opts & PO_PERSIST)
     htsmsg_add_bool(m, "persistent", 1);
+  if (opts & PO_LISTONLY)
+    htsmsg_add_bool(m, "listonly", 1);
   if ((optmask & PO_DOC) && (opts & PO_DOC_NLIST))
     htsmsg_add_bool(m, "doc_nlist", 1);
 

@@ -13,8 +13,8 @@ HISTORY=$(cd "$(dirname "$0")/.."; git log -5 --no-merges --pretty=format:"  * %
 
 # Defaults
 [ -z "$CHANGELOG"     ] && CHANGELOG=$(dirname "$0")/../debian/changelog
-[ -z "$DEBEMAIL"      ] && DEBEMAIL="andreas@tvheadend.org"
-[ -z "$DEBFULLNAME"   ] && DEBFULLNAME="Andreas Öman"
+[ -z "$DEBEMAIL"      ] && DEBEMAIL="debian@tvheadend.org"
+[ -z "$DEBFULLNAME"   ] && DEBFULLNAME="Tvheadend Project"
 [ -z "$VER"           ] && VER=$("$(dirname "$0")"/version)
 [ ! -z "$DIST"        ] && VER=${VER}~${DIST}
 [ -z "$DIST"          ] && DIST=unstable
@@ -26,7 +26,7 @@ echo >"${CHANGELOG}"  "tvheadend (${VER}) ${DIST}; urgency=low"
 echo >>"${CHANGELOG}"
 [ ! -z "$HISTORY" ] && echo >>"${CHANGELOG}" "${HISTORY}\n"
 echo >>"${CHANGELOG}" "  * The full changelog(s) can be found at "
-echo >>"${CHANGELOG}" "    https://tvheadend.org/projects/tvheadend/wiki/Releases"
+echo >>"${CHANGELOG}" "    https://docs.tvheadend.org/documentation/introduction/release-change-log"
 echo >>"${CHANGELOG}" "    https://github.com/tvheadend/tvheadend"
 echo >>"${CHANGELOG}"
 echo >>"${CHANGELOG}" " -- ${DEBFULLNAME} <${DEBEMAIL}>  ${NOW}"

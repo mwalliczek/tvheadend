@@ -76,15 +76,15 @@ udp_resolve( udp_connection_t *uc,
   }
   if (use->ai_family == AF_INET6) {
     ss->ss_family        = AF_INET6;
-    IP_AS_V6(*ss, port)  = htons(port);
-    memcpy(&IP_AS_V6(*ss, addr), &((struct sockaddr_in6 *)use->ai_addr)->sin6_addr,
+    IP_AS_V6(ss, port)  = htons(port);
+    memcpy(&IP_AS_V6(ss, addr), &((struct sockaddr_in6 *)use->ai_addr)->sin6_addr,
                                                              sizeof(struct in6_addr));
-    *multicast           = !!IN6_IS_ADDR_MULTICAST(&IP_AS_V6(*ss, addr));
+    *multicast           = !!IN6_IS_ADDR_MULTICAST(&IP_AS_V6(ss, addr));
   } else if (use->ai_family == AF_INET) {
     ss->ss_family        = AF_INET;
-    IP_AS_V4(*ss, port)  = htons(port);
-    IP_AS_V4(*ss, addr)  = ((struct sockaddr_in *)use->ai_addr)->sin_addr;
-    *multicast           = !!IN_MULTICAST(ntohl(IP_AS_V4(*ss, addr.s_addr)));
+    IP_AS_V4(ss, port)  = htons(port);
+    IP_AS_V4(ss, addr)  = ((struct sockaddr_in *)use->ai_addr)->sin_addr;
+    *multicast           = !!IN_MULTICAST(ntohl(IP_AS_V4(ss, addr.s_addr)));
   }
   freeaddrinfo(ressave);
   if (ss->ss_family != AF_INET && ss->ss_family != AF_INET6) {
@@ -154,7 +154,7 @@ udp_get_solip( void )
 udp_connection_t *
 udp_bind ( int subsystem, const char *name,
            const char *bindaddr, int port, const char *multicast_src,
-           const char *ifname, int rxsize, int txsize )
+           const char *ifname, int rxsize, int txsize, int bind_fail_allowed )
 {
   int fd, ifindex, reuse = 1;
   udp_connection_t *uc;
@@ -168,7 +168,8 @@ udp_bind ( int subsystem, const char *name,
   uc->ifname               = ifname ? strdup(ifname) : NULL;
   uc->subsystem            = subsystem;
   uc->name                 = name ? strdup(name) : NULL;
-  uc->rxtxsize             = rxsize;
+  uc->rxsize               = rxsize;
+  uc->txsize               = txsize;
 
   if (udp_resolve(uc, &uc->ip, uc->host, port, &uc->multicast, 1)) {
     udp_close(uc);
@@ -185,8 +186,8 @@ udp_bind ( int subsystem, const char *name,
 
   uc->fd = fd;
 
-  /* Mark reuse address */
-  if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse))) {
+  /* Mark reuse address, only wanted and required for Multicast in UDP (and TCP, but not here, then) */
+  if (uc->multicast && setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse))) {
     tvherror(subsystem, "%s - failed to reuse address for socket [%s]",
              name, strerror(errno));
     udp_close(uc);
@@ -203,13 +204,17 @@ udp_bind ( int subsystem, const char *name,
 
   /* IPv4 */
   if (uc->ip.ss_family == AF_INET) {
-    /* Bind */
+    /* Bind useful for receiver subsystem (not for udp streamer) */
+    if (subsystem != LS_UDP) {
     if (bind(fd, (struct sockaddr *)&uc->ip, sizeof(struct sockaddr_in))) {
-      inet_ntop(AF_INET, &IP_AS_V4(uc->ip, addr), buf, sizeof(buf));
-      tvherror(subsystem, "%s - cannot bind %s:%hu [e=%s]",
-               name, buf, ntohs(IP_AS_V4(uc->ip, port)), strerror(errno));
+      if (!bind_fail_allowed) {
+        inet_ntop(AF_INET, &IP_AS_V4(&uc->ip, addr), buf, sizeof(buf));
+        tvherror(subsystem, "%s - cannot bind %s:%hu [e=%s]",
+                name, buf, ntohs(IP_AS_V4(&uc->ip, port)), strerror(errno));
+      }
       goto error;
     }
+    }  
 
     if (uc->multicast) {
       /* Join multicast group */
@@ -218,7 +223,7 @@ udp_bind ( int subsystem, const char *name,
         struct ip_mreq_source ms;
         memset(&ms, 0, sizeof(ms));
 
-        ms.imr_multiaddr = IP_AS_V4(uc->ip, addr);
+        ms.imr_multiaddr = IP_AS_V4(&uc->ip, addr);
 
         /* Note, ip_mreq_source does not support the ifindex parameter,
            so we have to resolve to the ip of the interface on all platforms. */
@@ -250,7 +255,7 @@ udp_bind ( int subsystem, const char *name,
 #endif
         memset(&m,   0, sizeof(m));
 
-        m.imr_multiaddr      = IP_AS_V4(uc->ip, addr);
+        m.imr_multiaddr      = IP_AS_V4(&uc->ip, addr);
 #if !defined(PLATFORM_DARWIN)
         m.imr_address.s_addr = 0;
         m.imr_ifindex        = ifindex;
@@ -277,15 +282,17 @@ udp_bind ( int subsystem, const char *name,
 
     /* Bind */
     if (bind(fd, (struct sockaddr *)&uc->ip, sizeof(struct sockaddr_in6))) {
-      inet_ntop(AF_INET6, &IP_AS_V6(uc->ip, addr), buf, sizeof(buf));
-      tvherror(subsystem, "%s - cannot bind %s:%hu [e=%s]",
-               name, buf, ntohs(IP_AS_V6(uc->ip, port)), strerror(errno));
+      if (!bind_fail_allowed) {
+        inet_ntop(AF_INET6, &IP_AS_V6(&uc->ip, addr), buf, sizeof(buf));
+        tvherror(subsystem, "%s - cannot bind %s:%hu [e=%s]",
+                 name, buf, ntohs(IP_AS_V6(&uc->ip, port)), strerror(errno));
+      }
       goto error;
     }
 
     if (uc->multicast) {
       /* Join group */
-      m.ipv6mr_multiaddr = IP_AS_V6(uc->ip, addr);
+      m.ipv6mr_multiaddr = IP_AS_V6(&uc->ip, addr);
       m.ipv6mr_interface = ifindex;
 #ifdef SOL_IPV6
       if (setsockopt(fd, SOL_IPV6, IPV6_ADD_MEMBERSHIP, &m, sizeof(m))) {
@@ -331,7 +338,7 @@ udp_bind_double ( udp_connection_t **_u1, udp_connection_t **_u2,
                   int subsystem, const char *name1,
                   const char *name2, const char *host, int port,
                   const char *ifname, int rxsize1, int rxsize2,
-                  int txsize1, int txsize2 )
+                  int txsize1, int txsize2, int bind_fail_allowed )
 {
   udp_connection_t *u1 = NULL, *u2 = NULL;
   udp_connection_t *ucs[10];
@@ -339,13 +346,13 @@ udp_bind_double ( udp_connection_t **_u1, udp_connection_t **_u2,
 
   memset(&ucs, 0, sizeof(ucs));
   while (1) {
-    u1 = udp_bind(subsystem, name1, host, port, NULL, ifname, rxsize1, txsize1);
+    u1 = udp_bind(subsystem, name1, host, port, NULL, ifname, rxsize1, txsize1, bind_fail_allowed);
     if (u1 == NULL || u1 == UDP_FATAL_ERROR)
       goto fail;
     port2 = ntohs(IP_PORT(u1->ip));
     /* RTP port should be even, RTCP port should be odd */
     if ((port2 % 2) == 0) {
-      u2 = udp_bind(subsystem, name2, host, port2 + 1, NULL, ifname, rxsize2, txsize2);
+      u2 = udp_bind(subsystem, name2, host, port2 + 1, NULL, ifname, rxsize2, txsize2, bind_fail_allowed);
       if (u2 != NULL && u2 != UDP_FATAL_ERROR)
         break;
     }
@@ -381,7 +388,7 @@ udp_sendinit ( int subsystem, const char *name,
   uc->ifname               = ifname ? strdup(ifname) : NULL;
   uc->subsystem            = subsystem;
   uc->name                 = name ? strdup(name) : NULL;
-  uc->rxtxsize             = txsize;
+  uc->txsize               = txsize;
 
   /* Open socket */
   if ((fd = tvh_socket(uc->ip.ss_family, SOCK_DGRAM, 0)) == -1) {

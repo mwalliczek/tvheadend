@@ -201,6 +201,13 @@ struct epggrab_module_int
     ///< and extra details on to programme description for viewing by legacy clients.
   int                           xmltv_use_category_not_genre; ///< Use category tags and don't map to DVB genres.
 
+  const char                   *xmltv_xpath_category_code; ///< XPath string for extracting a category ETSI code.
+  const char                   *xmltv_xpath_unique_id;     ///< XPath string for extracting a unique event ID.
+  const char                   *xmltv_xpath_series_link;   ///< XPath string for extracting a series link.
+  const char                   *xmltv_xpath_episode_link;  ///< XPath string for extracting an episode link.
+  int                           xmltv_xpath_series_use_standard; ///< If the XPath node is not found, use the standard TVH routine.
+  int                           xmltv_xpath_episode_use_standard; ///< If the XPath node is not found, use the standard TVH routine.
+
   /* Handle data */
   char*     (*grab)   ( void *mod );
   htsmsg_t* (*trans)  ( void *mod, char *data );
@@ -213,7 +220,7 @@ struct epggrab_module_int
 struct epggrab_module_ext
 {
   epggrab_module_int_t         ;          ///< Parent object
-  
+
   int                          sock;      ///< Socket descriptor
 
   pthread_t                    tid;       ///< Thread ID
@@ -240,7 +247,7 @@ struct epggrab_ota_mux
 {
   tvh_uuid_t                         om_mux_uuid;     ///< Soft-link to mux
   LIST_HEAD(,epggrab_ota_map)        om_modules;      ///< List of linked mods
-  
+
   uint8_t                            om_done;         ///< The full completion mark for this round
   uint8_t                            om_complete;     ///< Has completed a scan
   uint8_t                            om_requeue;      ///< Requeue when stolen
@@ -311,6 +318,22 @@ struct epggrab_module_ota_scraper
 /*
  *
  */
+/*
+ * EIT processing policy. Per-service value selects which EIT sub-tables
+ * are accepted for that service; the per-service Default value defers
+ * to the global default (which therefore omits Default from its choice
+ * list). Adaptive accepts both actual- and other-TS but, once the
+ * service's own actual-TS schedule has been received, drops further
+ * other-TS for it so a neighbouring multiplex's coarse description
+ * cannot overwrite the service's detailed schedule.
+ */
+#define EIT_PROCESSING_DEFAULT       0   /* per-service only: use global */
+#define EIT_PROCESSING_NONE          1
+#define EIT_PROCESSING_ACTUAL_ONLY   2
+#define EIT_PROCESSING_OTHER_ONLY    3
+#define EIT_PROCESSING_EITHER        4
+#define EIT_PROCESSING_ADAPTIVE      5
+
 typedef struct epggrab_conf {
   idnode_t              idnode;
   char                 *cron;
@@ -319,9 +342,12 @@ typedef struct epggrab_conf {
   uint32_t              channel_reicon;
   uint32_t              epgdb_periodicsave;
   uint32_t              epgdb_saveafterimport;
+  uint32_t              epgdb_processparentallabels;
   char                 *ota_cron;
+  char                 *ota_genre_translation;
   uint32_t              ota_timeout;
   uint32_t              ota_initial;
+  uint32_t              eit_processing_default;
   uint32_t              int_initial;
 } epggrab_conf_t;
 
@@ -366,10 +392,11 @@ extern int                   epggrab_ota_running;
 /*
  * Set configuration
  */
-int epggrab_activate_module       ( epggrab_module_t *mod, int activate );
-void epggrab_ota_set_cron         ( void );
-void epggrab_ota_trigger          ( int secs );
-void epggrab_rerun_internal       ( void );
+int epggrab_activate_module            ( epggrab_module_t *mod, int activate );
+void epggrab_ota_set_cron              ( void );
+void epggrab_ota_set_genre_translation ( void );
+void epggrab_ota_trigger               ( int secs );
+void epggrab_rerun_internal            ( void );
 
 /*
  * Load/Save
@@ -398,6 +425,21 @@ void epggrab_ota_queue_mux( struct mpegts_mux *mm );
 epggrab_ota_mux_t *epggrab_ota_find_mux ( struct mpegts_mux *mm );
 htsmsg_t *epggrab_ota_module_id_list( const char *lang );
 const char *epggrab_ota_check_module_id( const char *id );
+
+/*
+ * Global variable for genre translation
+ */
+extern unsigned char                *epggrab_ota_genre_translation;
+
+/*
+ * Get the next execution times
+ */
+time_t epggrab_get_next_int(void);
+time_t epggrab_get_next_ota(void);
+/*
+ * Count active grabbers for a given type
+ */
+int epggrab_count_type(int grabberType);
 
 #endif /* __EPGGRAB_H__ */
 

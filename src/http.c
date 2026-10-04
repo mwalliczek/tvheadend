@@ -332,12 +332,17 @@ http_alive(http_connection_t *hc)
 static void
 http_auth_header
   (htsbuf_queue_t *hdrs, const char *realm, const char *algo,
-   const char *nonce, const char *opaque)
+   const char *nonce, const char *opaque, int stale)
 {
   htsbuf_qprintf(hdrs, "WWW-Authenticate: Digest realm=\"%s\", qop=auth", realm);
   if (algo)
     htsbuf_qprintf(hdrs, ", algorithm=%s", algo);
   htsbuf_qprintf(hdrs, ", nonce=\"%s\"", nonce);
+  /* the credentials were fine, only the nonce had expired: RFC 7616 asks for
+   * stale=true, without which a browser takes the 401 for a wrong password
+   * and asks the user again -- every 30 seconds, as nonces live that long */
+  if (stale)
+    htsbuf_qprintf(hdrs, ", stale=true");
   htsbuf_qprintf(hdrs, ", opaque=\"%s\"\r\n", opaque);
 }
 
@@ -370,7 +375,7 @@ http_send_header(http_connection_t *hc, int rc, const char *content,
     if (config.cors_origin && config.cors_origin[0]) {
       htsbuf_qprintf(&hdrs, "Access-Control-Allow-Origin: %s\r\n%s%s%s", config.cors_origin,
                             "Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n",
-                            "Access-Control-Allow-Headers: x-requested-with,authorization\r\n",
+                            "Access-Control-Allow-Headers: x-requested-with,authorization,content-type\r\n",
                             "Access-Control-Allow-Credentials: true\r\n");
     }
   }
@@ -412,13 +417,14 @@ http_send_header(http_connection_t *hc, int rc, const char *content,
         http_auth_header(&hdrs, realm,
                          config.http_auth_algo == HTTP_AUTH_ALGO_SHA256 ?
                            "SHA-256" :
-#if OPENSSL_VERSION_NUMBER >= 0x1010101fL
+#if OPENSSL_VERSION_NUMBER >= 0x1010101fL && !defined(LIBRESSL_VERSION_NUMBER)
                              "SHA-512-256",
 #else
                              "SHA-256",
 #endif
-                           hc->hc_nonce, opaque);
-      http_auth_header(&hdrs, realm, NULL, hc->hc_nonce, opaque);
+                           hc->hc_nonce, opaque, hc->hc_nonce_stale);
+      http_auth_header(&hdrs, realm, NULL, hc->hc_nonce, opaque,
+                       hc->hc_nonce_stale);
       free(opaque);
     } else {
       htsbuf_qprintf(&hdrs, "WWW-Authenticate: Basic realm=\"%s\"\r\n", realm);
@@ -636,8 +642,9 @@ http_check_local_ip( http_connection_t *hc )
  * Transmit a HTTP reply
  */
 static void
-http_send_reply(http_connection_t *hc, int rc, const char *content, 
-		const char *encoding, const char *location, int maxage)
+http_send_reply(http_connection_t *hc, int rc, const char *content,
+		const char *encoding, const char *location, int maxage,
+		const char *disposition)
 {
   size_t size = hc->hc_reply.hq_size;
   uint8_t *data = NULL;
@@ -653,7 +660,7 @@ http_send_reply(http_connection_t *hc, int rc, const char *content,
 
   http_send_begin(hc);
   http_send_header(hc, rc, content, size,
-		   encoding, location, maxage, 0, NULL, NULL);
+		   encoding, location, maxage, 0, disposition, NULL);
   
   if(!hc->hc_no_output) {
     if (data == NULL)
@@ -713,9 +720,9 @@ http_error(http_connection_t *hc, int error)
 
     htsbuf_append_str(&hc->hc_reply, "</BODY></HTML>\r\n");
 
-    http_send_reply(hc, error, "text/html", NULL, NULL, 0);
+    http_send_reply(hc, error, "text/html", NULL, NULL, 0, NULL);
   } else {
-    http_send_reply(hc, error, NULL, NULL, NULL, 0);
+    http_send_reply(hc, error, NULL, NULL, NULL, 0, NULL);
   }
 }
 
@@ -727,16 +734,27 @@ void
 http_output_html(http_connection_t *hc)
 {
   return http_send_reply(hc, HTTP_STATUS_OK, "text/html; charset=UTF-8",
-			 NULL, NULL, 0);
+			 NULL, NULL, 0, NULL);
 }
 
 /**
- * Send an HTTP OK, simple version for text/html
+ * Send an HTTP OK, simple version for arbitrary content type
  */
 void
 http_output_content(http_connection_t *hc, const char *content)
 {
-  return http_send_reply(hc, HTTP_STATUS_OK, content, NULL, NULL, 0);
+  return http_send_reply(hc, HTTP_STATUS_OK, content, NULL, NULL, 0, NULL);
+}
+
+/**
+ * Send an HTTP OK with a Content-Disposition header, so browsers download
+ * the body instead of rendering it inline (used for playlist downloads).
+ */
+void
+http_output_content_disposition(http_connection_t *hc, const char *content,
+                                const char *disposition)
+{
+  http_send_reply(hc, HTTP_STATUS_OK, content, NULL, NULL, 0, disposition);
 }
 
 
@@ -788,7 +806,7 @@ http_redirect(http_connection_t *hc, const char *location,
 		 "</BODY></HTML>\r\n",
 		 loc, loc);
 
-  http_send_reply(hc, HTTP_STATUS_FOUND, "text/html", NULL, loc, 0);
+  http_send_reply(hc, HTTP_STATUS_FOUND, "text/html", NULL, loc, 0, NULL);
 
   if (loc != location)
     free((char *)loc);
@@ -813,7 +831,7 @@ http_css_import(http_connection_t *hc, const char *location)
 
   htsbuf_qprintf(&hc->hc_reply, "@import url('%s');\r\n", loc);
 
-  http_send_reply(hc, HTTP_STATUS_OK, "text/css", NULL, loc, 0);
+  http_send_reply(hc, HTTP_STATUS_OK, "text/css", NULL, loc, 0, NULL);
 }
 
 /**
@@ -1072,7 +1090,6 @@ http_verify_prepare(http_connection_t *hc, struct http_verify_structure *v)
       m = http_get_digest_hash(v->algo, hc->hc_post_data ?: "");
       snprintf(all, sizeof(all), "%s:%s:%s", method, uri, m);
       free(m);
-      m = NULL;
     } else if (strcasecmp(qop, "auth") == 0) {
       snprintf(all, sizeof(all), "%s:%s", method, uri);
     } else {
@@ -1444,6 +1461,7 @@ process_request(http_connection_t *hc, htsbuf_queue_t *spill)
   hc->hc_password = NULL;
   hc->hc_authhdr  = NULL;
   hc->hc_session  = NULL;
+  hc->hc_nonce_stale = 0;
 
   /* Set keep-alive status */
   v = http_arg_get(&hc->hc_args, "connection");
@@ -1504,6 +1522,9 @@ process_request(http_connection_t *hc, htsbuf_queue_t *spill)
             config.http_auth == HTTP_AUTH_PLAIN_DIGEST) {
           v = http_get_header_value(argv[1], "nonce");
           if (v == NULL || !http_nonce_exists(v)) {
+            /* tell the client to retry with the fresh nonce this 401 carries
+             * instead of asking the user for a password again */
+            hc->hc_nonce_stale = v != NULL;
             free(v);
             http_error(hc, HTTP_STATUS_UNAUTHORIZED);
             return -1;

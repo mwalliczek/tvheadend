@@ -38,6 +38,18 @@ static int comet_waiting;
 #define MAILBOX_UNUSED_TIMEOUT      20
 #define MAILBOX_EMPTY_REPLY_TIMEOUT 10
 
+/*
+ * A client that stops collecting - a browser tab put in the background
+ * has its timers frozen, but the websocket stays open, so the mailbox is
+ * not released by comet_flush() - would otherwise accumulate every
+ * notification for as long as it is away.  With one status message per
+ * subscription per second that is unbounded.  Nothing older than this is
+ * of any use to the UI: it wants the current state, not a replay.
+ */
+#define MAILBOX_STALE_TIMEOUT       60
+
+static tvhlog_limit_t comet_stale_loglimit = { .last = 0, .count = 0 };
+
 //#define mbdebug(fmt...) printf(fmt);
 #define mbdebug(fmt...)
 
@@ -58,6 +70,7 @@ typedef struct comet_mailbox {
   int cmb_restricted; /* !admin */
   htsmsg_t *cmb_messages; /* A vector */
   int64_t cmb_last_used;
+  int64_t cmb_last_taken; /* when the client last collected the messages */
   LIST_ENTRY(comet_mailbox) cmb_link;
   int cmb_debug;
 } comet_mailbox_t;
@@ -137,6 +150,7 @@ comet_mailbox_create(const char *lang)
   cmb->cmb_lang = lang ? strdup(lang) : NULL;
   cmb->cmb_refcount = 1;
   cmb->cmb_last_used = mclk();
+  cmb->cmb_last_taken = mclk();
   mailbox_tally++;
 
   LIST_INSERT_HEAD(&mailboxes, cmb, cmb_link);
@@ -148,26 +162,29 @@ comet_mailbox_create(const char *lang)
 }
 
 /**
- *
+ * Build the session's access / UI-preference info message. Shared by
+ * the comet "accessUpdate" notification and the api/access/whoami
+ * endpoint so both emit the same shape. `peer_ipstr` may be NULL
+ * (the API path has no connection handle); the "address" field is
+ * omitted then.
  */
-static void
-comet_access_update(http_connection_t *hc, comet_mailbox_t *cmb)
+htsmsg_t *
+comet_access_info_build(struct access *aa, const char *peer_ipstr)
 {
   extern int access_noacl;
 
   htsmsg_t *m = htsmsg_create_map();
   const char *username = "";
   int64_t bfree, bused, btotal;
-  int dvr = !http_access_verify(hc, ACCESS_RECORDER);
-  int admin = !http_access_verify(hc, ACCESS_ADMIN);
+  int dvr = aa ? !access_verify2(aa, ACCESS_RECORDER) : 0;
+  int admin = aa ? !access_verify2(aa, ACCESS_ADMIN) : 0;
   const char *s;
+  uint32_t default_tab = config.default_tab;
 
-  htsmsg_add_str(m, "notificationClass", "accessUpdate");
+  if (aa) {
+    username = aa->aa_username ?: "";
 
-  if (hc->hc_access) {
-    username = hc->hc_access->aa_username ?: "";
-
-    switch (hc->hc_access->aa_uilevel) {
+    switch (aa->aa_uilevel) {
     case UILEVEL_BASIC:    s = "basic";    break;
     case UILEVEL_ADVANCED: s = "advanced"; break;
     case UILEVEL_EXPERT:   s = "expert";   break;
@@ -178,17 +195,26 @@ comet_access_update(http_connection_t *hc, comet_mailbox_t *cmb)
       if (config.uilevel_nochange)
         htsmsg_add_u32(m, "uilevel_nochange", config.uilevel_nochange);
     }
+
+    if(aa->aa_default_tab != CONFIG_DEFAULT_TAB_SYSTEM)
+    {
+      default_tab = aa->aa_default_tab;
+    }
+
   }
-  htsmsg_add_str(m, "theme", access_get_theme(hc->hc_access));
+  htsmsg_add_str(m, "theme", access_get_theme(aa));
+  htsmsg_add_u32(m, "page_size", config.page_size_ui);
   htsmsg_add_u32(m, "quicktips", config.ui_quicktips);
   htsmsg_add_u32(m, "chname_num", config.chname_num);
   htsmsg_add_u32(m, "chname_src", config.chname_src);
   htsmsg_add_str(m, "date_mask", config.date_mask);
   htsmsg_add_u32(m, "label_formatting", config.label_formatting);
+  htsmsg_add_u32(m, "default_tab", default_tab);
+  htsmsg_add_u32(m, "dvr_show_seconds", config.dvr_show_seconds);
   if (!access_noacl)
     htsmsg_add_str(m, "username", username);
-  if (hc->hc_peer_ipstr)
-    htsmsg_add_str(m, "address", hc->hc_peer_ipstr);
+  if (peer_ipstr)
+    htsmsg_add_str(m, "address", peer_ipstr);
   htsmsg_add_u32(m, "dvr",      dvr);
   htsmsg_add_u32(m, "admin",    admin);
 
@@ -211,6 +237,19 @@ comet_access_update(http_connection_t *hc, comet_mailbox_t *cmb)
 
   if (admin && config.wizard)
     htsmsg_add_str(m, "wizard", config.wizard);
+
+  return m;
+}
+
+/**
+ *
+ */
+static void
+comet_access_update(http_connection_t *hc, comet_mailbox_t *cmb)
+{
+  htsmsg_t *m = comet_access_info_build(hc->hc_access, hc->hc_peer_ipstr);
+
+  htsmsg_add_str(m, "notificationClass", "accessUpdate");
 
   if(cmb->cmb_messages == NULL)
     cmb->cmb_messages = htsmsg_create_list();
@@ -263,6 +302,7 @@ comet_message(comet_mailbox_t *cmb, int include_boxid, int ignore_null)
   htsmsg_add_msg(m, "messages", cmb->cmb_messages ?: htsmsg_create_list());
   cmb->cmb_messages = NULL;
   cmb->cmb_last_used = mclk();
+  cmb->cmb_last_taken = mclk();
   return m;
 }
 
@@ -347,7 +387,7 @@ comet_mailbox_poll(http_connection_t *hc, const char *remain, void *opaque)
 
   htsmsg_json_serialize(m, &hc->hc_reply, 0);
   htsmsg_destroy(m);
-  http_output_content(hc, "text/x-json; charset=UTF-8");
+  http_output_content(hc, "application/json; charset=UTF-8");
   return 0;
 }
 
@@ -552,7 +592,7 @@ comet_mailbox_rewrite_msg(int rewrite, htsmsg_t *m, const char *lang)
  *
  */
 void
-comet_mailbox_add_message(htsmsg_t *m, int isdebug, int rewrite)
+comet_mailbox_add_message(htsmsg_t *m, int isdebug, int isrestricted, int rewrite)
 {
   comet_mailbox_t *cmb;
   htsmsg_t *e;
@@ -565,12 +605,30 @@ comet_mailbox_add_message(htsmsg_t *m, int isdebug, int rewrite)
   if (atomic_get(&comet_running)) {
     LIST_FOREACH(cmb, &mailboxes, cmb_link) {
 
-      if(cmb->cmb_restricted)
+      if(isrestricted && cmb->cmb_restricted)
         continue;
 
       if(isdebug && !cmb->cmb_debug)
         continue;
-        
+
+      /* the client has not collected anything for a long time: drop what
+         has piled up, it is stale and the UI only wants current state */
+      if(cmb->cmb_messages != NULL &&
+         cmb->cmb_last_taken + sec2mono(MAILBOX_STALE_TIMEOUT) < mclk()) {
+        htsmsg_field_t *cf;
+        int cnt = 0;
+        HTSMSG_FOREACH(cf, cmb->cmb_messages)
+          cnt++;
+        if (tvhlog_limit(&comet_stale_loglimit, 30))
+          tvhwarn(LS_WEBUI, "comet: dropped %d messages queued for %d seconds "
+                            "without being collected (mailbox %.8s)",
+                  cnt, (int)mono2sec(mclk() - cmb->cmb_last_taken),
+                  cmb->cmb_boxid);
+        htsmsg_destroy(cmb->cmb_messages);
+        cmb->cmb_messages = NULL;
+        cmb->cmb_last_taken = mclk();
+      }
+
       if(cmb->cmb_messages == NULL)
         cmb->cmb_messages = htsmsg_create_list();
       e = htsmsg_copy(m);
@@ -593,6 +651,6 @@ comet_mailbox_add_logmsg(const char *txt, int isdebug, int rewrite)
   htsmsg_t *m = htsmsg_create_map();
   htsmsg_add_str(m, "notificationClass", "logmessage");
   htsmsg_add_str(m, "logtxt", txt);
-  comet_mailbox_add_message(m, isdebug, 0);
+  comet_mailbox_add_message(m, isdebug, 1, 0);
   htsmsg_destroy(m);
 }

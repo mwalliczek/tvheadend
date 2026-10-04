@@ -187,10 +187,10 @@ page_about(http_connection_t *hc, const char *remain, void *opaque)
 
   htsbuf_qprintf(hq, "<center class=\"about-tab\">\n\
 <div class=\"about-title\">HTS Tvheadend %s</div>\n\
-<p>&copy; 2006 - 2021 Andreas Öman, Jaroslav Kysela, Adam Sutton, et al.</p>\n\
+<p>&copy; 2006 - %.4s Andreas Smas, Jaroslav Kysela, Adam Sutton, et al.</p>\n\
 <p><img class=\"logobig\" src=\"static/img/logobig.png\"></p>\n\
 <p><a href=\"https://tvheadend.org\">https://tvheadend.org</a></p>\n",
-    tvheadend_version);
+    tvheadend_version, build_timestamp);
 
   htsbuf_qprintf(hq, "<p>%s \n\
 <a target=\"_blank\" href=\"http://www.extjs.com/\">ExtJS</a>. \
@@ -198,9 +198,8 @@ page_about(http_connection_t *hc, const char *remain, void *opaque)
 FamFamFam</a>, "\
 "<a target=\"_blank\" href=\"https://www.google.com/get/noto/help/emoji/\">Google Noto Color Emoji</a> "\
 "<a target=\"_blank\" href=\"https://raw.githubusercontent.com/googlei18n/noto-emoji/master/LICENSE\">(Apache Licence v2.0)</a>.\n"\
-"<p>This product uses the TMDB API but is not endorsed or certified by <a target=\"_blank\" href=\"https://www.themoviedb.org\">TMDb</a> <img src=\"static/img/tmdb.png\" class=\"tmdb\"></p>"\
-"<p>TV information and images are provided by TheTVDB.com, but we are not endorsed or certified by TheTVDB.com or its affiliates. <a target=\"_blank\" href=\"https://thetvdb.com\">TheTVDB.com</a> <img src=\"static/img/tvdb.png\" class=\"tvdb\"></p>"\
-"</p>\n",
+"<p>This product uses the TMDB and TheTVDB.com API to provide TV information and images.</p>"\
+"<p>It is not endorsed or certified by <a target=\"_blank\" href=\"https://www.themoviedb.org\">TMDb</a> <img src=\"static/img/tmdb.png\" class=\"tmdb\"> or by <a target=\"_blank\" href=\"https://thetvdb.com\">TheTVDB.com</a> <img src=\"static/img/tvdb.png\" class=\"tvdb\">.</p>\n",
     tvh_gettext_lang(lang, N_("Based on software from")),
     tvh_gettext_lang(lang, N_("Icons from")));
 
@@ -224,10 +223,10 @@ FamFamFam</a>, "\
 %s<br/>\n\
 %s\n\
 </p>\n\
-<a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=3Z87UEHP3WZK2'><img src='https://www.paypalobjects.com/en_US/GB/i/btn/btn_donateCC_LG.gif' alt='' /></a>\n\
+<a target=\"_blank\" href='https://opencollective.com/tvheadend/donate'><img src='static/img/opencollective.png' alt='' /></a>\n\
 </center>\n",
-   tvh_gettext_lang(lang, N_("If you'd like to support the project, please consider a donation.")),
-   tvh_gettext_lang(lang, N_("All proceeds are used to support server infrastructure and buy test equipment.")));
+   tvh_gettext_lang(lang, N_("To support Tvheadend development please consider making a donation")),
+   tvh_gettext_lang(lang, N_("towards project operating costs.")));
 
   http_output_html(hc);
   return 0;

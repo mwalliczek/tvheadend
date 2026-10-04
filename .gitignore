@@ -1,8 +1,8 @@
 build.*
 .config.mk
+node_modules/
 
 debian/debhelper-build-stamp
-filelist.txt
 
 src/version.c
 src/tvh_locale_inc.c
@@ -35,10 +35,13 @@ nbproject
 
 *.o
 
+debian/.debhelper
 debian/changelog
 debian/files
 debian/tvheadend
 debian/tvheadend-dbg
+debian/tvheadend-armv6l
+debian/tvheadend-dbg-armv6l
 debian/tvheadend*substvars
 debian/tvheadend*.debhelper*
 
@@ -68,3 +71,7 @@ tests/*TestResult.xml
 tests/input/dab/rtlsdr/rtlsdr_raw
 configure.log
 tests/*.d
+_codeql_detected_source_root
+
+# Claude Code local workspace (lock files, settings, etc.)
+.claude/

@@ -724,8 +724,7 @@ http_client_finish( http_client_t *hc )
   wcmd = TAILQ_FIRST(&hc->hc_wqueue);
   if (wcmd)
     http_client_cmd_destroy(hc, wcmd);
-  if (hc->hc_version != RTSP_VERSION_1_0 &&
-      hc->hc_handle_location &&
+  if (hc->hc_handle_location &&
       (hc->hc_code == HTTP_STATUS_MOVED ||
        hc->hc_code == HTTP_STATUS_FOUND ||
        hc->hc_code == HTTP_STATUS_SEE_OTHER ||
@@ -757,9 +756,10 @@ http_client_finish( http_client_t *hc )
 static int
 http_client_parse_arg( http_arg_list_t *list, const char *p )
 {
+  char *buf = tvh_strdupa(p);
   char *d, *t;
 
-  d = strchr(p, ':');
+  d = strchr(buf, ':');
   if (d) {
     *d++ = '\0';
     while (*d && *d <= ' ')
@@ -767,7 +767,7 @@ http_client_parse_arg( http_arg_list_t *list, const char *p )
     t = d + strlen(d);
     while (--t != d && *t <= ' ')
       *t = '\0';
-    http_arg_set(list, p, d);
+    http_arg_set(list, buf, d);
     return 0;
   }
   return -EINVAL;
@@ -1339,14 +1339,17 @@ http_client_simple_reconnect ( http_client_t *hc, const url_t *u,
 
   http_client_flush(hc, 0);
 
-  http_arg_init(&h);
-  hc->hc_hdr_create(hc, &h, u, 0);
   hc->hc_reconnected = 1;
   hc->hc_shutdown    = 0;
   hc->hc_pevents     = 0;
   hc->hc_version     = ver;
 
-  r = http_client_send(hc, hc->hc_cmd, u->path, u->query, &h, NULL, 0);
+  if (ver != RTSP_VERSION_1_0) {
+    http_arg_init(&h);
+    hc->hc_hdr_create(hc, &h, u, 0);
+    r = http_client_send(hc, hc->hc_cmd, u->path, u->query, &h, NULL, 0);
+  } else
+    r = http_client_send(hc, hc->hc_cmd, u->raw, u->query, NULL, NULL, 0);
   if (r < 0)
     return r;
 
@@ -1597,7 +1600,7 @@ http_client_connect
   tvh_mutex_init(&hc->hc_mutex, NULL);
   hc->hc_id      = atomic_add(&tally, 1);
   hc->hc_aux     = aux;
-  hc->hc_io_size = 1024;
+  hc->hc_io_size = 2048;
   hc->hc_rtsp_stream_id = -1;
   hc->hc_verify_peer = -1;
   hc->hc_bindaddr = bindaddr ? strdup(bindaddr) : NULL;

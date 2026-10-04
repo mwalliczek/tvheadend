@@ -81,14 +81,15 @@ tvh_context_helper_find(struct TVHContextHelpers *list, const AVCodec *codec)
 
 /* decoders ================================================================= */
 
-/* shared by H264, AAC and VORBIS */
+/* shared by H264, THEORA, AAC, VORBIS and OPUS */
 static int
 tvh_extradata_open(TVHContext *self, AVDictionary **opts)
 {
     size_t extradata_size = 0;
 
     if (!(extradata_size = pktbuf_len(self->input_gh))) {
-        return AVERROR(EAGAIN);
+        // most audio streams don't have input_gh
+        return 0;
     }
     if (extradata_size >= TVH_INPUT_BUFFER_MAX_SIZE) {
         tvh_context_log(self, LOG_ERR, "extradata too big");
@@ -338,7 +339,11 @@ static void
 tvh_aac_pack_adts_header(TVHContext *self, pktbuf_t *pb)
 {
     // XXX: this really should happen in the muxer
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    int chan_conf = (self->oavctx->ch_layout.nb_channels == 8) ? 7 : self->oavctx->ch_layout.nb_channels;
+#else
     int chan_conf = (self->oavctx->channels == 8) ? 7 : self->oavctx->channels;
+#endif
     bitstream_t bs;
 
     // https://wiki.multimedia.cx/index.php?title=ADTS
@@ -363,7 +368,7 @@ tvh_aac_pack_adts_header(TVHContext *self, pktbuf_t *pb)
 static th_pkt_t *
 tvh_aac_pack(TVHContext *self, AVPacket *avpkt)
 {
-    static const size_t header_size = 7, max_size = ((1 << 13) - 1);
+    static const size_t header_size = 7, max_size = ((1 << 14) - 1);
     size_t pkt_size = 0;
     th_pkt_t *pkt = NULL;
 
@@ -371,12 +376,21 @@ tvh_aac_pack(TVHContext *self, AVPacket *avpkt)
     // there be one in the first place?.
     // originally there was a check for avpkt->size < 2, I don't get it.
     // max aac frame size = 768 bytes per channel, max writable size 13 bits
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    if (avpkt->size > (768 * self->oavctx->ch_layout.nb_channels)) {
+        tvh_context_log(self, LOG_WARNING,
+            "packet size (%d) > aac max frame size (%d for %d channels)",
+            avpkt->size, (768 * self->oavctx->ch_layout.nb_channels),
+            self->oavctx->ch_layout.nb_channels);
+    }
+#else
     if (avpkt->size > (768 * self->oavctx->channels)) {
         tvh_context_log(self, LOG_WARNING,
             "packet size (%d) > aac max frame size (%d for %d channels)",
             avpkt->size, (768 * self->oavctx->channels),
             self->oavctx->channels);
     }
+#endif
     if ((pkt_size = avpkt->size + header_size) > max_size) {
         tvh_context_log(self, LOG_ERR, "aac frame data too big");
     }

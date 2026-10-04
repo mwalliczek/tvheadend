@@ -1,3 +1,31 @@
+const CONFIG_DEFAULT_TAB_SYSTEM        = 0;
+const CONFIG_DEFAULT_TAB_EPG           = 1;
+const CONFIG_DEFAULT_TAB_DVR_FIRST     = 10;
+const CONFIG_DEFAULT_TAB_DVR_UPCOMING  = 10;
+const CONFIG_DEFAULT_TAB_DVR_FINISHED  = 11;
+const CONFIG_DEFAULT_TAB_DVR_FAILED    = 12;
+const CONFIG_DEFAULT_TAB_DVR_REMOVED   = 13;
+const CONFIG_DEFAULT_TAB_DVR_AUTORECS  = 14;
+const CONFIG_DEFAULT_TAB_DVR_TIMERS    = 15;
+const CONFIG_DEFAULT_TAB_DVR_LAST      = 19;
+const CONFIG_DEFAULT_TAB_CFG_FIRST     = 20;
+const CONFIG_DEFAULT_TAB_CFG_GENERAL   = 20;
+const CONFIG_DEFAULT_TAB_CFG_USERS     = 21;
+const CONFIG_DEFAULT_TAB_CFG_DVB       = 22;
+const CONFIG_DEFAULT_TAB_CFG_CHANNEL   = 23;
+const CONFIG_DEFAULT_TAB_CFG_STREAM    = 24;
+const CONFIG_DEFAULT_TAB_CFG_REC       = 25;
+const CONFIG_DEFAULT_TAB_CFG_CA        = 26;
+const CONFIG_DEFAULT_TAB_CFG_DEBUG     = 27;
+const CONFIG_DEFAULT_TAB_CFG_LAST      = 29;
+const CONFIG_DEFAULT_TAB_STATUS_FIRST  = 30;
+const CONFIG_DEFAULT_TAB_STATUS_STREAM = 30;
+const CONFIG_DEFAULT_TAB_STATUS_SUBS   = 31;
+const CONFIG_DEFAULT_TAB_STATUS_CONN   = 32;
+const CONFIG_DEFAULT_TAB_STATUS_SVC    = 33;
+const CONFIG_DEFAULT_TAB_STATUS_LAST   = 39;
+const CONFIG_DEFAULT_TAB_ABOUT         = 40;
+
 tvheadend.dynamic = true;
 tvheadend.accessupdate = null;
 tvheadend.capabilities = null;
@@ -13,8 +41,10 @@ tvheadend.docs_toc = null;
 tvheadend.doc_history = [];
 tvheadend.doc_win = null;
 tvheadend.date_mask = '';
+tvheadend.dvr_show_seconds = true;
 tvheadend.label_formatting = false;
 tvheadend.language = window.navigator.userLanguage || window.navigator.language;
+tvheadend.default_tab = CONFIG_DEFAULT_TAB_EPG;
 
 // Use en-US if browser language detection fails.
 if (!tvheadend.language || !/\S/.test(tvheadend.language)) {
@@ -132,7 +162,7 @@ var catmap_minor = {
   "skiing" : "skier",
   "soap" : "couch_and_lamp",
   "soccer" : "soccer_ball",
-  "sports talk" : "speaking_head_in_silhouette",
+  "sports talk" : [ "sports_medal", "speaking_head_in_silhouette" ],
   "spy": "spy",
   "standup" : "microphone",
   "swimming" : "swimmer",
@@ -229,7 +259,12 @@ tvheadend.getContentTypeIcons = function(rec, style) {
       var l = catmap_major[v];
       if (l) ret_major.push(l);
       l = catmap_minor[v];
-      if (l) ret_minor.push(l)
+      if (l) {
+        if (Array.isArray(l))
+          ret_minor.push(...l);
+        else
+          ret_minor.push(l);
+      }
     }
   }
 
@@ -586,7 +621,7 @@ tvheadend.mdhelp = function(pagename) {
         msg = _('There\'s no documentation available, or there was a problem loading the page.\n\n') +
               _('**You\'ll also see this page if you try and view documentation (for a feature) not included with your version of Tvheadend.**\n\n\n\n') +
               _('Please take a look at the other Help pages (Table of Contents), if you still can\'t find what you\'re ') +
-              _('looking for please see the [Wiki](http://tvheadend.org/projects/tvheadend/wiki) ') +
+              _('looking for please see the [documentation](http://docs.tvheadend.org/documentation) ') +
               _('or join the [IRC channel on libera](https://web.libera.chat/?nick=tvhhelp|?#hts).');
 
         // Fake the result.
@@ -694,7 +729,7 @@ tvheadend.loading = function(on) {
 tvheadend.PagingToolbarConf = function(conf, title, auto, count)
 {
   conf.width = 50;
-  conf.pageSize = 50;
+  conf.pageSize = tvheadend.page_size;
   conf.displayInfo = true;
                     /// {0} start, {1} end, {2} total, {3} title
   conf.displayMsg = _('{3} {0} - {1} of {2}').replace('{3}', title);
@@ -1023,7 +1058,10 @@ function accessUpdate(o) {
     tvheadend.chname_num = o.chname_num ? 1 : 0;
     tvheadend.chname_src = o.chname_src ? 1 : 0;
     tvheadend.date_mask = o.date_mask;
+    tvheadend.dvr_show_seconds = o.dvr_show_seconds ? true : false;
     tvheadend.label_formatting = o.label_formatting ? true : false;
+    tvheadend.page_size = o.page_size;
+    tvheadend.default_tab = o.default_tab ? o.default_tab : CONFIG_DEFAULT_TAB_EPG;
 
     if (o.uilevel_nochange)
         tvheadend.uilevel_nochange = true;
@@ -1053,6 +1091,12 @@ function accessUpdate(o) {
     if (o.dvr == true && tvheadend.dvrpanel == null) {
         tvheadend.dvrpanel = tvheadend.dvr();
         panel.add(tvheadend.dvrpanel);
+
+        if (tvheadend.default_tab >= CONFIG_DEFAULT_TAB_DVR_FIRST &&
+            tvheadend.default_tab <= CONFIG_DEFAULT_TAB_DVR_LAST)
+            {
+                panel.setActiveTab(1);
+            }
     }
 
     if (o.admin == true && tvheadend.confpanel == null) {
@@ -1149,6 +1193,7 @@ function accessUpdate(o) {
         tvheadend.epggrab_map(chepg);
         tvheadend.epggrab_base(chepg);
         tvheadend.epggrab_mod(chepg);
+        tvheadend.ratinglabel(chepg);
 
         cp.add(chepg);
 
@@ -1203,8 +1248,23 @@ function accessUpdate(o) {
             cp.add(dbg);
         }
 
+        //Set the default config sub-panel
+        if (tvheadend.default_tab >= CONFIG_DEFAULT_TAB_CFG_FIRST &&
+            tvheadend.default_tab <= CONFIG_DEFAULT_TAB_CFG_LAST)
+            {
+                cp.setActiveTab(tvheadend.default_tab - CONFIG_DEFAULT_TAB_CFG_FIRST);
+            }
+
         /* Finish */
         panel.add(cp);
+
+        //Also set the main config tab to default on level 1
+        //if one of the child tabs is the system default.
+        if (tvheadend.default_tab >= CONFIG_DEFAULT_TAB_CFG_FIRST &&
+            tvheadend.default_tab <= CONFIG_DEFAULT_TAB_CFG_LAST) {
+            panel.setActiveTab(panel.items.indexOf(cp));
+        }
+
         tvheadend.confpanel = cp;
         cp.doLayout();
     }
@@ -1212,6 +1272,11 @@ function accessUpdate(o) {
     if (o.admin == true && tvheadend.statuspanel == null) {
         tvheadend.statuspanel = new tvheadend.status;
         panel.add(tvheadend.statuspanel);
+
+        if (tvheadend.default_tab >= CONFIG_DEFAULT_TAB_STATUS_FIRST &&
+            tvheadend.default_tab <= CONFIG_DEFAULT_TAB_STATUS_LAST) {
+            panel.setActiveTab(panel.items.indexOf(tvheadend.statuspanel));
+        }
     }
 
     if (tvheadend.aboutPanel == null) {
@@ -1224,6 +1289,10 @@ function accessUpdate(o) {
             autoLoad: 'about.html'
         });
         panel.add(tvheadend.aboutPanel);
+
+        if (tvheadend.default_tab === CONFIG_DEFAULT_TAB_ABOUT) {
+            panel.setActiveTab(panel.items.indexOf(tvheadend.aboutPanel));
+        }
     }
 
     panel.doLayout();
@@ -1404,38 +1473,46 @@ tvheadend.toLocaleFormat = function()
 	return tvh_locale_lang.replace('_','-');
 };
 
-tvheadend.toCustomDate = function(date, format) //author: meizz, improvements by pablozg
-{
-    if(/([%][MmsSyYdhq]+)/.test(format)){
-        var o = {
-            "\%M+" : date.getMonth()+1, //month
-            "\%d+" : date.getDate(),    //day
-            "\%h+" : date.getHours(),   //hour
-            "\%m+" : date.getMinutes(), //minute
-            "\%s+" : date.getSeconds(), //second
-            "\%q+" : Math.floor((date.getMonth()+3)/3),  //quarter
-            "\%S" : date.getMilliseconds() //millisecond
+tvheadend.toCustomDate = function(date, format) {
+    if (/(%[MmsSyYdhHIpPq]+)/.test(format)) {
+        const o = {
+            "%[yY]+": date.getFullYear(),
+            "%M+": date.getMonth() + 1,
+            "%d+": date.getDate(),
+            "%[hH]+": date.getHours(),
+            "%I+": date.getHours() % 12 || 12,
+            "%p": date.getHours() >= 12 ? "PM" : "AM",
+            "%P": date.getHours() >= 12 ? "pm" : "am",
+            "%m+": date.getMinutes(),
+            "%s+": date.getSeconds(),
+            "%q+": Math.floor((date.getMonth() + 3) / 3),
+            "%S": date.getMilliseconds()
+        };
+
+        format = format.replace(/%MMMM/, date.toLocaleDateString(tvheadend.toLocaleFormat(), { month: 'long' }))
+                       .replace(/%MMM/, date.toLocaleDateString(tvheadend.toLocaleFormat(), { month: 'short' }))
+                       .replace(/%dddd/, date.toLocaleDateString(tvheadend.toLocaleFormat(), { weekday: 'long' }))
+                       .replace(/%ddd/, date.toLocaleDateString(tvheadend.toLocaleFormat(), { weekday: 'short' }));
+
+        for (const k in o) {
+            // pad to 4 places with zero, then slice from the end 1 less than match length (to trim % char)
+            format = format.replace(new RegExp(k), (match) => match.length === 2 ? o[k] : String(o[k]).padStart(4, 0).slice(1 - match.length));
         }
 
-        if(/(\%[yY]+)/.test(format)) format=format.replace(RegExp.$1, (date.getFullYear()+"").substr(5 - RegExp.$1.length));
-
-        if(/(\%MMMM)/.test(format)) format=format.replace(RegExp.$1, (date.toLocaleDateString(tvheadend.toLocaleFormat(), {month: 'long'})));
-
-        if(/(\%MMM)/.test(format)) format=format.replace(RegExp.$1, (date.toLocaleDateString(tvheadend.toLocaleFormat(), {month: 'short'})));
-
-        if(/(\%dddd)/.test(format)) format=format.replace(RegExp.$1, (date.toLocaleDateString(tvheadend.toLocaleFormat(), {weekday: 'long'})));
-
-        if(/(\%ddd)/.test(format)) format=format.replace(RegExp.$1, (date.toLocaleDateString(tvheadend.toLocaleFormat(), {weekday: 'short'})));
-
-        for(var k in o)
-            if(new RegExp("("+ k +")").test(format))
-                    format = format.replace(RegExp.$1, RegExp.$1.length==2 ? o[k] : ("00"+ o[k]).substr((""+ o[k]).length));
         return format;
-    }else{
-        var options = {weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false};
-        return date.toLocaleString(tvheadend.toLocaleFormat(), options);
     }
-}
+
+    const options = {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    };
+    return date.toLocaleString(tvheadend.toLocaleFormat(), options);
+};
 
 /**
  *

@@ -208,7 +208,7 @@ const idclass_t dvb_mux_dvbt_class =
   .ic_caption    = N_("DVB-T multiplex"),
   .ic_properties = (const property_t[]){
     {
-      MUX_PROP_STR("delsys", N_("Delivery system"), dvbt, delsys, "DVBT"),
+      MUX_PROP_STR("delsys", N_("Delivery system"), dvbt, delsys, "DVB-T"),
       .desc     = N_("The delivery system the mux uses. "
                      "Make sure that your tuner supports the delivery "
                      "system selected here."),
@@ -229,7 +229,7 @@ const idclass_t dvb_mux_dvbt_class =
                      "do not like the AUTO setting."),
     },
     {
-      MUX_PROP_STR("constellation", N_("Constellation"), dvbt, qam, N_("AUTO")),
+      MUX_PROP_STR("constellation", N_("Constellation"), dvbt, qam, N_("QAM/AUTO")),
       .desc     = N_("The COFDM modulation used by the mux. "
                      "If you're not sure of the value leave as AUTO."),
     },
@@ -324,7 +324,7 @@ const idclass_t dvb_mux_dvbc_class =
       .off      = offsetof(dvb_mux_t, lm_tuning.u.dmc_fe_qam.symbol_rate),
     },
     {
-      MUX_PROP_STR("constellation", N_("Constellation"), dvbc, qam, N_("AUTO")),
+      MUX_PROP_STR("constellation", N_("Constellation"), dvbc, qam, N_("QAM/AUTO")),
       .desc     = N_("The quadrature amplitude modulation (QAM) used by the mux. "
                      "If you're not sure of the value leave as AUTO."),
     },
@@ -362,12 +362,20 @@ dvb_mux_class_X(dvbs, qpsk, fec_inner, fec, fec,
                      DVB_FEC_AUTO, DVB_FEC_NONE,
                      DVB_FEC_1_2, DVB_FEC_2_3, DVB_FEC_3_4, DVB_FEC_3_5,
                      DVB_FEC_4_5, DVB_FEC_5_6, DVB_FEC_7_8, DVB_FEC_8_9,
-                     DVB_FEC_9_10);
+                     DVB_FEC_9_10, DVB_FEC_1_3, DVB_FEC_1_4, DVB_FEC_4_15,
+                     DVB_FEC_5_9, DVB_FEC_7_9, DVB_FEC_7_15, DVB_FEC_8_15,
+                     DVB_FEC_9_20, DVB_FEC_11_15, DVB_FEC_11_20, DVB_FEC_11_45,
+                     DVB_FEC_13_18, DVB_FEC_13_45, DVB_FEC_14_45, DVB_FEC_23_36,
+                     DVB_FEC_25_36, DVB_FEC_26_45, DVB_FEC_28_45, DVB_FEC_32_45,
+                     DVB_FEC_77_90);
 dvb_mux_class_R(dvbs, modulation, qam, qam,
-                     DVB_MOD_AUTO, DVB_MOD_QPSK, DVB_MOD_QAM_16,
-                     DVB_MOD_PSK_8, DVB_MOD_APSK_16, DVB_MOD_APSK_32);
+                     DVB_MOD_AUTO, DVB_MOD_QPSK, DVB_MOD_QAM_16, DVB_MOD_QAM_1024,
+                     DVB_MOD_QAM_4096, DVB_MOD_PSK_8, DVB_MOD_APSK_16, DVB_MOD_APSK_32,
+                     DVB_MOD_APSK_64, DVB_MOD_APSK_8_L, DVB_MOD_APSK_16_L,
+                     DVB_MOD_APSK_32_L, DVB_MOD_APSK_64_L);
 dvb_mux_class_R(dvbs, rolloff, rolloff, rolloff,
-                     DVB_ROLLOFF_35, DVB_ROLLOFF_20, DVB_ROLLOFF_25);
+                     DVB_HIERARCHY_AUTO, DVB_ROLLOFF_5, DVB_ROLLOFF_10, DVB_ROLLOFF_15,
+                     DVB_ROLLOFF_20, DVB_ROLLOFF_25, DVB_ROLLOFF_35);
 dvb_mux_class_R(dvbs, pilot, pilot, pilot,
                      DVB_PILOT_AUTO, DVB_PILOT_ON, DVB_PILOT_OFF);
 dvb_mux_class_X(dvbs, qpsk, polarisation, polarisation, pol,
@@ -454,7 +462,7 @@ const idclass_t dvb_mux_dvbs_class =
   .ic_caption    = N_("DVB-S multiplex"),
   .ic_properties = (const property_t[]){
     {
-      MUX_PROP_STR("delsys", N_("Delivery system"), dvbs, delsys, "DVBS"),
+      MUX_PROP_STR("delsys", N_("Delivery system"), dvbs, delsys, "DVB-S"),
       .desc     = N_("The delivery system used by your provider."),
     },
     {
@@ -546,6 +554,19 @@ const idclass_t dvb_mux_dvbs_class =
       .desc     = N_("For example: 312000000. This frequency is 312Mhz."),
       .opts     = PO_ADVANCED
     },
+    {
+      .type     = PT_U32,
+      .id       = "dvb_satip_dvbs_freq",
+      .name     = N_("SAT>IP DVB-S frequency (kHz)"),
+      .off      = offsetof(dvb_mux_t, mm_dvb_satip_dvbs_freq),
+      .desc     = N_("Virtual DVB-S frequency in kHz for SAT>IP clients. "
+                     "When set, SAT>IP clients tune to this mux using "
+                     "this frequency instead of the real transponder frequency. "
+                     "Required for DVB-S2X MIS muxes sharing the same "
+                     "physical frequency with different ISI values. "
+                     "Example: 10701000 (= 10701 MHz)."),
+      .opts     = PO_ADVANCED
+    },
     {}
   }
 };
@@ -588,7 +609,7 @@ const idclass_t dvb_mux_atsc_t_class =
       .set      = dvb_mux_dvbt_class_frequency_set,
     },
     {
-      MUX_PROP_STR("modulation", N_("Modulation"), atsc_t, qam, N_("AUTO")),
+      MUX_PROP_STR("modulation", N_("Modulation"), atsc_t, qam, N_("QAM/AUTO")),
       .desc     = N_("The modulation used on the mux."),
     },
     {}
@@ -636,7 +657,7 @@ const idclass_t dvb_mux_atsc_c_class =
       .off      = offsetof(dvb_mux_t, lm_tuning.u.dmc_fe_qam.symbol_rate),
     },
     {
-      MUX_PROP_STR("constellation", N_("Constellation"), dvbc, qam, N_("AUTO")),
+      MUX_PROP_STR("constellation", N_("Constellation"), dvbc, qam, N_("QAM/AUTO")),
       .desc     = N_("The quadrature amplitude modulation (QAM) used by the mux. "
                      "If you're not sure of the value leave as AUTO."),
     },
@@ -767,7 +788,7 @@ const idclass_t dvb_mux_isdb_t_class =
       .desc     = N_("The layer A forward error correction."),
     },
     {
-      MUX_PROP_STR("layera_mod", N_("Layer A: Constellation"), isdb_t, isdbt_mod_a, N_("AUTO")),
+      MUX_PROP_STR("layera_mod", N_("Layer A: Constellation"), isdb_t, isdbt_mod_a, N_("QAM/AUTO")),
       .desc     = N_("The layer A constellation."),
     },
     {
@@ -790,7 +811,7 @@ const idclass_t dvb_mux_isdb_t_class =
       .desc     = N_("The layer B forward error correction."),
     },
     {
-      MUX_PROP_STR("layerb_mod", N_("Layer B: Constellation"), isdb_t, isdbt_mod_b, N_("AUTO")),
+      MUX_PROP_STR("layerb_mod", N_("Layer B: Constellation"), isdb_t, isdbt_mod_b, N_("QAM/AUTO")),
       .desc     = N_("The layer B constellation."),
     },
     {
@@ -813,7 +834,7 @@ const idclass_t dvb_mux_isdb_t_class =
       .desc     = N_("The layer C forward error correction."),
     },
     {
-      MUX_PROP_STR("layerc_mod", N_("Layer C: Constellation"), isdb_t, isdbt_mod_c, N_("AUTO")),
+      MUX_PROP_STR("layerc_mod", N_("Layer C: Constellation"), isdb_t, isdbt_mod_c, N_("QAM/AUTO")),
       .desc     = N_("The layer C constellation."),
     },
     {
@@ -864,7 +885,7 @@ const idclass_t dvb_mux_isdb_c_class =
       .off      = offsetof(dvb_mux_t, lm_tuning.u.dmc_fe_qam.symbol_rate),
     },
     {
-      MUX_PROP_STR("constellation", N_("Constellation"), dvbc, qam, N_("AUTO")),
+      MUX_PROP_STR("constellation", N_("Constellation"), dvbc, qam, N_("QAM/AUTO")),
       .desc     = N_("The quadrature amplitude modulation (QAM) used by the mux. "
                      "If you're not sure of the value leave as AUTO."),
     },
@@ -916,7 +937,7 @@ const idclass_t dvb_mux_isdb_s_class =
   .ic_caption    = N_("ISDB-S multiplex"),
   .ic_properties = (const property_t[]){
     {
-      MUX_PROP_STR("delsys", N_("Delivery system"), isdb_s, delsys, "ISDBS"),
+      MUX_PROP_STR("delsys", N_("Delivery system"), isdb_s, delsys, "ISDB-S"),
       .desc     = N_("The delivery system used by your provider."),
     },
     {
@@ -1007,7 +1028,7 @@ const idclass_t dvb_mux_dtmb_class =
   .ic_caption    = N_("DTMB multiplex"),
   .ic_properties = (const property_t[]){
     {
-      MUX_PROP_STR("delsys", N_("Delivery system"), dtmb, delsys, "DVBT"),
+      MUX_PROP_STR("delsys", N_("Delivery system"), dtmb, delsys, "DTMB"),
       .desc     = N_("The delivery system the mux uses. "
                      "Make sure that your tuner supports the delivery "
                      "system selected here."),
@@ -1028,7 +1049,7 @@ const idclass_t dvb_mux_dtmb_class =
                      "do not like the AUTO setting."),
     },
     {
-      MUX_PROP_STR("constellation", N_("Constellation"), dtmb, qam, N_("AUTO")),
+      MUX_PROP_STR("constellation", N_("Constellation"), dtmb, qam, N_("QAM/AUTO")),
       .desc     = N_("The COFDM modulation used by the mux. "
                      "If you're not sure of the value leave as AUTO."),
     },

@@ -105,6 +105,7 @@ iptv_auto_network_process_m3u_item(iptv_network_t *in,
 
   epgid = htsmsg_get_str(item, "tvh-chnum");
   if (!epgid) epgid = htsmsg_get_str(item, "tvg-chno");
+  if (!epgid) epgid = htsmsg_get_str(item, "channel-number");
   chnum2 = epgid ? channel_get_number_from_str(epgid) : 0;
 
   muxprio = htsmsg_get_s32_or_default(item, "tvh-prio", -1);
@@ -161,7 +162,7 @@ iptv_auto_network_process_m3u_item(iptv_network_t *in,
   }
 
   if (urlparse(url, &u))
-    return;
+    goto end;
   if (u.host == NULL || u.host[0] == '\0')
     goto end;
 
@@ -385,7 +386,7 @@ iptv_auto_network_process(void *aux, const char *last_url,
   mpegts_mux_t *mm, *mm2;
   int r = -1, count, n, i;
   http_arg_list_t remove_args, ignore_args;
-  char *argv[32];
+  char *argv[32], *removes, *ignores;
 
   /* note that we know that data are terminated with '\0' */
 
@@ -394,14 +395,16 @@ iptv_auto_network_process(void *aux, const char *last_url,
 
   http_arg_init(&remove_args);
   if (in->in_remove_args) {
-    n = http_tokenize(in->in_remove_args, argv, ARRAY_SIZE(argv), -1);
+    removes = tvh_strdupa(in->in_remove_args);
+    n = http_tokenize(removes, argv, ARRAY_SIZE(argv), -1);
     for (i = 0; i < n; i++)
       http_arg_set(&remove_args, argv[i], NULL);
   }
 
   http_arg_init(&ignore_args);
   if (in->in_ignore_args) {
-    n = http_tokenize(in->in_ignore_args, argv, ARRAY_SIZE(argv), -1);
+    ignores = tvh_strdupa(in->in_ignore_args);
+    n = http_tokenize(ignores, argv, ARRAY_SIZE(argv), -1);
     for (i = 0; i < n; i++)
       http_arg_set(&ignore_args, argv[i], NULL);
   }
@@ -418,6 +421,7 @@ iptv_auto_network_process(void *aux, const char *last_url,
                                       in->in_channel_number);
 
   http_arg_flush(&remove_args);
+  http_arg_flush(&ignore_args);
 
   if (r == 0) {
     count = 0;

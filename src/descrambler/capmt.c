@@ -20,11 +20,13 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 #include <fcntl.h>
+#include <ctype.h>
 
 #include "tvheadend.h"
 
 #include "input.h"
 #include "caclient.h"
+#include "caid.h"
 #include "service.h"
 #include "tcp.h"
 #include "tvhpoll.h"
@@ -1024,7 +1026,7 @@ service_found:
     f0 = pf->filter[0];
     m0 = pf->filter[1];
     if ((f0 & 0xf0) == 0x80 && (m0 & 0xf0) == 0xf0) goto cont;
-    if (caid == 0x4a30 && f0 == 0x50 && m0 == 0xff) goto cont; /* DVN */
+    if (caid_is_dvn(caid) && f0 == 0x50 && m0 == 0xff) goto cont; /* DVN */
   }
 cont:
   if (t)
@@ -1349,6 +1351,62 @@ capmt_peek_str(sbuf_t *sb, int *offset)
   return str;
 }
 
+/*
+ * Extract the OSCam SVN revision from a DVBAPI_SERVER_INFO string.
+ * Returns 0 when no revision can be read.
+ *
+ * Two formats are in the wild:
+ *
+ *   "OSCam v1.30, build r11772@631abab8"          pre-r11773
+ *                       rev^
+ *
+ *   "OSCam 2.26.07-11966 (x86_64-linux-gnu); ..."  r11773+
+ *           p^    rev^    ^end
+ *
+ * In the second the revision closes the version token, which runs
+ * from the first space to the next. The build target after it
+ * carries hyphens of its own ("x86_64-linux-gnu",
+ * "mips-linux-uclibc-libusb"), so the scan has to stop at `end`
+ * rather than walk the rest of the string.
+ *
+ * The product name is not checked, so OSCam forks that keep the
+ * layout parse too. A server that puts something else entirely in
+ * that position yields either 0 or a small number, and only a
+ * revision at or above the r11396 feature gate changes what we send.
+ */
+static int
+capmt_oscam_revision(const char *info)
+{
+  const char *rev, *p, *end;
+
+  /* Legacy: the revision follows "build r", wherever that sits. */
+  if ((rev = strstr(info, "build r")) != NULL)
+    return strtol(rev + 7, NULL, 10);
+
+  /* Step over the product name to the version token. */
+  if ((p = strchr(info, ' ')) == NULL)
+    return 0;
+  p++;
+
+  /* Stop at the build target, which is hyphen-rich. */
+  if ((end = strchr(p, ' ')) == NULL)
+    end = p + strlen(p);
+
+  /* Revision is whatever follows the token's last hyphen. */
+  for (rev = NULL; p < end; p++)
+    if (*p == '-')
+      rev = p + 1;
+  if (rev == NULL || rev == end)
+    return 0;
+
+  /* Digits only: "v1.20-unstable_svn" has no revision to report. */
+  for (p = rev; p < end; p++)
+    if (!isdigit((unsigned char)*p))
+      return 0;
+
+  return strtol(rev, NULL, 10);
+}
+
 static void
 capmt_analyze_cmd(capmt_t *capmt, uint32_t cmd, int adapter, sbuf_t *sb, int offset)
 {
@@ -1509,11 +1567,10 @@ capmt_analyze_cmd(capmt_t *capmt, uint32_t cmd, int adapter, sbuf_t *sb, int off
     uint16_t protover = sbuf_peek_u16(sb, offset);
     int offset2       = offset + 2;
     char *info        = capmt_peek_str(sb, &offset2);
-    char *rev         = strstr(info, "build r");
 
-    tvhinfo(LS_CAPMT, "%s: Connected to server '%s' (protocol version %d)", capmt_name(capmt), info, protover);
-    if (rev)
-      capmt->capmt_oscam_rev = strtol(rev + 7, NULL, 10);
+    capmt->capmt_oscam_rev = capmt_oscam_revision(info);
+    tvhinfo(LS_CAPMT, "%s: Connected to server '%s' (protocol version %d, revision %d)",
+            capmt_name(capmt), info, protover, capmt->capmt_oscam_rev);
 
     free(info);
 
@@ -1610,8 +1667,8 @@ handle_ca0(capmt_t *capmt)
       if (ret == 0) {
         tvhinfo(LS_CAPMT, "%s: normal socket shutdown", capmt_name(capmt));
 
-        close(recvsock);
         capmt_poll_rem(capmt, recvsock);
+        close(recvsock);
         adapter->ca_sock = -1;
         continue;
       }

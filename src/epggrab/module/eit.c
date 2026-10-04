@@ -28,6 +28,7 @@
 #include "input.h"
 #include "input/mpegts/dvb_charset.h"
 #include "dvr/dvr.h"
+#include "ratinglabels.h"
 
 /* ************************************************************************
  * Opaque
@@ -113,7 +114,7 @@ typedef struct eit_event
 {
   char              uri[529];
   char              suri[529];
-  
+
   lang_str_t       *title;
   lang_str_t       *subtitle;
   lang_str_t       *summary;
@@ -134,6 +135,7 @@ typedef struct eit_event
   uint8_t           bw;
 
   uint8_t           parental;
+  ratinglabel_t     *rating_label;
 
   uint8_t           is_new;
   time_t            first_aired;
@@ -155,7 +157,7 @@ static void _eit_done(void *mod);
 
 // Dump a descriptor tag for debug (looking for new tags etc...)
 static void
-_eit_dtag_dump 
+_eit_dtag_dump
   ( epggrab_module_t *mod, uint8_t dtag, uint8_t dlen, const uint8_t *buf )
 {
 #if APS_DEBUG
@@ -187,7 +189,7 @@ static dvb_string_conv_t _eit_freesat_conv[2] = {
  */
 static int _eit_get_string_with_len
   ( epggrab_module_t *mod,
-    char *dst, size_t dstlen, 
+    char *dst, size_t dstlen,
     const uint8_t *src, size_t srclen, const char *charset )
 {
   epggrab_module_ota_t *m = (epggrab_module_ota_t *)mod;
@@ -284,7 +286,7 @@ static int _eit_desc_ext_event
     if ( (r = _eit_get_string_with_len(mod, ikey, sizeof(ikey),
                                        iptr, ilen, ev->default_charset)) < 0 )
       break;
-    
+
     ilen -= r;
     iptr += r;
 
@@ -391,12 +393,25 @@ static int _eit_desc_component
 static int _eit_desc_content
   ( epggrab_module_t *mod, const uint8_t *ptr, int len, eit_event_t *ev )
 {
+  uint8_t tempPtr = 0;  //Temporary variable to hold a (potentially) changed *ptr value.
+  tempPtr = *ptr;
   while (len > 1) {
-    if (*ptr == 0xb1)
+    //If the genre translation table has been loaded, it will not be a null pointer.
+    if (epggrab_ota_genre_translation){
+      //Get the potentially new genre value.
+      tempPtr = epggrab_ota_genre_translation[*ptr];
+      //If we did get a translation, write a trace for debugging.
+      if(tempPtr != *ptr)
+      {
+        tvhtrace(LS_TBL_EIT, "Translating '%d' (0x%02x) to '%d' (0x%02x)", *ptr, *ptr, tempPtr, tempPtr);
+      }
+    }//END genre translation table loaded.
+
+    if (tempPtr == 0xb1)  //0xB1 is the genre code for 'Black and White'
       ev->bw = 1;
-    else if (*ptr < 0xb0) {
+    else if (tempPtr < 0xb0) {  //0xB0 is the start of the 'Special Characteristics' block.
       if (!ev->genre) ev->genre = calloc(1, sizeof(epg_genre_list_t));
-      epg_genre_list_add_by_eit(ev->genre, *ptr);
+      epg_genre_list_add_by_eit(ev->genre, (const uint8_t)tempPtr);  //Cast as a 'const'
     }
     len -= 2;
     ptr += 2;
@@ -410,15 +425,63 @@ static int _eit_desc_content
 static int _eit_desc_parental
   ( epggrab_module_t *mod, const uint8_t *ptr, int len, eit_event_t *ev )
 {
-  int cnt = 0, sum = 0, i = 0;
+  int cnt = 0, sum = 0, i = 3;
+
+  char            tmpCountry[4];
+  int             tmpAge = 0;
+  ratinglabel_t   *rl = NULL;
+
   while (len > 3) {
+
+    //If we are processing parental rating labels.
+    if(epggrab_conf.epgdb_processparentallabels)
+    {
+      //Get the recommended age for this rating.
+      //0x00 undefined
+      //0x01 to 0x0F minimum age = rating + 3 years
+      //0x10 to 0xFF defined by the broadcaster
+      if(ptr[i] == 0)
+      {
+        tmpAge = 0;
+      }
+      else
+      {
+        tmpAge = ptr[i];  //Do not add 3 here, do that with the 'display age'.
+      }
+
+      //Get the country code for this rating.
+      tmpCountry[0] = ptr[0];
+      tmpCountry[1] = ptr[1];
+      tmpCountry[2] = ptr[2];
+      tmpCountry[3] = 0;
+
+      tvhtrace(LS_TBL_EIT, "Country '%s', age '%d'", tmpCountry, tmpAge);
+
+      //Look for a matching rating label
+      rl = ratinglabel_find_from_eit(tmpCountry, tmpAge);
+
+      //If we have found a rating label, save the details and exit.
+      //ie, ony use the first parental rating found.
+      //TODO: In future, if (eg in Europe) the rating codes from multiple
+      //countries are present, select the one that user prefers.
+      //A new config option will be needed for this.
+      //HOWEVER: A sampling of EIT data from European users
+      //suggests that this will not be necessary.
+      if(rl){
+        ev->parental = rl->rl_display_age;
+        ev->rating_label = rl;
+        return 0;
+      }
+    }//END rating labels are being processed.
+    //If rating labels are not processed, do the original TVH process.
+
     if ( ptr[i] && ptr[i] < 0x10 ) {
       cnt++;
       sum += (ptr[i] + 3);
     }
     len -= 4;
     i   += 4;
-  }
+  }//END loop through descriptors
   // Note: we ignore the country code and average the lot!
   if (cnt)
     ev->parental = (uint8_t)(sum / cnt);
@@ -461,7 +524,7 @@ static int _eit_desc_crid
         crid = ev->suri;
         clen = sizeof(ev->suri);
       }
-    
+
       if (crid) {
         if (strstr(buf, "crid://") == buf) {
           strlcpy(crid, buf, clen);
@@ -630,6 +693,10 @@ static int _eit_process_event_one
   char tm1[32], tm2[32];
   int short_target = ((eit_module_t *)mod)->short_target;
 
+  lang_str_t *temp_string;        //}
+  lang_str_ele_t *temp_ele;       //} Used for appending/prepending to the desc.
+  const char *temp_s1, *temp_s2;  //}
+
   /* Core fields */
   eid   = ptr[0] << 8 | ptr[1];
   start = dvb_convert_date(&ptr[2], local);
@@ -721,8 +788,167 @@ static int _eit_process_event_one
     *save |= epg_broadcast_set_genre(ebc, ev->genre, &changes);
   if (ev->parental)
     *save |= epg_broadcast_set_age_rating(ebc, ev->parental, &changes);
+
+  if (ev->rating_label)
+    {
+    tvhtrace(mod->subsys, "About to save rating label '%p'", ev->rating_label);
+    *save |= epg_broadcast_set_rating_label(ebc, ev->rating_label, &changes);
+    }
+
+  /*
+      Notes on EPG fields. DMC, May 2025.
+
+      ev->title :   Originates from EIT tag 0x4d 'short_event_descriptor' 'event name'
+      ev->summary : Originates from EIT tag 0x4d 'short_event_descriptor' 'text describing the event'
+      ev->desc :    Originates from EIT tag 0c4e 'extended_event_descriptor'
+      ev-subtitle : Originates from scraping operations performed by previous functions.
+
+      If the grabber scraping option is enabled:
+      ev->title, ev->subtitle, ev->summary may be set/update/replaced by scraped values.
+
+      Eventually, if the sub-title is empty, the summary will be used in its place.
+
+      Summary of possible EPG Text manipulation operations.
+
+      Defined in EIT EPG Grabber
+      'Set the short EPG description to given target'
+      short_target: *0 = Subtitle* | 1 = Summary | 2 = Subtitle and summary
+
+      (New features from here..)
+      Defined in MPGTS Service
+      svc->s_dvb_subtitle_processing
+      [*None* | Save in Description | Append to Description | Prepend to Description]
+      This is only active if short_target == 0 so that the EPG grabber setting
+      takes priority over the service setting.
+      
+      svc->s_dvb_ignore_matching_subtitle [True | *False*]
+      If the Sub-title and the Title contain identical content, ignore the Sub-title and only save the Title.
+   */
+
+  //If processing is enabled AND the grabber is saving the sub-title in the sub-title then
+  //save the sub-title in the description provided that the description is also empty OR
+  //append/prepend the sub-title to the description if the description is not empty.
+  if ((svc->s_dvb_subtitle_processing != SVC_PROCESS_SUBTITLE_NONE) && (ev->summary || ev->subtitle) && short_target == 0)
+  {
+      //If there is not already a description, just use the subtitle/summary instead
+      if(!ev->desc)
+      {
+        //If there was a sub-title scraped, use that.
+        if (ev->subtitle)
+        {
+          *save |= epg_broadcast_set_description(ebc, ev->subtitle, &changes);
+          lang_str_destroy(ev->subtitle);
+          ev->subtitle = lang_str_create();
+          tvhtrace(LS_TBL_EIT, "Description set to sub-title.");
+        }
+        else
+        {
+          *save |= epg_broadcast_set_description(ebc, ev->summary, &changes);
+          lang_str_destroy(ev->summary);
+          ev->summary = lang_str_create();
+          tvhtrace(LS_TBL_EIT, "Description set to summary.");
+        }
+      }
+      else //There is a description present so append/prepend as required.
+      {
+        temp_string = lang_str_create();
+        if(svc->s_dvb_subtitle_processing == SVC_PROCESS_SUBTITLE_APPEND)
+        {
+          if(ev->subtitle)
+          {
+            RB_FOREACH(temp_ele, ev->subtitle, link) {
+              temp_s1 = lang_str_get(ev->desc, temp_ele->lang);
+              lang_str_append(temp_string, temp_s1, temp_ele->lang);
+              lang_str_append(temp_string, " ", temp_ele->lang);
+              temp_s2 = lang_str_get(ev->subtitle, temp_ele->lang);
+              lang_str_append(temp_string, temp_s2, temp_ele->lang);
+              tvhtrace(LS_TBL_EIT, "Sub-title appended to description.");
+            }
+          }
+          else if(ev->summary)
+          {
+            RB_FOREACH(temp_ele, ev->summary, link) {
+              temp_s1 = lang_str_get(ev->desc, temp_ele->lang);
+              lang_str_append(temp_string, temp_s1, temp_ele->lang);
+              lang_str_append(temp_string, " ", temp_ele->lang);
+              temp_s2 = lang_str_get(ev->summary, temp_ele->lang);
+              lang_str_append(temp_string, temp_s2, temp_ele->lang);
+              tvhtrace(LS_TBL_EIT, "Summary appended to description.");
+            }
+          }
+        }//END Append
+
+        if(svc->s_dvb_subtitle_processing == SVC_PROCESS_SUBTITLE_PREPEND)
+        {
+          if(ev->subtitle)
+          {
+            RB_FOREACH(temp_ele, ev->subtitle, link) {
+              temp_s1 = lang_str_get(ev->subtitle, temp_ele->lang);
+              lang_str_append(temp_string, temp_s1, temp_ele->lang);
+              lang_str_append(temp_string, " ", temp_ele->lang);
+              temp_s2 = lang_str_get(ev->desc, temp_ele->lang);
+              lang_str_append(temp_string, temp_s2, temp_ele->lang);
+              tvhtrace(LS_TBL_EIT, "Sub-title prepended to description.");
+            }
+          }
+          else if(ev->summary)
+          {
+            RB_FOREACH(temp_ele, ev->summary, link) {
+              temp_s1 = lang_str_get(ev->summary, temp_ele->lang);
+              lang_str_append(temp_string, temp_s1, temp_ele->lang);
+              lang_str_append(temp_string, " ", temp_ele->lang);
+              temp_s2 = lang_str_get(ev->desc, temp_ele->lang);
+              lang_str_append(temp_string, temp_s2, temp_ele->lang);
+              tvhtrace(LS_TBL_EIT, "Summary prepended to description.");
+            }
+          }
+        }//END Prepend
+
+        //Save the new desc with the appended/prepended content.
+        *save |= epg_broadcast_set_description(ebc, temp_string, &changes);
+
+        //Nuke the summary because it is now part of the desc.
+        if(ev->summary)
+        {
+          lang_str_destroy(ev->summary);
+          ev->summary = lang_str_create();
+        }
+
+        //Nuke the subtitle because it is now part of the desc.
+        if(ev->subtitle)
+        {
+          lang_str_destroy(ev->subtitle);
+          ev->subtitle = lang_str_create();
+        }
+
+        //Clean up the temp language string.
+        if (temp_string)    lang_str_destroy(temp_string);
+
+      }//END append or prepend
+  }//END DVB sub-title processing
+
+  //If processing is enabled, delete the summary/sub-title if it is the same as the title.
+  if (svc->s_dvb_ignore_matching_subtitle && (ev->summary || ev->subtitle))
+  {
+      if (lang_str_compare(ev->title, ev->summary) == 0)  //0 = no differences
+      {
+          lang_str_destroy(ev->summary);
+          ev->summary = lang_str_create();
+          tvhtrace(LS_TBL_EIT, "Deleting summary, same as title.");
+      }
+
+      if (lang_str_compare(ev->title, ev->subtitle) == 0)  //0 = no differences
+      {
+          lang_str_destroy(ev->subtitle);
+          ev->subtitle = lang_str_create();
+          tvhtrace(LS_TBL_EIT, "Deleting sub-title, same as title.");
+      }
+  }
+
+  //The sub-title is set by scraping it from the EIT short description (held in the summary).
   if (ev->subtitle)
     *save |= epg_broadcast_set_subtitle(ebc, ev->subtitle, &changes);
+    //short_target: 0 = Subtitle | 2 = Subtitle and summary
   else if ((short_target == 0 || short_target == 2) && ev->summary)
     *save |= epg_broadcast_set_subtitle(ebc, ev->summary, &changes);
 #if TODO_ADD_EXTRA
@@ -813,6 +1039,14 @@ static int _eit_process_event
         break;
       case DVB_DESC_PARENTAL_RAT:
         r = _eit_desc_parental(mod, ptr, dlen, &ev);
+        if(epggrab_conf.epgdb_processparentallabels){
+            if(ev.rating_label){
+              tvhtrace(mod->subsys, "RATINGLABEL '%d'  '%s'", ev.parental, ev.rating_label->rl_display_label);
+            } else {
+              tvhtrace(mod->subsys, "RATINGLABEL '%d'  '<NONE>'", ev.parental);
+            }
+        }
+
         break;
       case DVB_DESC_CRID:
         r = _eit_desc_crid(mod, ptr, dlen, &ev, ed);
@@ -882,7 +1116,7 @@ _eit_process_data(void *m, void *data, uint32_t len)
   size_t hlen;
   eit_data_t *ed = data;
 
-  assert(len >= sizeof(ed));
+  assert(len >= sizeof(*ed));
   hlen = sizeof(*ed) + ed->cridauth_len + ed->charset_len;
   assert(len >= hlen);
   data += hlen;
@@ -995,8 +1229,8 @@ _eit_callback
     mask <<= (24 - (sa % 32));
     st->sections[sa/32] &= ~mask;
   }
-  
-  /* UK Cable Virgin: EPG data for services in other transponders is transmitted 
+
+  /* UK Cable Virgin: EPG data for services in other transponders is transmitted
   // in the 'actual' transpoder table IDs */
   if ((hacks & EIT_HACK_EXTRAMUXLOOKUP) != 0 && (tableid == 0x50 || tableid == 0x4E)) {
     mm = mpegts_network_find_mux(mm->mm_network, onid, tsid, 1);
@@ -1051,8 +1285,54 @@ svc_ok:
   if (!LIST_FIRST(&svc->s_channels))
     goto done;
 
-  if (svc->s_dvb_ignore_eit)
+  /* Apply the effective EIT processing policy for this service:
+   * the per-service value, falling back to the global default when
+   * the service is set to Default. Tableid ranges in this callback
+   * (see the bounds check earlier in this function) are
+   *   0x4e               actual-TS present/following
+   *   0x50-0x5f          actual-TS schedule
+   *   0x4f, 0x60-0x6f    other-TS present/following + schedule. */
+  int processing = svc->s_dvb_eit_processing;
+  if (processing == EIT_PROCESSING_DEFAULT)
+    processing = epggrab_conf.eit_processing_default;
+
+  switch (processing) {
+  case EIT_PROCESSING_NONE:
     goto done;
+  case EIT_PROCESSING_ACTUAL_ONLY:
+    if (tableid == 0x4f || tableid >= 0x60)
+      goto done;
+    break;
+  case EIT_PROCESSING_OTHER_ONLY:
+    if (tableid == 0x4e || (tableid >= 0x50 && tableid < 0x60))
+      goto done;
+    break;
+  case EIT_PROCESSING_ADAPTIVE:
+    /* Track actual-TS schedule arrival per service. Once seen,
+     * drop further other-TS for it so a neighbouring multiplex's
+     * coarse description cannot overwrite the service's own
+     * detailed schedule. Services whose actual-TS is never
+     * received keep using other-TS, so a dedicated EPG multiplex
+     * still works. P/F (0x4e / 0x4f) is only two events per
+     * service and is not used as the "actual-TS seen" trigger. */
+    if (tableid >= 0x50 && tableid < 0x60) {
+      if (!svc->s_dvb_eit_actual_seen) {
+        svc->s_dvb_eit_actual_seen = 1;
+        tvhtrace(LS_TBL_EIT, "%s: %s actual-TS schedule seen",
+                 mt->mt_name, svc->s_nicename);
+      }
+    } else if ((tableid == 0x4f || tableid >= 0x60) &&
+               svc->s_dvb_eit_actual_seen) {
+      tvhtrace(LS_TBL_EIT,
+               "%s: skip other-TS tid 0x%02X for %s, actual-TS seen",
+               mt->mt_name, tableid, svc->s_nicename);
+      goto done;
+    }
+    break;
+  case EIT_PROCESSING_EITHER:
+  default:
+    break;
+  }
 
   /* Queue events */
   len -= 11;
@@ -1097,7 +1377,7 @@ done:
 complete:
   if (ota && !r && (tableid >= 0x50 && tableid < 0x60))
     epggrab_ota_complete((epggrab_module_ota_t*)mod, ota);
-  
+
   return r;
 }
 
@@ -1240,7 +1520,7 @@ static int _eit_tune
     return 1;
 
   /* Check if any services are mapped */
-  // TODO: using indirect ref's like this is inefficient, should 
+  // TODO: using indirect ref's like this is inefficient, should
   //       consider changeing it?
   for (osl = RB_FIRST(&map->om_svcs); osl != NULL; osl = nxt) {
     nxt = RB_NEXT(osl, link);

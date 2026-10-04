@@ -336,18 +336,10 @@ iptv_input_start_mux ( mpegts_input_t *mi, mpegts_mux_instance_t *mmi, int weigh
   const char *scheme;
   url_t url;
 
-  /* Already active */
-  if (im->mm_active)
+  /* Active? */
+  if (im->mm_active) {
     return 0;
-
-  /* Reset Error Counters */
-  atomic_set(&mmi->tii_stats.unc, 0);
-  atomic_set(&mmi->tii_stats.cc, 0);
-  tvh_mutex_lock(&mmi->tii_stats_mutex);
-  mmi->tii_stats.te = 0;
-  mmi->tii_stats.ec_block = 0;
-  mmi->tii_stats.tc_block = 0;
-  tvh_mutex_unlock(&mmi->tii_stats_mutex);
+  }
   
   /* Substitute things */
   if (im->mm_iptv_substitute && raw) {
@@ -366,7 +358,7 @@ iptv_input_start_mux ( mpegts_input_t *mi, mpegts_mux_instance_t *mmi, int weigh
 
   } else
 #endif
-         if (raw && !strncmp(raw, "pipe://", 7)) {
+  if (raw && !strncmp(raw, "pipe://", 7)) {
 
     scheme = "pipe";
 
@@ -384,6 +376,7 @@ iptv_input_start_mux ( mpegts_input_t *mi, mpegts_mux_instance_t *mmi, int weigh
 
     if (urlparse(raw ?: "", &url)) {
       tvherror(LS_IPTV, "%s - invalid URL [%s]", im->mm_nicename, raw);
+      urlreset(&url);
       return ret;
     }
     scheme = url.scheme;
@@ -394,11 +387,19 @@ iptv_input_start_mux ( mpegts_input_t *mi, mpegts_mux_instance_t *mmi, int weigh
   ih = iptv_handler_find(scheme ?: "");
   if (!ih) {
     tvherror(LS_IPTV, "%s - unsupported scheme [%s]", im->mm_nicename, scheme ?: "none");
+    urlreset(&url);
     return ret;
   }
 
-  /* Start */
   tvh_mutex_lock(&iptv_lock);
+  /* Already active */
+  if (im->mm_active) {
+    tvh_mutex_unlock(&iptv_lock);
+    urlreset(&url);
+    return 0;
+  }
+
+  /* Start */
   s = im->mm_iptv_url_raw;
   im->mm_iptv_url_raw = raw ? strdup(raw) : NULL;
   if (im->mm_iptv_url_raw) {
@@ -431,7 +432,10 @@ iptv_input_close_fds ( iptv_input_t *mi, iptv_mux_t *im )
   /* Close file */
   if (im->mm_iptv_fd > 0) {
     tvhpoll_rem1(pool->poll, im->mm_iptv_fd);
-    udp_close(im->mm_iptv_connection);
+    if(im->mm_iptv_connection == NULL)
+      close(im->mm_iptv_fd);
+    else
+      udp_close(im->mm_iptv_connection);
     im->mm_iptv_connection = NULL;
     im->mm_iptv_fd = -1;
   }
@@ -439,7 +443,10 @@ iptv_input_close_fds ( iptv_input_t *mi, iptv_mux_t *im )
   /* Close file2 */
   if (im->im_rtcp_info.connection_fd > 0) {
     tvhpoll_rem1(pool->poll, im->im_rtcp_info.connection_fd);
-    udp_close(im->im_rtcp_info.connection);
+    if(im->im_rtcp_info.connection == NULL)
+      close(im->im_rtcp_info.connection_fd);
+    else
+      udp_close(im->im_rtcp_info.connection);
     im->im_rtcp_info.connection = NULL;
     im->im_rtcp_info.connection_fd = -1;
   }
@@ -568,6 +575,7 @@ iptv_input_thread ( void *aux )
       if ((n = im->im_handler->read(mi, im)) < 0) {
         tvherror(LS_IPTV, "read() error %s", strerror(errno));
         im->im_handler->stop(mi, im);
+        tvh_mutex_unlock(&iptv_lock);
         break;
       }
       r = iptv_input_recv_packets(im, n);

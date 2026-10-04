@@ -22,14 +22,28 @@
 
 
 /* aac ====================================================================== */
-
+// see aacenc_profiles[] ffmpeg-7.0/libavcodec/aacenctab.h + AV_PROFILE_UNKNOWN
 static const AVProfile aac_profiles[] = {
-    { FF_PROFILE_AAC_MAIN, "Main" },
-    { FF_PROFILE_AAC_LOW,  "LC" },
-    { FF_PROFILE_AAC_LTP,  "LTP" },
-    { FF_PROFILE_UNKNOWN },
+    { FF_AV_PROFILE_AAC_MAIN,      "Main" },
+    { FF_AV_PROFILE_AAC_LOW,       "LC" },
+    { FF_AV_PROFILE_AAC_LTP,       "LTP" },
+    { FF_AV_PROFILE_MPEG2_AAC_LOW, "MPEG2_LC" },
+    { FF_AV_PROFILE_UNKNOWN },
 };
 
+#if LIBAVCODEC_VERSION_MAJOR > 59
+// see aac_normal_chan_layouts[7] in ffmpeg-7.0/libavcodec/aacenctab.h + NULL termination
+static const AVChannelLayout aac_channel_layouts[] = {
+    AV_CHANNEL_LAYOUT_MONO,
+    AV_CHANNEL_LAYOUT_STEREO,
+    AV_CHANNEL_LAYOUT_SURROUND,
+    AV_CHANNEL_LAYOUT_4POINT0,
+    AV_CHANNEL_LAYOUT_5POINT0_BACK,
+    AV_CHANNEL_LAYOUT_5POINT1_BACK,
+    AV_CHANNEL_LAYOUT_7POINT1,
+    { 0 },
+};
+#else
 // see aac_chan_configs in ffmpeg-3.0.2/libavcodec/aacenctab.h
 static const uint64_t aac_channel_layouts[] = {
     AV_CH_LAYOUT_MONO,
@@ -41,6 +55,7 @@ static const uint64_t aac_channel_layouts[] = {
     AV_CH_LAYOUT_7POINT1_WIDE_BACK,
     0
 };
+#endif
 
 
 typedef struct {
@@ -54,12 +69,12 @@ tvh_codec_profile_aac_open(tvh_codec_profile_aac_t *self, AVDictionary **opts)
 {
     // bit_rate or global_quality
     if (self->bit_rate) {
-        AV_DICT_SET_BIT_RATE(opts, self->bit_rate);
+        AV_DICT_SET_BIT_RATE(LST_AAC, opts, self->bit_rate);
     }
     else {
-        AV_DICT_SET_GLOBAL_QUALITY(opts, self->qscale, 1);
+        AV_DICT_SET_GLOBAL_QUALITY(LST_AAC, opts, self->qscale, 1);
     }
-    AV_DICT_SET(opts, "aac_coder", self->coder, 0);
+    AV_DICT_SET(LST_AAC, opts, "aac_coder", self->coder, 0);
     return 0;
 }
 

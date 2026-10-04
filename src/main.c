@@ -1,5 +1,5 @@
 /*
- *  TVheadend
+ *  Tvheadend
  *  Copyright (C) 2007 - 2010 Andreas Öman
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -71,6 +71,7 @@
 #include "transcoding/codec.h"
 #include "profile.h"
 #include "bouquet.h"
+#include "ratinglabels.h"
 #include "tvhtime.h"
 #include "packet.h"
 #include "streaming.h"
@@ -153,7 +154,7 @@ const char      *tvheadend_cwd0;
 const char      *tvheadend_cwd;
 const char      *tvheadend_webroot;
 const tvh_caps_t tvheadend_capabilities[] = {
-#if ENABLE_CWC || ENABLE_CAPMT || ENABLE_CONSTCW || ENABLE_CCCAM
+#if ENABLE_CWC || ENABLE_CAPMT || ENABLE_CONSTCW || ENABLE_CCCAM || ENABLE_LINUXDVB_CA
   { "caclient", NULL },
 #endif
 #if ENABLE_LINUXDVB || ENABLE_SATIP_CLIENT || ENABLE_HDHOMERUN_CLIENT || ENABLE_RTLSDR
@@ -216,7 +217,7 @@ handle_sigill(int x)
   /* to determine the CPU capabilities with possible */
   /* unknown instructions */
   tvhwarn(LS_CPU, "Illegal instruction handler (might be OK)");
-  signal(SIGILL, handle_sigill);
+  tvh_signal(SIGILL, handle_sigill);
 }
 
 void
@@ -227,7 +228,7 @@ doexit(int x)
   tvh_cond_signal(&gtimer_cond, 0);
   tvh_cond_signal(&mtimer_cond, 0);
   atomic_set(&tvheadend_running, 0);
-  signal(x, doexit);
+  tvh_signal(x, doexit);
 }
 
 static int
@@ -696,7 +697,7 @@ mtimer_thread(void *aux)
       cb = mti->mti_callback;
       LIST_REMOVE(mti, mti_link);
       mti->mti_callback = NULL;
-      
+
       mtimer_running = mti;
       tvh_mutex_unlock(&mtimer_lock);
 
@@ -803,7 +804,9 @@ main(int argc, char **argv)
   } randseed;
   struct rlimit rl;
   extern int dvb_bouquets_parse;
-
+#if ENABLE_VAAPI
+  extern int vainfo_probe_enabled;
+#endif
   main_tid = pthread_self();
 
   /* Setup global mutexes */
@@ -842,9 +845,9 @@ main(int argc, char **argv)
               opt_threadid     = 0,
               opt_libav        = 0,
               opt_ipv6         = 0,
-              opt_nosatip      = 0,
+              opt_nosatipcli   = 0,
               opt_satip_rtsp   = 0,
-#if ENABLE_TSFILE
+#if ENABLE_TSFILE || ENABLE_TSDEBUG
               opt_tsfile_tuner = 0,
 #endif
               opt_dump         = 0,
@@ -872,8 +875,10 @@ main(int argc, char **argv)
              *opt_satip_bindaddr = NULL;
   static char *__opt_satip_xml[10];
   str_list_t  opt_satip_xml    = { .max = 10, .num = 0, .str = __opt_satip_xml };
-  static char *__opt_satip_tsfile[10];
-  str_list_t  opt_tsfile       = { .max = 10, .num = 0, .str = __opt_satip_tsfile };
+#if ENABLE_TSFILE || ENABLE_TSDEBUG
+  static char *__opt_tsfile[10];
+  str_list_t  opt_tsfile       = { .max = 10, .num = 0, .str = __opt_tsfile };
+#endif
   cmdline_opt_t cmdline_opts[] = {
     {   0, NULL,        N_("Generic options"),         OPT_BOOL, NULL         },
     { 'h', "help",      N_("Show this page"),          OPT_BOOL, &opt_help    },
@@ -910,8 +915,10 @@ main(int argc, char **argv)
       OPT_INT, &opt_satip_rtsp },
 #endif
 #if ENABLE_SATIP_CLIENT
-    {   0, "nosatip",    N_("Disable SAT>IP client"),
-      OPT_BOOL, &opt_nosatip },
+    {   0, "nosatip",    N_("Disable SAT>IP client (deprecated flag, use nosatipcli)"),
+      OPT_BOOL, &opt_nosatipcli },
+    {   0, "nosatipcli",    N_("Disable SAT>IP client"),
+      OPT_BOOL, &opt_nosatipcli },
     {   0, "satip_xml",  N_("URL with the SAT>IP server XML location"),
       OPT_STR_LIST, &opt_satip_xml },
 #endif
@@ -1065,10 +1072,14 @@ main(int argc, char **argv)
     }
     if (tmp[strlen(tmp)-1] == '/')
       tmp[strlen(tmp)-1] = '\0';
-    if (tmp[0])
+    if (tmp[0]) {
       tvheadend_webroot = tmp;
-    else
+    } else {
+      /* "/" or "" normalise to no webroot at all — leaving the raw
+       * value would prefix every registered route with it. */
       free(tmp);
+      tvheadend_webroot = NULL;
+    }
   }
   tvheadend_webui_debug = opt_uidebug;
 
@@ -1110,10 +1121,13 @@ main(int argc, char **argv)
   tvhlog_set_trace(log_trace);
   tvhinfo(LS_MAIN, "Log started");
 
-  signal(SIGPIPE, handle_sigpipe); // will be redundant later
-  signal(SIGILL, handle_sigill);   // see handler..
+  tvh_signal(SIGPIPE, handle_sigpipe); // will be redundant later
+  tvh_signal(SIGILL, handle_sigill);   // see handler..
 
-  /* Set priviledges */
+  if (opt_fork && !opt_user && !opt_config)
+    tvhwarn(LS_START, "Forking without --user or --config may use unexpected configuration location");
+
+  /* Set privileges */
   if((opt_fork && getuid() == 0) || opt_group || opt_user) {
     const char *homedir;
     struct group  *grp = getgrnam(opt_group ?: "video");
@@ -1287,18 +1301,28 @@ main(int argc, char **argv)
   tvhftrace(LS_MAIN, fsmonitor_init);
   tvhftrace(LS_MAIN, libav_init);
   tvhftrace(LS_MAIN, tvhtime_init);
+#if ENABLE_VAAPI
+  tvhftrace(LS_MAIN, codec_init, vainfo_probe_enabled);
+#else
   tvhftrace(LS_MAIN, codec_init);
+#endif
   tvhftrace(LS_MAIN, profile_init);
   tvhftrace(LS_MAIN, imagecache_init);
   tvhftrace(LS_MAIN, http_client_init);
   tvhftrace(LS_MAIN, esfilter_init);
   tvhftrace(LS_MAIN, bouquet_init);
+  tvhftrace(LS_MAIN, ratinglabel_init);
   tvhftrace(LS_MAIN, service_init);
   tvhftrace(LS_MAIN, descrambler_init);
   tvhftrace(LS_MAIN, dvb_init);
 #if ENABLE_MPEGTS
-  tvhftrace(LS_MAIN, mpegts_init, adapter_mask, opt_nosatip, &opt_satip_xml,
+#if ENABLE_TSFILE || ENABLE_TSDEBUG
+  tvhftrace(LS_MAIN, mpegts_init, adapter_mask, opt_nosatipcli, &opt_satip_xml,
             &opt_tsfile, opt_tsfile_tuner);
+#else
+  tvhftrace(LS_MAIN, mpegts_init, adapter_mask, opt_nosatipcli, &opt_satip_xml,
+            NULL, 0);
+#endif
 #endif
 #if ENABLE_RTLSDR
   tvhftrace(LS_MAIN, dab_init);
@@ -1346,8 +1370,8 @@ main(int argc, char **argv)
   sigaddset(&set, SIGTERM);
   sigaddset(&set, SIGINT);
 
-  signal(SIGTERM, doexit);
-  signal(SIGINT, doexit);
+  tvh_signal(SIGTERM, doexit);
+  tvh_signal(SIGINT, doexit);
 
   pthread_sigmask(SIG_UNBLOCK, &set, NULL);
 
@@ -1408,6 +1432,7 @@ main(int argc, char **argv)
   tvhftrace(LS_MAIN, service_done);
   tvhftrace(LS_MAIN, channel_done);
   tvhftrace(LS_MAIN, bouquet_done);
+  tvhftrace(LS_MAIN, ratinglabel_done);
   tvhftrace(LS_MAIN, subscription_done);
   tvhftrace(LS_MAIN, access_done);
   tvhftrace(LS_MAIN, epg_done);

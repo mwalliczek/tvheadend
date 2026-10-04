@@ -121,15 +121,42 @@ cc_get_card_name(cc_card_data_t *pcard, char *buf, size_t buflen)
 /**
  *
  */
+static int
+provider_exists(cc_card_data_t *pcard, uint32_t providerid)
+{
+  int i;
+
+  for(i = 0; i < pcard->cs_ra.providers_count; i++)
+    if(providerid == pcard->cs_ra.providers[i].id)
+      return 1;
+  return 0;
+}
+
+/**
+ *
+ */
+static int
+verify_provider(cc_card_data_t *pcard, uint32_t providerid)
+{
+  if(providerid == 0)
+    return 1;
+
+  return provider_exists(pcard, providerid);
+}
+
+/**
+ *
+ */
 cc_card_data_t *
 cc_new_card(cclient_t *cc, uint16_t caid, uint32_t cardid, uint8_t *ua,
-            int pcount, uint8_t **pid, uint8_t **psa)
+            int pcount, uint8_t **pid, uint8_t **psa, int add)
 {
   cc_card_data_t *pcard = NULL;
-  emm_provider_t *ep;
+  emm_provider_t *ep, *providers;
   const char *n;
   const uint8_t *id, *sa;
-  int i, j, c, allocated = 0;
+  int i, j, c, add_pcount = 0, start_index = 0, ua_changed = 0, allocated = 0;
+  uint32_t id32;
   char buf[256];
 
   LIST_FOREACH(pcard, &cc->cc_cards, cs_card)
@@ -145,35 +172,76 @@ cc_new_card(cclient_t *cc, uint16_t caid, uint32_t cardid, uint8_t *ua,
   }
 
   if (ua) {
-    memcpy(pcard->cs_ra.ua, ua, 8);
-    if (cc_check_empty(ua, 8))
-      ua = NULL;
+    if (memcmp(pcard->cs_ra.ua, ua, 8)) {
+      memcpy(pcard->cs_ra.ua, ua, 8);
+      if (cc_check_empty(ua, 8))
+        ua = NULL;
+      ua_changed = 1;
+    }
   } else {
-    memset(pcard->cs_ra.ua, 0, 8);
+    if (allocated)
+      memset(pcard->cs_ra.ua, 0, 8);
   }
 
-  free(pcard->cs_ra.providers);
-  pcard->cs_ra.providers_count = pcount;
-  pcard->cs_ra.providers = calloc(pcount, sizeof(pcard->cs_ra.providers[0]));
+  if (add && !allocated) {
+    uint8_t **add_pid = alloca(sizeof(void *) * pcount);
+    uint8_t **add_psa = alloca(sizeof(void *) * pcount);
 
-  for (i = 0, ep = pcard->cs_ra.providers; i < pcount; i++, ep++) {
+    for (i = 0; i < pcount; i++) {
+      id = pid[i];
+      if (!id)
+        continue;
+      id32 = (id[0] << 16) | (id[1] << 8) | id[2];
+      if (provider_exists(pcard, id32)) {
+        tvhtrace(cc->cc_subsys, "%s: Provider %06X skip [ID:%08X CAID:%04X]",
+                 cc->cc_name, id32, cardid, caid);
+        continue;
+      }
+      add_pid[add_pcount] = pid[i];
+      add_psa[add_pcount] = psa ? psa[i] : NULL;
+      add_pcount++;
+    }
+    
+    start_index = pcard->cs_ra.providers_count;
+    if (add_pcount == 0) {
+      tvhdebug(cc->cc_subsys, "%s: All providers already registered [ID:%08X CAID:%04X]",
+               cc->cc_name, cardid, caid);
+      goto skip_providers;
+    }
+
+    providers = calloc(start_index + add_pcount, sizeof(pcard->cs_ra.providers[0]));
+    memcpy(providers, pcard->cs_ra.providers, start_index * sizeof(pcard->cs_ra.providers[0]));
+    pid = add_pid;
+    psa = add_psa;
+  } else {
+    providers = calloc(pcount, sizeof(pcard->cs_ra.providers[0]));
+    add_pcount = pcount;
+  }
+
+  for (i = 0, ep = providers + start_index; i < add_pcount; i++, ep++) {
     id = pid[i];
     if (id)
       ep->id = (id[0] << 16) | (id[1] << 8) | id[2];
-    if (psa)
+    if (psa && psa[i])
       memcpy(ep->sa, psa[i], 8);
   }
 
+  free(pcard->cs_ra.providers);
+  pcard->cs_ra.providers = providers;
+  pcount = start_index + add_pcount;
+  pcard->cs_ra.providers_count = pcount;
+
+skip_providers:
   n = caid2name(caid) ?: "Unknown";
 
-  if (ua) {
+  if (ua && (!add || ua_changed)) {
     tvhinfo(cc->cc_subsys, "%s: Connected as user %s "
             "to a %s-card-%08x [CAID:%04x : %02x.%02x.%02x.%02x.%02x.%02x.%02x.%02x] "
-            "with %d provider%s",
+            "with %d provider%s%s",
             cc->cc_name, cc->cc_username, n, cardid, caid,
             ua[0], ua[1], ua[2], ua[3], ua[4], ua[5], ua[6], ua[7],
-            pcount, pcount != 1 ? "s" : "");
-  } else {
+            pcount, pcount != 1 ? "s" : "", add ? " /ADD" : "");
+  } else if (!add) {
     tvhinfo(cc->cc_subsys, "%s: Connected as user %s "
             "to a %s-card-%08x [CAID:%04x] with %d provider%s",
             cc->cc_name, cc->cc_username, n, cardid, caid,
@@ -181,12 +249,13 @@ cc_new_card(cclient_t *cc, uint16_t caid, uint32_t cardid, uint8_t *ua,
   }
 
   buf[0] = '\0';
-  for (i = j = c = 0, ep = pcard->cs_ra.providers; i < pcount; i++, ep++) {
+  i = start_index;
+  for (j = c = 0, ep = pcard->cs_ra.providers + start_index; i < pcount; i++, ep++) {
     if (psa && !cc_check_empty(ep->sa, 8)) {
       sa = ep->sa;
       if (buf[0]) {
-        tvhdebug(cc->cc_subsys, "%s: Providers: ID:%08x CAID:%04X:[%s]",
-                 cc->cc_name, cardid, caid, buf);
+        tvhdebug(cc->cc_subsys, "%s: Providers: ID:%08x CAID:%04X:[%s]%s",
+                 cc->cc_name, cardid, caid, buf, add ? " /ADD" : "");
         buf[0] = '\0';
         c = 0;
       }
@@ -196,19 +265,19 @@ cc_new_card(cclient_t *cc, uint16_t caid, uint32_t cardid, uint8_t *ua,
     } else {
       tvh_strlcatf(buf, sizeof(buf), c, "%s0x%06x", c > 0 ? "," : "", ep->id);
       if (++j > 5) {
-        tvhdebug(cc->cc_subsys, "%s: Providers: ID:%08x CAID:%04X:[%s]",
-                 cc->cc_name, cardid, caid, buf);
+        tvhdebug(cc->cc_subsys, "%s: Providers: ID:%08x CAID:%04X:[%s]%s",
+                 cc->cc_name, cardid, caid, buf, add ? " /ADD" : "");
         buf[0] = '\0';
         c = j = 0;
       }
     }
   }
   if (j > 0)
-    tvhdebug(cc->cc_subsys, "%s: Providers: ID:%08x CAID:%04X:[%s]",
-             cc->cc_name, cardid, caid, buf);
+    tvhdebug(cc->cc_subsys, "%s: Providers: ID:%08x CAID:%04X:[%s]%s",
+             cc->cc_name, cardid, caid, buf, add ? " /ADD" : "");
   if (allocated)
     LIST_INSERT_HEAD(&cc->cc_cards, pcard, cs_card);
-  if (cc->cc_emm && ua) {
+  if (cc->cc_emm && ua && ua_changed) {
     ua = pcard->cs_ra.ua;
     i = ua[0] || ua[1] || ua[2] || ua[3] ||
         ua[4] || ua[5] || ua[6] || ua[7];
@@ -342,12 +411,12 @@ cc_ecm_reply(cc_service_t *ct, cc_ecm_section_t *es,
   cc_ecm_pid_t *ep;
   cc_ecm_section_t *es2, es3;
   char chaninfo[128];
-  int i;
+  int i, resolved = 0;
   int64_t delay = (getfastmonoclock() - es->es_time) / 1000LL; // in ms
 
   es->es_pending = 0;
 
-  snprintf(chaninfo, sizeof(chaninfo), " (PID %d)", es->es_capid);
+  snprintf(chaninfo, sizeof(chaninfo), " (PID %d CAID %04X)", es->es_capid, es->es_caid);
 
   if (key_even == NULL || key_odd == NULL) {
 
@@ -358,6 +427,8 @@ cc_ecm_reply(cc_service_t *ct, cc_ecm_section_t *es,
     if(es->es_keystate == ES_FORBIDDEN)
       return; // We already know it's bad
 
+    resolved = descrambler_resolved((service_t *)t, (th_descrambler_t *)ct);
+
     if (es->es_nok >= CC_MAX_NOKS) {
       tvhdebug(cc->cc_subsys,
                "%s: Too many NOKs[%i] for service \"%s\"%s from %s",
@@ -366,7 +437,7 @@ cc_ecm_reply(cc_service_t *ct, cc_ecm_section_t *es,
       goto forbid;
     }
 
-    if (descrambler_resolved((service_t *)t, (th_descrambler_t *)ct)) {
+    if (resolved) {
       tvhdebug(cc->cc_subsys,
               "%s: NOK[%i] from %s: Already has a key for service \"%s\"",
                cc->cc_name, es->es_section, ct->td_nicename, t->s_dvb_svcname);
@@ -394,6 +465,9 @@ forbid:
       return;
     
     es->es_keystate = ES_FORBIDDEN;
+    if (resolved) /* another reader handles those requests */
+      return;
+
     LIST_FOREACH(ep, &ct->cs_ecm_pids, ep_link) {
       LIST_FOREACH(es2, &ep->ep_sections, es_link)
         if (es2->es_keystate == ES_UNKNOWN ||
@@ -748,23 +822,6 @@ cc_thread(void *aux)
 /**
  *
  */
-static int
-verify_provider(cc_card_data_t *pcard, uint32_t providerid)
-{
-  int i;
-
-  if(providerid == 0)
-    return 1;
-  
-  for(i = 0; i < pcard->cs_ra.providers_count; i++)
-    if(providerid == pcard->cs_ra.providers[i].id)
-      return 1;
-  return 0;
-}
-
-/**
- *
- */
 void
 cc_emm_set_allowed(cclient_t *cc, int emm_allowed)
 {
@@ -848,10 +905,10 @@ cc_table_input(void *opaque, int pid, const uint8_t *data, int len, int emm)
   elementary_stream_t *st;
   mpegts_service_t *t = (mpegts_service_t*)ct->td_service;
   cclient_t *cc = ct->cs_client;
-  int capid, section, ecm;
+  int section, ecm;
   cc_ecm_pid_t *ep;
   cc_ecm_section_t *es;
-  char chaninfo[32];
+  char chaninfo[40];
   cc_card_data_t *pcard = NULL;
   caid_t *c;
   uint16_t caid;
@@ -886,7 +943,7 @@ cc_table_input(void *opaque, int pid, const uint8_t *data, int len, int emm)
   if(ep == NULL) {
     if (ct->ecm_state == ECM_INIT) {
       // Validate prefered ECM PID
-      tvhdebug(cc->cc_subsys, "%s: ECM state INIT", cc->cc_name);
+      tvhdebug(cc->cc_subsys, "%s: ECM state INIT (PID %d)", cc->cc_name, pid);
 
       if(t->s_dvb_prefcapid_lock != PREFCAPID_OFF) {
         st = elementary_stream_find(&t->s_components, t->s_dvb_prefcapid);
@@ -933,13 +990,13 @@ found:
   provid = c->providerid;
 
   ecm = data[0] == 0x80 || data[0] == 0x81;
-  if (pcard->cs_ra.caid == 0x4a30) ecm |= data[0] == 0x50; /* DVN */
+  if (caid_is_dvn(caid)) ecm |= data[0] == 0x50; /* DVN */
 
   if (ecm) {
-    if ((pcard->cs_ra.caid >> 8) == 6) {
+    if (caid_is_irdeto(caid)) {
       ep->ep_last_section = data[5];
       section = data[4];
-    } else if (pcard->cs_ra.caid == 0xe00) {
+    } else if (caid_is_powervu(caid)) {
       ep->ep_last_section = 0;
       section = data[0] & 1;
     } else {
@@ -947,8 +1004,7 @@ found:
       section = 0;
     }
 
-    capid = pid;
-    snprintf(chaninfo, sizeof(chaninfo), " (PID %d)", capid);
+    snprintf(chaninfo, sizeof(chaninfo), " (PID %d CAID %04X)", pid, caid);
 
     LIST_FOREACH(es, &ep->ep_sections, es_link)
       if (es->es_section == section)
@@ -978,14 +1034,14 @@ found:
 
     es->es_caid = caid;
     es->es_provid = provid;
-    es->es_capid = capid;
+    es->es_capid = pid;
     es->es_pending = 1;
     es->es_resolved = 0;
 
     if (ct->cs_capid != 0xffff && ct->cs_capid > 0 &&
-       capid > 0 && ct->cs_capid != capid) {
-      tvhdebug(cc->cc_subsys, "%s: Filtering ECM (PID %d), using PID %d",
-               cc->cc_name, capid, ct->cs_capid);
+        pid > 0 && ct->cs_capid != pid) {
+      tvhdebug(cc->cc_subsys, "%s: Filtering ECM (PID %d CAID %04X), using PID %d",
+               cc->cc_name, pid, caid, ct->cs_capid);
       goto end;
     }
 

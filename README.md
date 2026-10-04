@@ -1,12 +1,6 @@
-![TVHeadend Logo](https://github.com/tvheadend/tvheadend/raw/master/src/webui/static/img/satip-icon120.png)
-Tvheadend
-========================================
-(c) 2006 - 2021 Tvheadend Foundation CIC
+<div align="center">
 
-Status
-------
-
-[![Build Status](https://travis-ci.org/tvheadend/tvheadend.svg?branch=master)](https://travis-ci.org/tvheadend/tvheadend)
+[![Build Status](https://github.com/tvheadend/tvheadend/actions/workflows/build-cloudsmith.yml/badge.svg?branch=master)](https://github.com/tvheadend/tvheadend/actions/workflows/build-cloudsmith.yml)
 [![Coverity Scan](https://scan.coverity.com/projects/2114/badge.svg)](https://scan.coverity.com/projects/2114)
 [![Github last commit](https://img.shields.io/github/last-commit/tvheadend/tvheadend)](https://github.com/tvheadend/tvheadend)
 
@@ -14,74 +8,84 @@ Status
 [![License](https://img.shields.io/badge/license-GPLv3-blue)](./LICENSE.md) 
 [![GitHub Activity](https://img.shields.io/github/commit-activity/y/tvheadend/tvheadend.svg?label=commits)](https://github.com/tvheadend/tvheadend/commits)
 
+[![Hosted By: Cloudsmith](https://img.shields.io/badge/Packages%20hosted%20by-cloudsmith-blue?logo=cloudsmith&style=flat-square)](https://cloudsmith.io/~tvheadend/repos/tvheadend/packages/)
 
-What it is
-----------
+</div>
+
+Tvheadend
+=========
+
+Tvheadend is the leading TV streaming server and Digital Video Recorder for Linux.
 
 ![tvheadend front page](https://github.com/tvheadend/tvheadend/raw/master/src/webui/static/img/epg.png)
 
-Tvheadend is a TV streaming server and digital video recorder.
-
 It supports the following inputs:
 
-  * DVB-C(2)
-  * DVB-T(2)
-  * DVB-S(2)
   * ATSC
-  * SAT>IP
+  * DVB-C(2)
+  * DVB-S(2)
+  * DVB-T(2)
   * HDHomeRun
   * IPTV
     * UDP
     * HTTP
+  * SAT>IP
+  * Unix Pipe
 
 It supports the following outputs:
 
+  * HTSP (native protocol)
   * HTTP
-  * HTSP (own protocol)
   * SAT>IP
 
-How to build for Linux
-----------------------
+Documentation
+-------------
+
+Tvheadend documentation can be found here: [https://docs.tvheadend.org](https://docs.tvheadend.org).
+
+Support
+-------
+
+Please triage issues and ask questions in the forum: [https://tvheadend.org](https://tvheadend.org) or use the `#hts` IRC channel on Libera.Chat to speak with project staff: [https://web.libera.chat/#hts](https://web.libera.chat/#hts).
+
+Please report triaged bugs via GitHub Issues. 
+
+Building for Linux
+------------------
 
 First you need to configure:
 
 	$ ./configure
 
-If any dependencies are missing the configure script will complain or attempt
+If build dependencies are missing the configure script will complain or attempt
 to disable optional features.
 
-Build the binary:
+To build the binary:
 
 	$ make
 
-After build, the binary resides in `build.linux` directory.
+After compiling the Tvheadend binary is in the `build.linux` directory.
 
-Thus, to start it, just type:
+To run the Tvheadend binary:
 
 	$ ./build.linux/tvheadend
 
 Settings are stored in `$HOME/.hts/tvheadend`.
 
-How to build for OS X
----------------------
+To install the newly compiled Tvheadend binary and associated files onto your system:
 
-Same build procedure applies to OS X.
-After build, the binary resides in `build.darwin` directory.
+	$ sudo make install
 
-Only network sources (IPTV, SAT>IP) are supported on OS X.
-There is no support for DVB USB sticks and PCI cards.
-Transcoding is currently not supported.
+Running on Linux
+----------------
 
-Packages
---------
+Instructions for popular distributions are in our public [documentation](https://docs.tvheadend.org/documentation/installation/linux).
 
-Install instructions for various distributions can be found at the [Wiki](https://tvheadend.org/projects/tvheadend/wiki/Download).
+Running in Docker
+-----------------
 
-Further information
--------------------
+Running in Docker can be as simple as:
 
-For more information about building, including generating packages, please visit:
-* https://tvheadend.org/projects/tvheadend/wiki/Building
-* https://tvheadend.org/projects/tvheadend/wiki/Packaging
-* https://tvheadend.org/projects/tvheadend/wiki/Git
-* https://tvheadend.org/projects/tvheadend/wiki/Internationalization
+	$ docker run --rm ghcr.io/tvheadend/tvheadend:latest
+
+See [README.Docker.md](README.Docker.md) for more details.

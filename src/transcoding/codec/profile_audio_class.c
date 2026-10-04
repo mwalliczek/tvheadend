@@ -87,10 +87,15 @@ static htsmsg_t *
 tvh_codec_audio_get_list_channel_layouts(TVHAudioCodec *self)
 {
     htsmsg_t *list = NULL, *map = NULL;
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    const AVChannelLayout *channel_layouts = self->channel_layouts;
+    const AVChannelLayout *l;
+#else
     const uint64_t *channel_layouts = self->channel_layouts;
     uint64_t l = 0;
-    char l_buf[16];
     int i;
+#endif
+    char l_buf[16];
 
     if (channel_layouts && (list = htsmsg_create_list())) {
         if (!(map = htsmsg_create_map())) {
@@ -98,6 +103,21 @@ tvh_codec_audio_get_list_channel_layouts(TVHAudioCodec *self)
             list = NULL;
         }
         else {
+#if LIBAVCODEC_VERSION_MAJOR > 59
+            l = channel_layouts;
+            ADD_ENTRY(list, map, s64, 0, str, AUTO_STR);
+            while (l->nb_channels != 0) {
+                if(av_channel_layout_describe(l, l_buf, sizeof(l_buf)) > 0) {
+                    if (!(map = htsmsg_create_map())) {
+                        htsmsg_destroy(list);
+                        list = NULL;
+                        break;
+                    }
+                    ADD_ENTRY(list, map, s64, l->u.mask, str, l_buf);
+                }
+                l++;
+            }
+#else
             ADD_ENTRY(list, map, s64, l, str, AUTO_STR);
             for (i = 0; (l = channel_layouts[i]); i++) {
                 if (l < INT64_MAX) {
@@ -106,11 +126,11 @@ tvh_codec_audio_get_list_channel_layouts(TVHAudioCodec *self)
                         list = NULL;
                         break;
                     }
-                    l_buf[0] = '\0';
                     av_get_channel_layout_string(l_buf, sizeof(l_buf), 0, l);
                     ADD_ENTRY(list, map, s64, l, str, l_buf);
                 }
             }
+#endif
         }
     }
     return list;
@@ -127,11 +147,22 @@ tvh_codec_profile_audio_is_copy(TVHAudioCodecProfile *self, tvh_ssc_t *ssc)
     // and sample_rate (48kHz) for input
     int ssc_channels = ssc->es_channels ? ssc->es_channels : 2;
     int ssc_sr = ssc->es_sri ? sri_to_rate(ssc->es_sri) : 48000;
+#if LIBAVCODEC_VERSION_MAJOR > 59
+    AVChannelLayout ch_layout = {0};
+    av_channel_layout_from_mask(&ch_layout, self->channel_layout);
+    if ((self->channel_layout && ssc_channels != ch_layout.nb_channels) ||
+        (self->sample_rate      && ssc_sr != self->sample_rate)) {
+        av_channel_layout_uninit(&ch_layout);
+        return 0;
+    }
+    av_channel_layout_uninit(&ch_layout);
+#else
     if ((self->channel_layout &&
          ssc_channels != av_get_channel_layout_nb_channels(self->channel_layout)) ||
         (self->sample_rate && ssc_sr != self->sample_rate)) {
         return 0;
     }
+#endif
     return 1;
 }
 
@@ -140,16 +171,19 @@ static int
 tvh_codec_profile_audio_open(TVHAudioCodecProfile *self, AVDictionary **opts)
 {
     if (self->sample_fmt != AV_SAMPLE_FMT_NONE) {
-        AV_DICT_SET_INT(opts, "sample_fmt", self->sample_fmt,
+        AV_DICT_SET_INT(LST_AUDIO, opts, "sample_fmt", self->sample_fmt,
                         AV_DICT_DONT_OVERWRITE);
     }
     if (self->sample_rate) {
-        AV_DICT_SET_INT(opts, "sample_rate", self->sample_rate,
+        AV_DICT_SET_INT(LST_AUDIO, opts, "sample_rate", self->sample_rate,
                         AV_DICT_DONT_OVERWRITE);
     }
     if (self->channel_layout) {
-        AV_DICT_SET_INT(opts, "channel_layout", self->channel_layout,
-                        AV_DICT_DONT_OVERWRITE);
+#if LIBAVCODEC_VERSION_MAJOR > 59
+        AV_DICT_SET_INT(LST_AUDIO, opts, "ch_layout_u_mask", self->channel_layout, AV_DICT_DONT_OVERWRITE);
+#else
+        AV_DICT_SET_INT(LST_AUDIO, opts, "channel_layout", self->channel_layout, AV_DICT_DONT_OVERWRITE);
+#endif
     }
     return 0;
 }

@@ -25,7 +25,7 @@
 #include "redblack.h"
 #include "access.h"
 
-#define TVH_API_VERSION 19
+#define TVH_API_VERSION 20
 
 /*
  * Command hook
@@ -67,6 +67,7 @@ void api_input_init         ( void );
 void api_service_init       ( void );
 void api_channel_init       ( void );
 void api_bouquet_init       ( void );
+void api_ratinglabel_init   ( void );
 void api_mpegts_init        ( void );
 void api_dab_init        ( void );
 void api_epg_init           ( void );

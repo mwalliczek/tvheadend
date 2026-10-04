@@ -42,7 +42,7 @@ iptv_udp_start
   /* Note: url->user is used for specifying multicast source address (SSM)
      here. The URL format is rtp://<srcaddr>@<grpaddr>:<port> */
   conn = udp_bind(LS_IPTV, im->mm_nicename, url->host, url->port, url->user,
-                  im->mm_iptv_interface, IPTV_BUF_SIZE, 4*1024);
+                  im->mm_iptv_interface, IPTV_BUF_SIZE, 4*1024, 0);
   if (conn == UDP_FATAL_ERROR)
     return SM_CODE_TUNING_FAILED;
   if (conn == NULL)
@@ -73,11 +73,8 @@ iptv_udp_stop
   im->im_data = NULL;
   tvh_mutex_unlock(&iptv_lock);
   udp_multirecv_free(&im->im_um);
-  if(&im->im_rtcp_info.um) {
-    udp_multirecv_free(&im->im_rtcp_info.um);
-  }
-  if(&im->im_temp_buffer)
-    sbuf_free(&im->im_temp_buffer);
+  udp_multirecv_free(&im->im_rtcp_info.um);
+  sbuf_free(&im->im_temp_buffer);
   tvh_mutex_lock(&iptv_lock);
 }
 
@@ -105,7 +102,7 @@ iptv_udp_read ( iptv_input_t *mi, iptv_mux_t *im )
   }
 
   if (im->mm_iptv_rtp_seq < 0xffff && im->mm_iptv_rtp_seq > 0x3ff) {
-    tvherror(LS_IPTV, "receving non-raw UDP data for %s!", im->mm_nicename);
+    tvherror(LS_IPTV, "receiving non-raw UDP data for %s!", im->mm_nicename);
     im->mm_iptv_rtp_seq = 0x10000; /* no further logs! */
   }
 

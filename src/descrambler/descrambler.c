@@ -232,13 +232,22 @@ descrambler_data_analyze(th_descrambler_runtime_t *dr,
 /*
  *
  */
+static inline void
+descrambler_ecmsec_unref(descrambler_ecmsec_t *des)
+{
+  int v = atomic_dec(&des->refcnt, 1);
+  assert(v > 0);
+  if (v == 1) {
+    free(des->last_data);
+    free(des);
+  }
+}
+
 static void
 descrambler_destroy_ecmsec(descrambler_ecmsec_t *des)
 {
   LIST_REMOVE(des, link);
-  free(des->last_data);
-  if (atomic_dec(&des->refcnt, 1) == 0)
-    free(des);
+  descrambler_ecmsec_unref(des);
 }
 
 static void
@@ -1301,6 +1310,8 @@ descrambler_table_callback
   int64_t clk, clk2, clk3;
   uint8_t ki;
   int i, j;
+  caid_t *ca;
+  elementary_stream_t *st;
 
   if (len < 6)
     return 0;
@@ -1318,6 +1329,7 @@ descrambler_table_callback
     if (des == NULL) {
       des = calloc(1, sizeof(*des));
       des->number = emm ? 0 : ptr[4];
+      atomic_add(&des->refcnt, 1);
       LIST_INSERT_HEAD(&ds->ecmsecs, des, link);
     }
     if (des->last_data == NULL || len != des->last_data_len ||
@@ -1334,9 +1346,9 @@ descrambler_table_callback
     } else {
       des->changed = des->last_data != NULL ? 1 : 0;
     }
-    atomic_add(&des->refcnt, 1);
     des->callback = ds->callback;
     des->opaque = ds->opaque;
+    atomic_add(&des->refcnt, 1);
     LIST_INSERT_HEAD(&sections, des, active_link);
   }
   tvh_mutex_unlock(&mt->mt_mux->mm_descrambler_lock);
@@ -1362,13 +1374,20 @@ descrambler_table_callback
               if (dr->dr_ecm_parity == ECM_PARITY_81EVEN_80ODD)
                 j ^= 1;
               dr->dr_ecm_start[j] = clk;
-              if (dr->dr_quick_ecm) {
-                ki = 1 << (j + 6); /* 0x40 = even, 0x80 = odd */
-                for (i = 0; i < DESCRAMBLER_MAX_KEYS; i++) {
-                  tk = &dr->dr_keys[i];
+              ki = 1 << (j + 6); /* 0x40 = even, 0x80 = odd */
+              for (i = 0; i < DESCRAMBLER_MAX_KEYS; i++) {
+                tk = &dr->dr_keys[i];
+                if (dr->dr_quick_ecm)
                   tk->key_valid &= ~ki;
-                  if (tk->key_pid == 0) break;
+                TAILQ_FOREACH(st, &mt->mt_service->s_components.set_filter, es_filter_link) {
+                  if (st->es_pid != mt->mt_pid) continue;
+                    LIST_FOREACH(ca, &st->es_caids, link) {
+                    if (ca->use == 0) continue;
+                    tk->key_csa.csa_ecm = (caid_is_videoguard(ca->caid) && (ptr[4] != 0 && (ptr[2] - ptr[4]) == 4)) ? 4 : 0;
+                    tvhtrace(LS_DESCRAMBLER, "key ecm=%X (caid=%04X)", tk->key_csa.csa_ecm, ca->caid);
+                  }
                 }
+                if (tk->key_pid == 0) break;
               }
             }
             tvhtrace(LS_DESCRAMBLER, "ECM message %02x:%02x (section %d, len %d, pid %d) for service \"%s\"",
@@ -1420,8 +1439,7 @@ descrambler_table_callback
 
   while ((des = LIST_FIRST(&sections)) != NULL) {
     LIST_REMOVE(des, active_link);
-    if (atomic_dec(&des->refcnt, 1) == 0)
-      free(des);
+    descrambler_ecmsec_unref(des);
   }
   return 0;
 }

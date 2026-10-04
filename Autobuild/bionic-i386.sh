@@ -1,3 +1,2 @@
-AUTOBUILD_CONFIGURE_EXTRA="${AUTOBUILD_CONFIGURE_EXTRA:-} --arch=i686"
-DEBDIST=bionic
-source Autobuild/debian.sh
+source Autobuild/i386.sh
+source Autobuild/bionic.sh
