@@ -25,7 +25,8 @@ RTLSDR = src/input/dab/rtlsdr
 
 TESTS = viterbiTest ficHandlerTest mp4processorTest firecheckTest protectionTest \
         sdr_dab_service_instance_Test input_sdrTest sdr_dab_basic_demodulationTest \
-        sdr_fifoTest charsetsTest fib-processorTest dab_motTest dab_epgTest dab_scanTest
+        sdr_fifoTest charsetsTest fib-processorTest dab_motTest dab_epgTest dab_scanTest \
+        phasereferenceTest
 
 .PHONY: tests clean
 
@@ -113,6 +114,9 @@ tests/input_sdrTest:	tests/input_sdrTest.o $(SDR_INPUT) tests/utilities.o tests/
 
 tests/sdr_dab_basic_demodulationTest:	tests/sdr_dab_basic_demodulationTest.o tests/sdr_dab_basic_demodulation.o \
 			$(SDR_INPUT) tests/utilities.o tests/fib-processor.o tests/tvh_thread.o tests/dab_service.o tests/charsets.o
+		gcc $(CFLAGS) $^ $(LIBS) -lfftw3f -o $@
+
+tests/phasereferenceTest:	tests/phasereferenceTest.o tests/phasereference.o tests/utilities.o
 		gcc $(CFLAGS) $^ $(LIBS) -lfftw3f -o $@
 
 tests/dab_motTest:	tests/dab_motTest.o tests/dab_mot.o tests/charsets.o tests/utilities.o

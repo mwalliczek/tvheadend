@@ -19,7 +19,6 @@ int readFromDevice(rtlsdr_frontend_t *lfe) {
 		}
 		if (sdr->ev[0].ptr != lfe) break;
 		if (read(lfe->lfe_control_pipe.rd, &b, 1) > 0 && cbCount(&sdr->fifo) > 0) {
-			tvhtrace(LS_RTLSDR, "fifo count %u", cbCount(&sdr->fifo));
 			return 1;
 		}
 	}

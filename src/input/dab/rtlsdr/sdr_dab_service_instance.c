@@ -212,7 +212,8 @@ void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t result
       pkt->a.pkt_channels = channels;
       pkt->a.pkt_sri = sp->CoreSrIndex;
       if (sp->sbrFlag) {
-        pkt->a.pkt_ext_sri = sp->ExtensionSrIndex;
+        /* stored + 1, zero means no SBR (see parser_latm.c) */
+        pkt->a.pkt_ext_sri = sp->ExtensionSrIndex + 1;
       }
   //    pkt->pkt_err = st->es_buf_a.sb_err;
       pkt->pkt_componentindex = 1;

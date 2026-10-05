@@ -36,12 +36,10 @@ void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
         return;
 
     // OK, now we have a full CIF
-    tvhtrace(LS_RTLSDR, "OK, now we have a full CIF");
     
     tvh_mutex_lock(&sdr->active_service_mutex);
     
     LIST_FOREACH(s, &sdr->active_service_instance, service_link) {
-        tvhtrace(LS_RTLSDR, "checking %s", s->dai_service ? s->dai_service->s_nicename : "data");
 	int startAddr	= s -> subChannel -> StartAddr;
 	int Length	= s -> subChannel -> Length;
 	if (Length > 0 && startAddr >= 0 &&

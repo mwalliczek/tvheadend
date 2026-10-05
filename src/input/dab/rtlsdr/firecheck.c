@@ -90,6 +90,5 @@ uint16_t istate;
 	           ((istate ^ state << 8) & 0xff00);
 	}
 
-	tvhdebug(LS_RTLSDR, "firecode_check %d", state);
 	return state == 0;
 }
