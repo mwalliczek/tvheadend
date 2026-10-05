@@ -196,10 +196,20 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, const float _Complex* v
     /**
     *	that gives us a basis for defining the threshold
     */
-    if (Max < 3 * sum / T_u) {
+    if (Max < 3 * sum / T_u)
         return  -fabsf(Max * T_u / sum) - 1;
-    } else
-        return maxIndex;
+    /**
+    *	In a single frequency network a later path (another transmitter)
+    *	may be stronger than the first one. Starting the FFT window at the
+    *	strongest path then lets the next symbol of the earlier path leak
+    *	into the window. Use the earliest path within the guard interval
+    *	before the strongest one that reaches a third of its magnitude;
+    *	the later paths fall into the cyclic prefix.
+    */
+    for (i = maxIndex > T_g ? maxIndex - T_g : 0; i < maxIndex; i++)
+        if (cabsf(sdr->phaseReference.fftBuffer[i]) >= Max / 3)
+            return i;
+    return maxIndex;
 }
 
 #define SEARCH_RANGE    (2 * 35)
