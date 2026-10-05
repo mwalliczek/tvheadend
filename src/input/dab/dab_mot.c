@@ -64,6 +64,12 @@ struct dab_mot_decoder {
   void               *opaque;
   dab_mot_stats_t     stats;
 
+  /* packet stream: packets continue across logical frames, the bytes of
+     an unfinished packet wait here for the next frame */
+  uint8_t            *stream;
+  size_t              stream_len, stream_size;
+  uint32_t            frames;
+
   /* packet to data group assembly */
   uint8_t            *dg;
   size_t              dg_len;
@@ -561,15 +567,28 @@ void dab_mot_decoder_feed_packets(dab_mot_decoder_t *dec,
                                   const uint8_t *data, size_t len)
 {
   size_t i = 0;
+  uint8_t *buf;
+
+  /* a packet (24 .. 96 bytes) can span logical frames, e.g. 96 byte
+     packets in an 8 kbit/s sub-channel (24 bytes per frame) */
+  if (dec->stream_len + len > dec->stream_size) {
+    dec->stream_size = dec->stream_len + len;
+    dec->stream = realloc(dec->stream, dec->stream_size);
+  }
+  memcpy(dec->stream + dec->stream_len, data, len);
+  len += dec->stream_len;
+  buf = dec->stream;
 
   while (i + 24 <= len) {
-    const uint8_t *p = data + i;
+    const uint8_t *p = buf + i;
     size_t size = ((p[0] >> 6) + 1) * 24;
     int ci, first, last, address, useful;
 
-    if (i + size > len || !crc_ok(p, size)) {
+    if (i + size > len)
+      break;                          /* rest of the packet in the next frame */
+    if (!crc_ok(p, size)) {
       dec->stats.packet_crc_errors++;
-      i += 24;                        /* resynchronise */
+      i += 24;                        /* resynchronise, packets are 24 byte aligned */
       continue;
     }
     i += size;
@@ -604,6 +623,16 @@ void dab_mot_decoder_feed_packets(dab_mot_decoder_t *dec,
       dab_mot_decoder_feed_datagroup(dec, dec->dg, dec->dg_len);
     }
   }
+  dec->stream_len = len - i;
+  memmove(dec->stream, buf + i, dec->stream_len);
+
+  /* about every 30 s (logical frames of 24 ms) */
+  if (++dec->frames % 1250 == 0)
+    tvhdebug(LS_DABEPG, "packet address %d: %u packets (%u CRC errors), "
+             "%u data groups (%u errors), %u objects",
+             dec->address, dec->stats.packets, dec->stats.packet_crc_errors,
+             dec->stats.datagroups, dec->stats.datagroup_errors,
+             dec->stats.objects);
 }
 
 /* ************************************************************************
@@ -642,6 +671,7 @@ void dab_mot_decoder_destroy(dab_mot_decoder_t *dec)
   segbuf_clear(&dec->dir_segs);
   free(dec->dir);
   free(dec->dg);
+  free(dec->stream);
   free(dec);
 }
 

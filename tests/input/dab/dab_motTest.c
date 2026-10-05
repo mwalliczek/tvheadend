@@ -46,7 +46,8 @@ static void check_epg_object(received_t *r) {
     free(pi);
 }
 
-/* feed the stream like the sub-channel decoder: packet aligned frames */
+/* feed the stream like the sub-channel decoder, one logical frame
+ * (3 * bitrate bytes, not necessarily packet aligned) at a time */
 static void feed(dab_mot_decoder_t *dec, const uint8_t *d, size_t len, size_t frame) {
     for (size_t i = 0; i < len; i += frame)
         dab_mot_decoder_feed_packets(dec, d + i, len - i < frame ? len - i : frame);
@@ -71,6 +72,18 @@ START_TEST(headerModeTest) {
     feed(dec, pk, len, 2 * 96);
     ck_assert_int_eq(r.count, 1);
     dab_mot_decoder_destroy(dec);
+
+    /* low bit rate sub-channels: the 96 byte packets span logical frames
+       (8 kbit/s: 24 bytes, 24 kbit/s: 72 bytes per frame) */
+    for (size_t frame = 24; frame <= 120; frame += 48) {
+        memset(&r, 0, sizeof(r));
+        dec = dab_mot_decoder_create(1, on_object, &r);
+        feed(dec, pk, len, frame);
+        ck_assert_msg(r.count == 1, "frame size %zu: %d objects", frame, r.count);
+        check_epg_object(&r);
+        ck_assert_int_eq(dab_mot_decoder_stats(dec)->packet_crc_errors, 0);
+        dab_mot_decoder_destroy(dec);
+    }
 
     /* packets for another address are ignored */
     memset(&r, 0, sizeof(r));
