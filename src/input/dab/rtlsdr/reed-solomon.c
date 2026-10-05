@@ -176,11 +176,11 @@ void destroy_reedSolomon(reedSolomon_t* res) {
 
 int16_t	reedSolomon_decode_rs (reedSolomon_t* res, uint8_t *data) {
 uint8_t syndromes [res->nroots];
-uint8_t Lambda	  [res->nroots];
+uint8_t Lambda	  [res->nroots + 1];
 uint16_t lambda_degree, omega_degree;
 uint8_t	rootTable [res->nroots];
 uint8_t	locTable  [res->nroots];
-uint8_t	omega	  [res->nroots];
+uint8_t	omega	  [res->nroots + 1];
 int16_t	rootCount;
 int16_t	i;
 //
@@ -214,11 +214,9 @@ int16_t	i;
 	                              galois_power2poly (res->myGalois, tmp));
 	      }
 	   }
-	   uint16_t tmp = galois_multiply_power (res->myGalois,
-	                              galois_multiply_power (res->myGalois,
-	                                     rootTable [j],
-	                                     galois_divide_power (res->myGalois, res->fcr, 1)),
-	                              res->codeLength);
+//	num2 = alpha ** (root * (fcr - 1)): a product of the exponents
+	   uint16_t tmp = (rootTable [j] *
+	                     (res->fcr + res->codeLength - 1)) % res->codeLength;
 	   num2	= galois_power2poly (res->myGalois, tmp);
 	   den = 0;
 /*
@@ -269,6 +267,31 @@ int16_t	ret;
 	   rf [i] = r [i - cutlen];
 
 	ret = reedSolomon_decode_rs (res, rf);
+	for (i = cutlen; i < res->codeLength - res->nroots; i++)
+	   d [i - cutlen] = rf [i];
+	return ret;
+}
+
+/*
+ * Like reedSolomon_dec, but for a shortened code a correction in the
+ * (virtual, zero) padding is a miscorrection: report it as uncorrectable
+ * instead of returning wrong data. 0 .. nroots / 2: corrected symbols.
+ */
+int16_t reedSolomon_dec_checked (reedSolomon_t* res, const uint8_t *r, uint8_t *d, int16_t cutlen) {
+uint8_t rf [res->codeLength];
+int16_t i;
+int16_t	ret;
+
+	memset (rf, 0, cutlen * sizeof (rf [0]));
+	for (i = cutlen; i < res->codeLength; i++)
+	   rf [i] = r [i - cutlen];
+
+	ret = reedSolomon_decode_rs (res, rf);
+	if (ret < 0)
+	   return ret;
+	for (i = 0; i < cutlen; i++)
+	   if (rf [i] != 0)
+	      return -1;
 	for (i = cutlen; i < res->codeLength - res->nroots; i++)
 	   d [i - cutlen] = rf [i];
 	return ret;
@@ -352,12 +375,14 @@ int16_t	deg_lambda	= 0;
 	   Corrector [0] = 0;
 
 //	and compute a new error
-	   error	= syndromes [K];	
-	   for (i = 1; i <= K; i ++)  {
-	      error = galois_add_poly (error, galois_multiply_poly (res->myGalois, syndromes [K - i],
+	   K += 1;
+	   if (K > res->nroots)
+	      break;
+	   error	= syndromes [K - 1];
+	   for (i = 1; i < K && i < res->nroots; i ++)  {
+	      error = galois_add_poly (error, galois_multiply_poly (res->myGalois, syndromes [K - 1 - i],
 	                                                     Lambda [i]));
 	   }
-	   K += 1;
  	} // end of Berlekamp loop
 
 	for (i = 0; i < res->nroots; i ++) {
@@ -365,6 +390,7 @@ int16_t	deg_lambda	= 0;
 	      deg_lambda = i;
 	   Lambda [i] = galois_poly2power (res->myGalois, Lambda [i]);
 	}
+	Lambda [res->nroots] = res->codeLength;	// zero, the array has nroots + 1 entries
 	return deg_lambda;
 }
 //

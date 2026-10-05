@@ -39,6 +39,7 @@ reedSolomon_t* init_reedSolomon(uint16_t symsize,
 	                          uint16_t prim,
 	                          uint16_t nroots);
 int16_t	reedSolomon_dec (reedSolomon_t* res, const uint8_t *r, uint8_t *d, int16_t cutlen);
+int16_t	reedSolomon_dec_checked (reedSolomon_t* res, const uint8_t *r, uint8_t *d, int16_t cutlen);
 
 void destroy_reedSolomon(reedSolomon_t* res);
 
