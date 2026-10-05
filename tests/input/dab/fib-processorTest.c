@@ -286,12 +286,12 @@ START_TEST(fecSchemeTest) {
     put(&f, 2, 1);
     put(&f, 6, 4);
     put(&f, 2, 1);
-    dei->mmi_ensemble->subChannels[10].SubChId = 3;
-    dei->mmi_ensemble->subChannels[11].SubChId = 4;
     process(&f);
-    ck_assert_int_eq(dei->mmi_ensemble->subChannels[10].FEC_scheme, 1);
+    /* the sub-channel table is indexed by SubChId (as for FIG 0/1) */
+    ck_assert_int_eq(dei->mmi_ensemble->subChannels[3].FEC_scheme, 1);
     /* the last entry of the FIG must not be lost */
-    ck_assert_int_eq(dei->mmi_ensemble->subChannels[11].FEC_scheme, 1);
+    ck_assert_int_eq(dei->mmi_ensemble->subChannels[4].FEC_scheme, 1);
+    ck_assert_int_eq(dei->mmi_ensemble->subChannels[5].FEC_scheme, 0);
 } END_TEST
 
 START_TEST(oversizedFigTest) {

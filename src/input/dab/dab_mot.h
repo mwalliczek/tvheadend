@@ -65,11 +65,17 @@ typedef struct dab_mot_stats {
   uint32_t datagroups;
   uint32_t datagroup_errors;
   uint32_t objects;
+  uint32_t fec_frames;
+  uint32_t fec_bytes_corrected;
+  uint32_t fec_rows_failed;
 } dab_mot_stats_t;
 
 dab_mot_decoder_t *dab_mot_decoder_create
   (uint16_t packet_address, dab_mot_object_cb_t cb, void *opaque);
 void dab_mot_decoder_destroy(dab_mot_decoder_t *dec);
+
+/* the sub-channel uses packet mode FEC (FIG 0/14 FEC scheme 1) */
+void dab_mot_decoder_set_fec(dab_mot_decoder_t *dec, int fec);
 
 /* one logical frame (24 ms) of a packet mode sub-channel, as bytes */
 void dab_mot_decoder_feed_packets

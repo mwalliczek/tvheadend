@@ -80,11 +80,23 @@ sdr_dab_data_instance_create(dab_ensemble_t *mm, int subChId, int packetAddress,
                              dab_mot_object_cb_t cb, void *opaque)
 {
     sdr_dab_service_instance_t* res = sdr_dab_instance_create(&mm->subChannels[subChId], subChId);
+    subChannel *sc;
+    char prot[16];
+
     if (res == NULL)
         return NULL;
+    sc = res->subChannel;
     res->mot = dab_mot_decoder_create(packetAddress, cb, opaque);
-    res->packetBytes = calloc(3 * res->subChannel->BitRate, sizeof(uint8_t));
-    tvhdebug(LS_RTLSDR, "decoding packet address %d in subchannel %d", packetAddress, subChId);
+    dab_mot_decoder_set_fec(res->mot, sc->FEC_scheme == 1);
+    res->packetBytes = calloc(3 * sc->BitRate, sizeof(uint8_t));
+    if (sc->shortForm)
+        snprintf(prot, sizeof(prot), "UEP %d", sc->protLevel);
+    else
+        snprintf(prot, sizeof(prot), "EEP %d-%c", (sc->protLevel & 3) + 1,
+                 (sc->protLevel & 4) ? 'B' : 'A');
+    tvhinfo(LS_DABEPG, "decoding packet address %d in subchannel %d "
+            "(%d kbit/s, %s, %d CUs, FEC scheme %d)", packetAddress, subChId,
+            sc->BitRate, prot, sc->Length, sc->FEC_scheme);
     return res;
 }
 
@@ -139,6 +151,8 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
             sds->packetBytes[i] = (b[0] << 7) | (b[1] << 6) | (b[2] << 5) | (b[3] << 4) |
                                   (b[4] << 3) | (b[5] << 2) | (b[6] << 1) | b[7];
         }
+        /* FIG 0/14 may arrive after the decoder was started */
+        dab_mot_decoder_set_fec(sds->mot, sds->subChannel->FEC_scheme == 1);
         dab_mot_decoder_feed_packets(sds->mot, sds->packetBytes, 3 * sds->subChannel->BitRate);
     }
 }
