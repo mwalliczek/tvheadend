@@ -80,6 +80,27 @@ START_TEST(estimateOffsetTest) {
     }
 } END_TEST
 
+/* a phase reference symbol received with an RTL-SDR stick (T_s samples,
+ * buffer as handed over by the demodulator, still 9 carriers off) */
+START_TEST(recordedSymbolTest) {
+    float _Complex in[T_s], corrected[T_s];
+    FILE *pFile = fopen("input/dab/rtlsdr/phasereferenceTest/phasereferenceInput", "rb");
+    int n, offset;
+
+    ck_assert_ptr_ne(pFile, NULL);
+    ck_assert_int_eq(fread(in, sizeof(float _Complex), T_s, pFile), T_s);
+    fclose(pFile);
+
+    /* the coarse estimation finds the carrier offset */
+    offset = phaseReferenceEstimateOffset(&sdr, &in[472]);
+    ck_assert_int_eq(offset, -9);
+
+    /* corrected, the first (and only) path starts at 472 */
+    for (n = 0; n < T_s; n++)
+        corrected[n] = in[n] * cexpf(-I * 2 * M_PI * offset * n / T_u);
+    ck_assert_int_eq(phaseReferenceFindIndex(&sdr, corrected), 472);
+} END_TEST
+
 static Suite *phasereference_suite(void) {
     Suite *s = suite_create("phasereference");
     TCase *tc_core = tcase_create("Core");
@@ -87,6 +108,7 @@ static Suite *phasereference_suite(void) {
     tcase_add_test(tc_core, findIndexSfnTest);
     tcase_add_test(tc_core, findIndexWeakFirstPathTest);
     tcase_add_test(tc_core, estimateOffsetTest);
+    tcase_add_test(tc_core, recordedSymbolTest);
     suite_add_tcase(s, tc_core);
     return s;
 }
