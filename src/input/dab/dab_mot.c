@@ -549,6 +549,8 @@ void dab_mot_decoder_feed_datagroup(dab_mot_decoder_t *dec,
       tid = (dg[i + 1] << 8) | dg[i + 2];
     i += 1 + li;
   }
+  tvhtrace(LS_DABEPG, "data group type %d, transport id %d, segment %d%s, %zu bytes",
+           type, tid, segno, last ? " (last)" : "", len - i);
   /* MOT always uses segmentation and transport ids */
   if (!seg || !tidflag)
     return;
@@ -556,6 +558,7 @@ void dab_mot_decoder_feed_datagroup(dab_mot_decoder_t *dec,
   return;
 
 fail:
+  tvhtrace(LS_DABEPG, "invalid data group (%zu bytes)", len);
   dec->stats.datagroup_errors++;
 }
 
@@ -626,8 +629,8 @@ void dab_mot_decoder_feed_packets(dab_mot_decoder_t *dec,
   dec->stream_len = len - i;
   memmove(dec->stream, buf + i, dec->stream_len);
 
-  /* about every 30 s (logical frames of 24 ms) */
-  if (++dec->frames % 1250 == 0)
+  /* after about 6 s and then every 30 s (logical frames of 24 ms) */
+  if (++dec->frames % 1250 == 250)
     tvhdebug(LS_DABEPG, "packet address %d: %u packets (%u CRC errors), "
              "%u data groups (%u errors), %u objects",
              dec->address, dec->stats.packets, dec->stats.packet_crc_errors,
