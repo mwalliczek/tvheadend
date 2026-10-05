@@ -282,7 +282,7 @@ int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t f
 #endif
         } else {
             mp4processor->writeCb(NULL, 0, &streamParameters, mp4processor->context);
-            tvherror(LS_RTLSDR, "CRC failure with dab+ frame should not happen");
+            tvhdebug(LS_RTLSDR, "mp4 AU %d of %d: CRC error, frame dropped (reception)", i + 1, num_aus);
         }
     }
     return 1;
