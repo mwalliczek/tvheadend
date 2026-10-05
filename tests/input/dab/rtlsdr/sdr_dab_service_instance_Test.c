@@ -7,6 +7,8 @@
 
 void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context);
 
+extern streaming_message_t *streaming_last_delivered;
+
 static dab_ensemble_t *ensemble;
 static dab_service_t *service;
 
@@ -60,6 +62,41 @@ START_TEST(frameDurationTest) {
             ck_assert_int_eq(sds->dts, 90000 * 120 / 1000);
         }
     }
+    sdr_dab_service_instance_destroy(sds);
+} END_TEST
+
+START_TEST(audioParametersTest) {
+    /* DAB+ with SBR: 24 kHz AAC core, 48 kHz output. The extension rate
+     * index is stored + 1 (0 = no SBR), like the LATM parser does, as
+     * the global header and the MKV muxer subtract one again */
+    static const uint8_t au[16] = { 0 };
+    sdr_dab_service_instance_t* sds = sdr_dab_service_instance_create(service);
+    stream_parms sp;
+    th_pkt_t *pkt;
+
+    memset(&sp, 0, sizeof(sp));
+    sp.dacRate = 1;
+    sp.sbrFlag = 1;
+    sp.aacChannelMode = 1;
+    sp.CoreSrIndex = 6;         /* 24 kHz */
+    sp.CoreChConfig = 2;
+    sp.ExtensionSrIndex = 3;    /* 48 kHz */
+    sdr_dab_service_instance_dataCallback(au, sizeof(au), &sp, sds);
+    ck_assert_ptr_ne(streaming_last_delivered, NULL);
+    pkt = streaming_last_delivered->sm_data;
+    ck_assert_int_eq(pkt->a.pkt_sri, 6);
+    ck_assert_int_eq(pkt->a.pkt_ext_sri, 3 + 1);
+    ck_assert_int_eq(pkt->a.pkt_channels, 2);
+
+    /* without SBR there is no extension rate */
+    sp.sbrFlag = 0;
+    sp.CoreSrIndex = 3;         /* 48 kHz */
+    sdr_dab_service_instance_dataCallback(au, sizeof(au), &sp, sds);
+    pkt = streaming_last_delivered->sm_data;
+    ck_assert_int_eq(pkt->a.pkt_sri, 3);
+    ck_assert_int_eq(pkt->a.pkt_ext_sri, 0);
+
+    streaming_service_deliver(NULL, NULL);
     sdr_dab_service_instance_destroy(sds);
 } END_TEST
 
@@ -204,6 +241,7 @@ static Suite *sdr_dab_service_instance_suite(void) {
     tcase_add_test(tc_core, createDestroyTest);
     tcase_add_test(tc_core, invalidSubchannelTest);
     tcase_add_test(tc_core, frameDurationTest);
+    tcase_add_test(tc_core, audioParametersTest);
     tcase_add_test(tc_core, mscOutOfRangeTest);
     tcase_add_test(tc_core, packetModeEndToEndTest);
     suite_add_tcase(s, tc_core);

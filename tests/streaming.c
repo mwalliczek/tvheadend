@@ -33,9 +33,18 @@ streaming_message_t* streaming_msg_clone(streaming_message_t *src) {
     return NULL;
 }
 
+/* the last message delivered by a service, for the tests to inspect */
+streaming_message_t *streaming_last_delivered;
+
 void
 streaming_service_deliver(service_t *t, streaming_message_t *sm)
 {
+  if (streaming_last_delivered) {
+    if (streaming_last_delivered->sm_type == SMT_PACKET)
+      pkt_ref_dec(streaming_last_delivered->sm_data);
+    free(streaming_last_delivered);
+  }
+  streaming_last_delivered = sm;
 }
 
 const char *
