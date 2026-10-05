@@ -89,10 +89,8 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
             sdr->fibCRCtotal = 0;
         }
         if (!check_CRC_bits(p, 256)) {
-            tvhtrace(LS_RTLSDR, "ficHandler checkCRC failed %d %d", i, ficno);
             continue;
         }
-        tvhtrace(LS_RTLSDR, "ficHandler checkCRC success %d %d", i, ficno);
         process_FIB(sdr->mmi, p, ficno);
         sdr->fibCRCsuccess++;
 #ifdef TRACE_FIC_HANDLER

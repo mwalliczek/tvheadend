@@ -412,7 +412,6 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 {
 	rtlsdr_frontend_t *lfe = ctx;
 	struct sdr_state_t *sdr = &lfe->sdr;
-	tvhtrace(LS_RTLSDR, "callback with %u bytes, count %u", len, cbCount(&sdr->fifo));
 	if (!ctx) {
 		return;
 	}

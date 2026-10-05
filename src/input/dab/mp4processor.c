@@ -119,7 +119,6 @@ void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V) {
     //	Note that the packing in the entry vector is still one bit
     //	per Byte, nbits is the number of Bits (i.e. containing bytes)
 
-    tvhtrace(LS_RTLSDR, "mp4Processor_addtoFrame");
 
 
     for (i = 0; i < nbits / 8; i++) {	// in bytes
@@ -137,7 +136,7 @@ void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V) {
         if (++mp4processor->frameCount >= 50) {
             mp4processor->frameCount = 0;
             mp4processor->frame_quality = 2 * (50 - mp4processor->frameErrors);
-            tvhtrace(LS_RTLSDR, "frame_quality: %d", mp4processor->frame_quality);
+            tvhtrace(LS_RTLSDR, "mp4 frame_quality: %d", mp4processor->frame_quality);
             //	      if (mp4processor->mscQuality != NULL)
             //	         mscQuality (frame_quality, rs_quality, aac_quality, ctx);
             mp4processor->frameErrors = 0;
@@ -158,7 +157,7 @@ void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V) {
         } else {	// virtual shift to left in block sizes
             mp4processor->blocksInBuffer = 4;
             mp4processor->frameErrors++;
-            tvhtrace(LS_RTLSDR, "frameErrors++");
+            tvhtrace(LS_RTLSDR, "mp4 frameErrors++");
         }
     }
 }
