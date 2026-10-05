@@ -16,13 +16,16 @@
 #define DECISIONTYPE_BITSIZE 8
 #define COMPUTETYPE uint32_t
 
-//decision_t is a BIT vector
+//decision_t is a BIT vector, one per trellis stage (8 bytes). The
+//kernels write it byte wise, so it needs no SIMD alignment; an
+//aligned (16) here made every second element of the array misaligned
+//(sizeof stays 8)
 typedef union {
 	DECISIONTYPE t[NUMSTATES/DECISIONTYPE_BITSIZE];
 	uint32_t w[NUMSTATES/32];
 	uint16_t s[NUMSTATES/16];
 	uint8_t c[NUMSTATES/8];
-} decision_t __attribute__ ((aligned (16)));
+} decision_t;
 
 typedef union {
 	COMPUTETYPE t[NUMSTATES];

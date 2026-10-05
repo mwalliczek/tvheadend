@@ -131,10 +131,10 @@ uint32_t	size;
 
 	vp->frameBits		= wordlength;
 
-// B I G N O T E	The spiral code uses (wordLength + (VITERBI_K - 1) * sizeof ...
-// However, the application then crashes, so something is not OK
-// By doubling the size, the problem disappears. It is not solved though
-// and not further investigation.
+// The buffers are twice the size needed. That used to hide the
+// kernels being called with the number of trellis stages instead of
+// the number of iterations (they decode two stages per iteration),
+// which made them read and write twice as far.
 #ifdef __MINGW32__
 	size = 2 * ((wordlength + (VITERBI_K - 1)) / 8 + 1 + 16) & ~0xF;
 	vp->data	= (uint8_t *)_aligned_malloc (size, 16);
@@ -279,7 +279,9 @@ int32_t s;
 	for (s = 0; s < nbits; s++)
 	   memset (d + s, 0, sizeof(decision_t));
 
-	FULL_SPIRAL (nbits,
+	/* the kernels decode two trellis stages per iteration (8 symbols,
+	   two decision_t); nbits is always even */
+	FULL_SPIRAL ((nbits + 1) / 2,
 	             (SPIRAL_COMPUTETYPE *)vp -> new_metrics -> t,
 	             (SPIRAL_COMPUTETYPE *)vp -> old_metrics -> t,
 	             (SPIRAL_COMPUTETYPE *)syms,
