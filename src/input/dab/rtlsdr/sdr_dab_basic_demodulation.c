@@ -3,6 +3,8 @@
 #include "tvheadend.h"
 #include "rtlsdr_private.h"
 #include "phasereference.h"
+
+#define WINDOW_MARGIN 16
 #include "ofdmDecoder.h"
 #include "sdr_dab_basic_demodulation.h"
 
@@ -140,6 +142,12 @@ void *rtlsdr_demod_thread_fn(void *arg)
 		//	Once here, we are synchronized, we need to copy the data we
 		//	used for synchronization for block 0
 
+		/* start the FFT windows a little into the cyclic prefix: the sample
+		   clock offset of the stick moves the symbols by up to ~0.15
+		   samples per symbol (~10 per frame at 50 ppm), which must not
+		   push the window into the next symbol */
+		if (startIndex >= WINDOW_MARGIN)
+			startIndex -= WINDOW_MARGIN;
 		memmove(ofdmBuffer, &ofdmBuffer[startIndex],
 			(T_u - startIndex) * sizeof(float _Complex));
 		int ofdmBufferIndex = T_u - startIndex;
