@@ -78,11 +78,11 @@ const idclass_t rtlsdr_frontend_dab_class =
 			.type = PT_INT,
 			.id = "gain",
 			.name = N_("Tuner gain"),
-			.desc = N_("Gain of the tuner. Automatic lets the tuner "
-			           "adjust it; for weak signals a high fixed gain "
-			           "(e.g. 40 dB or more) can be better, for strong "
-			           "ones a lower gain avoids overload. Applied when "
-			           "the next ensemble is tuned."),
+			.desc = N_("Gain of the tuner, default 49.6 dB (maximum) "
+			           "for weak signals. Close to a transmitter a lower "
+			           "gain avoids overload; Automatic lets the tuner "
+			           "adjust it. Applied when the next ensemble is "
+			           "tuned."),
 			.off = offsetof(rtlsdr_frontend_t, lfe_gain),
 			.list = rtlsdr_frontend_class_gain_list,
 		},
@@ -749,7 +749,9 @@ rtlsdr_frontend_create
 		tvhtrace(LS_RTLSDR, "calloc failed!");
 		return NULL;
 	}
-	lfe->lfe_gain = -1;		/* default: automatic, overwritten by the config */
+	/* default: maximum gain (R820T), the tuner AGC did worse in field
+	   tests; overwritten by the config */
+	lfe->lfe_gain = 496;
 	lfe = (rtlsdr_frontend_t *) dab_input_create0((dab_input_t *)lfe, idc, uuid, conf);
 	if (!lfe) {
 		tvhtrace(LS_RTLSDR, "rtlsdr_frontend_create0 failed!");
