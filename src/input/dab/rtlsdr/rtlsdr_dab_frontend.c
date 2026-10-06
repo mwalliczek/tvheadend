@@ -538,18 +538,26 @@ rtlsdr_frontend_monitor(void *aux)
 
 		mmi->tii_stats.signal = lfe->sdr.sLevel * 32768.0;
 
+		/* channel bit errors since the last status: BER = ec_bit / tc_bit */
+		tvh_mutex_lock(&mmi->tii_stats_mutex);
+		mmi->tii_stats.tc_bit = atomic_exchange(&sdr->berBits, 0);
+		mmi->tii_stats.ec_bit = atomic_exchange(&sdr->berErrors, 0);
+		tvh_mutex_unlock(&mmi->tii_stats_mutex);
+
 		/* Send message */
 		sigstat.status_text = signal2str(status);
 		sigstat.snr = mmi->tii_stats.snr;
 		sigstat.signal = mmi->tii_stats.signal;
-/*		sigstat.ber = mmi->tii_stats.ber;
-		sigstat.unc = atomic_get(&mmi->tii_stats.unc);*/
+		sigstat.ber = mmi->tii_stats.ber;
+		sigstat.unc = atomic_get(&mmi->tii_stats.unc);
 		sigstat.signal_scale = mmi->tii_stats.signal_scale;
 		sigstat.snr_scale = mmi->tii_stats.snr_scale;
-/*		sigstat.ec_bit = mmi->tii_stats.ec_bit;
+		tvh_mutex_lock(&mmi->tii_stats_mutex);
+		sigstat.ec_bit = mmi->tii_stats.ec_bit;
 		sigstat.tc_bit = mmi->tii_stats.tc_bit;
 		sigstat.ec_block = mmi->tii_stats.ec_block;
-		sigstat.tc_block = mmi->tii_stats.tc_block; */
+		sigstat.tc_block = mmi->tii_stats.tc_block;
+		tvh_mutex_unlock(&mmi->tii_stats_mutex);
 		memset(&sm, 0, sizeof(sm));
 		sm.sm_type = SMT_SIGNAL_STATUS;
 		sm.sm_data = &sigstat;

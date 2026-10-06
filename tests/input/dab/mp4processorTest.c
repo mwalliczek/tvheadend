@@ -33,6 +33,10 @@ START_TEST(mp4processorTest) {
     ck_assert_int_eq(myResultLength, 361);
     ck_assert_int_eq(memcmpResult, 0);
     printf("myResult %p, myResultLength %d\n", myResult, myResultLength);
+    /* status counters: the AUs of the superframe, no errors */
+    ck_assert_int_gt(mp4->statAUs, 0);
+    ck_assert_int_eq(mp4->statAUErrors, 0);
+    ck_assert_int_eq(mp4->statRSUncorrectable, 0);
     
     destroy_mp4processor(mp4);
 } END_TEST

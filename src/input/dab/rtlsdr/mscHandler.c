@@ -50,6 +50,7 @@ void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
             tvhtrace(LS_RTLSDR, "msc -> %s", s->dai_service ? s->dai_service->s_nicename : "data");
 
             sdr_dab_service_instance_process_data(s, myBegin);
+            sdr_dab_service_instance_stats(s, sdr);
         }
     }
 

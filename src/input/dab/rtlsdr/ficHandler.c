@@ -71,6 +71,9 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
 
     tvhtrace(LS_RTLSDR, "process_ficInput started: %d", ficno);
     protection_deconvolve(sdr->protection, sdr->ofdm_input, sdr->bitBuffer_out);
+    atomic_add(&sdr->berBits, sdr->protection->bits);
+    atomic_add(&sdr->berErrors, sdr->protection->bitErrors);
+    sdr->protection->bits = sdr->protection->bitErrors = 0;
 
     /**
     *	each of the fib blocks is protected by a crc

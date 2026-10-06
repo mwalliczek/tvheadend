@@ -88,6 +88,61 @@ START_TEST(eepProtectionTest) {
     protection_destroy(protection);
 } END_TEST
 
+/* textbook DAB encoder (EN 300 401 11.1.1): generators 133, 171, 145, 133
+ * (octal), the current bit is the MSB of the shift register */
+static void encode(const uint8_t *u, int n, uint8_t *c) {
+    static const int g[4] = { 0133, 0171, 0145, 0133 };
+    int reg = 0;
+    for (int i = 0; i < n + 6; i++) {
+        reg = (reg >> 1) | ((i < n ? u[i] : 0) << 6);
+        for (int k = 0; k < 4; k++)
+            c[4 * i + k] = __builtin_parity(reg & g[k]);
+    }
+}
+
+/* the channel bit errors are counted by re-encoding the decoded bits */
+START_TEST(bitErrorCountTest) {
+    protection_t *p;
+    uint8_t *u, *c, *out;
+    int16_t *in;
+    int i, n = 0, flipped = 0;
+
+    initConstViterbi768();
+    p = eep_protection_init(64, 2);         /* EEP 3-A, 64 kbit/s */
+    u = malloc(p->outSize);
+    c = malloc(p->indexTableSize);
+    out = malloc(p->outSize);
+    in = calloc(p->indexTableSize, sizeof(int16_t));
+    srand(5);
+    for (i = 0; i < p->outSize; i++)
+        u[i] = rand() & 1;
+    encode(u, p->outSize, c);
+    for (i = 0; i < p->indexTableSize; i++)
+        if (p->indexTable[i])
+            in[n++] = c[i] ? 100 : -100;
+
+    protection_deconvolve(p, in, out);
+    for (i = 0; i < p->outSize; i++)
+        ck_assert_int_eq(out[i] ^ p->disperseVector[i], u[i]);
+    ck_assert_int_eq(p->bits, n);
+    ck_assert_int_eq(p->bitErrors, 0);
+
+    /* sparse errors are corrected and counted */
+    for (i = 7; i < n; i += 97, flipped++)
+        in[i] = -in[i];
+    protection_deconvolve(p, in, out);
+    for (i = 0; i < p->outSize; i++)
+        ck_assert_int_eq(out[i] ^ p->disperseVector[i], u[i]);
+    ck_assert_int_eq(p->bits, 2 * n);
+    ck_assert_int_eq(p->bitErrors, flipped);
+
+    free(u);
+    free(c);
+    free(out);
+    free(in);
+    protection_destroy(p);
+} END_TEST
+
 static Suite *protection_suite(void) {
     Suite *s = suite_create("protection");
     TCase *tc_core = tcase_create("Core");
@@ -96,6 +151,7 @@ static Suite *protection_suite(void) {
     tcase_add_test(tc_core, uepSizesTest);
     tcase_add_test(tc_core, eepSizesTest);
     tcase_add_test(tc_core, highBitrateDeconvolveTest);
+    tcase_add_test(tc_core, bitErrorCountTest);
     suite_add_tcase(s, tc_core);
     return s;
 }

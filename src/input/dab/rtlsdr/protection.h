@@ -34,6 +34,10 @@ struct protection
     int16_t*	viterbiBlock;
     uint8_t*	indexTable;
     uint8_t*    disperseVector;
+    /* channel bit errors: received hard decisions compared with the
+       re-encoded Viterbi output, summed up until read */
+    uint32_t    bits;
+    uint32_t    bitErrors;
 };
 
 protection_t* protection_init(int16_t bitRate);

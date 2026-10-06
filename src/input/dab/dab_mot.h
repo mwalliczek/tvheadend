@@ -68,6 +68,7 @@ typedef struct dab_mot_stats {
   uint32_t fec_frames;
   uint32_t fec_bytes_corrected;
   uint32_t fec_rows_failed;
+  uint32_t continuity_errors;           /* packets lost (continuity index) */
 } dab_mot_stats_t;
 
 dab_mot_decoder_t *dab_mot_decoder_create

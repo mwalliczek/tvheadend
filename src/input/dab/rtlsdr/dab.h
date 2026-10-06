@@ -86,6 +86,9 @@ struct sdr_dab_service_instance
 
         dab_mot_decoder_t*	mot;            /* packet mode data (EPG) */
         uint8_t*	packetBytes;
+        dab_mot_stats_t	motStats;       /* last values reported */
+
+        uint32_t	decodedBytes;   /* since the last report */
 };
 
 struct sdr_state_t {
@@ -132,6 +135,10 @@ struct sdr_state_t {
 	int16_t		cifVector[55296];
 	
 	protection_t*	protection;
+
+	/* channel bit errors (FIC and sub-channels) since the last status */
+	volatile int	berBits;
+	volatile int	berErrors;
 
 #ifdef TRACE_RTLSDR_RAW
  	FILE*		traceFile;
@@ -187,5 +194,6 @@ void sdr_init(struct sdr_state_t *sdr);
 void sdr_destroy(struct sdr_state_t *sdr);
 
 void sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int16_t *v);
+void sdr_dab_service_instance_stats(sdr_dab_service_instance_t *sds, struct sdr_state_t *sdr);
 
 #endif

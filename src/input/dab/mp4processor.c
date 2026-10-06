@@ -157,6 +157,7 @@ void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V) {
         if (sync) {
             /* AUs in uncorrectable RS columns fail their own CRC, the
                others are still good and the superframe sync stays */
+            mp4processor->statRSUncorrectable += failed;
             if (failed) {
                 mp4processor->rsErrors++;
                 tvhdebug(LS_RTLSDR, "mp4 superframe: %d of %d RS code words uncorrectable",
@@ -174,6 +175,7 @@ void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V) {
         } else {	// virtual shift to left in block sizes
             mp4processor->blocksInBuffer = 4;
             mp4processor->frameErrors++;
+            mp4processor->statLostBlocks++;
             tvhtrace(LS_RTLSDR, "mp4 frameErrors++");
         }
     }
@@ -290,6 +292,7 @@ static int mp4Processor_processSuperframe(mp4processor_t* mp4processor) {
         }
 
         //	but first the crc check
+        mp4processor->statAUs++;
         if (check_crc_bytes(&mp4processor->outVector[mp4processor->au_start[i]],
             aac_frame_length)) {
             uint8_t fileBuffer[1024];
@@ -300,6 +303,7 @@ static int mp4Processor_processSuperframe(mp4processor_t* mp4processor) {
             exit(0);
 #endif
         } else {
+            mp4processor->statAUErrors++;
             mp4processor->writeCb(NULL, 0, &streamParameters, mp4processor->context);
             tvhdebug(LS_RTLSDR, "mp4 AU %d of %d: CRC error, frame dropped (reception)", i + 1, num_aus);
         }

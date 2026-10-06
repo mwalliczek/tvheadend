@@ -60,6 +60,12 @@ struct mp4processor {
     int16_t		frame_quality;
     int16_t		rs_quality;
     
+    /* statistics, summed up until read (sdr_dab_service_instance_stats) */
+    uint32_t		statAUs;            /* audio access units */
+    uint32_t		statAUErrors;       /* AUs with CRC error */
+    uint32_t		statLostBlocks;     /* logical frames without superframe sync */
+    uint32_t		statRSUncorrectable;/* uncorrectable RS code words */
+
     void		*context;
     void 		(*writeCb)(const uint8_t*, int16_t, const stream_parms* stream_parms, void*);
 };
