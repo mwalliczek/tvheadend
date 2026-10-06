@@ -336,7 +336,7 @@ uint8_t	CN	= getBits_1 (d, 8 + 0);
 //	   fprintf (stderr, "cifcount = %d\n", highpart * 250 + lowpart);
 //	   fprintf (stderr, "Change happening in %d CIFs\n", occurrenceChange);
 //	}
-	fprintf (stderr, "changes in config not supported, choose again\n");
+	tvhwarn(LS_RTLSDR, "FIG 0/0: ensemble reconfiguration announced, not supported");
 //	emit  changeinConfiguration ();
 //
 }
