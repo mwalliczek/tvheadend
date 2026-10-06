@@ -981,9 +981,16 @@ main(int argc, char **argv)
 
   };
 
-  /* Get current directory */
-  tvheadend_cwd0 = dirname(tvh_strdupa(argv[0]));
-  tvheadend_cwd = dirname(tvh_strdupa(tvheadend_cwd0));
+  /* Get current directory: absolute, --fork changes the working
+     directory to / (data files of an uninstalled build) */
+  {
+    static char exe[PATH_MAX];
+    const char *path = argv[0];
+    if (strchr(path, '/') && realpath(path, exe))
+      path = exe;
+    tvheadend_cwd0 = dirname(tvh_strdupa(path));
+    tvheadend_cwd = dirname(tvh_strdupa(tvheadend_cwd0));
+  }
 
   /* Set locale */
   setlocale(LC_ALL, "");
