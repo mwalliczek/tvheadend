@@ -83,6 +83,8 @@ struct rtlsdr_frontend
 	int                       lfe_status;
 	int                       lfe_freq;
 	time_t                    lfe_monitor;
+	int64_t                   lfe_tuned;      /* mclk of the last (re)tune */
+	int                       lfe_retunes;    /* re-tunes without FIC sync */
 	mtimer_t                  lfe_monitor_timer;
 	
 	uint32_t                  lfe_status_period;

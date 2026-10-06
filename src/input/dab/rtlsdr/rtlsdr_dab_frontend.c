@@ -10,6 +10,9 @@
 #include "sdr_dab_basic_demodulation.h"
 
 #define DEFAULT_ASYNC_BUF_NUMBER 32
+#define RTLSDR_TUNE_ATTEMPTS 3
+#define RTLSDR_RETUNE_TIMEOUT 10 /* s without FIC sync */
+#define RTLSDR_RETUNES 3
 
 static void
 rtlsdr_frontend_monitor(void *aux);
@@ -475,6 +478,28 @@ static void *rtlsdr_read_thread_fn(void *arg)
 	return 0;
 }
 
+/*
+ * No FIC sync some seconds after tuning: program the tuner again. The
+ * PLL of the R820T sometimes does not lock on the first attempt
+ * ("[R82XX] PLL not locked!" from librtlsdr), but librtlsdr still
+ * reports success, so only the missing sync shows it.
+ */
+static void
+rtlsdr_frontend_retune_check(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi)
+{
+	if (mmi->fibProcessorIsSynced || lfe->lfe_retunes >= RTLSDR_RETUNES ||
+	    mclk() - lfe->lfe_tuned < sec2mono(RTLSDR_RETUNE_TIMEOUT))
+		return;
+	lfe->lfe_retunes++;
+	tvhwarn(LS_RTLSDR, "%s - no sync after %d s, tuning again (%d/%d)",
+	        mmi->mmi_ensemble->mm_nicename, RTLSDR_RETUNE_TIMEOUT,
+	        lfe->lfe_retunes, RTLSDR_RETUNES);
+	if (rtlsdr_set_center_freq(lfe->dev, lfe->lfe_freq) < 0)
+		tvherror(LS_RTLSDR, "%s - failed to set center freq %u Hz",
+		         mmi->mmi_ensemble->mm_nicename, (uint32_t)lfe->lfe_freq);
+	lfe->lfe_tuned = mclk();
+}
+
 static void
 rtlsdr_frontend_monitor(void *aux)
 {
@@ -531,6 +556,7 @@ rtlsdr_frontend_monitor(void *aux)
 			rtlsdr_read_thread_fn, lfe, "rtlsdr-front-read");
 
 	} else  {
+		rtlsdr_frontend_retune_check(lfe, mmi);
 		rtlsdr_frontend_epg_check(lfe);
 		rtlsdr_frontend_cache_update(lfe);
 		lfe->lfe_locked = lfe->sdr.mmi->fibProcessorIsSynced;
@@ -611,7 +637,7 @@ int
 rtlsdr_frontend_tune0
 (rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi, uint32_t freq)
 {
-	int r = 0;
+	int r = 0, i;
 	dab_ensemble_t *lm = mmi->mmi_ensemble;
 		  
 	r = rtlsdr_frontend_clear(lfe, mmi);
@@ -651,10 +677,19 @@ rtlsdr_frontend_tune0
 		tvhinfo(LS_RTLSDR, "tuner gain automatic");
 
 	/* Set the frequency */
-	r = rtlsdr_set_center_freq(lfe->dev, freq);
+	for (i = 0; i < RTLSDR_TUNE_ATTEMPTS; i++) {
+		r = rtlsdr_set_center_freq(lfe->dev, freq);
+		if (r >= 0)
+			break;
+		tvhwarn(LS_RTLSDR, "%s - failed to set center freq %u Hz (attempt %d/%d)",
+		        lm->mm_nicename, freq, i + 1, RTLSDR_TUNE_ATTEMPTS);
+	}
 	if (r < 0)
-		tvherror(LS_RTLSDR, "WARNING: Failed to set center freq.\n");
-	
+		tvherror(LS_RTLSDR, "%s - failed to set center freq %u Hz",
+		         lm->mm_nicename, freq);
+	lfe->lfe_tuned = mclk();
+	lfe->lfe_retunes = 0;
+
 	return r;
 }
 
