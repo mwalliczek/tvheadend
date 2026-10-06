@@ -119,6 +119,32 @@ void protection_destroy(protection_t* protection) {
     free(protection);
 }
 
+/*
+ * Count the channel bit errors: encode the decoded bits again with the
+ * mother code (K = 7, rate 1/4, the polynomials of the Viterbi decoder)
+ * and compare with the signs of the received soft bits (a one is a
+ * positive soft bit). Punctured and zero (erased) bits are not counted.
+ */
+static void protection_count_errors(protection_t *protection, const uint8_t *bits) {
+static const uint8_t polys [4] = { 0155, 0117, 0123, 0155 };
+uint32_t	sr	= 0, n = 0, e = 0;
+int32_t		i, k;
+
+	for (i = 0; i < protection->outSize + 6; i ++) {
+	   sr = ((sr << 1) | (i < protection->outSize ? bits [i] : 0)) & 0x7F;
+	   for (k = 0; k < 4; k ++) {
+	      int16_t v = protection->viterbiBlock [4 * i + k];
+	      if (!protection->indexTable [4 * i + k] || v == 0)
+	         continue;
+	      n ++;
+	      if ((v > 0) != __builtin_parity (sr & polys [k]))
+	         e ++;
+	   }
+	}
+	protection->bits	+= n;
+	protection->bitErrors	+= e;
+}
+
 void protection_deconvolve(protection_t *protection, int16_t *v, uint8_t *outBuffer) {
 int32_t	i;
 int32_t	inputCounter	= 0;
@@ -134,6 +160,7 @@ int32_t	inputCounter	= 0;
 
 ///     The actual deconvolution is done by the viterbi decoder
 	deconvolve (&protection->vp, protection->viterbiBlock, outBuffer);
+	protection_count_errors (protection, outBuffer);
 	
 //
 //      and the energy dispersal

@@ -119,6 +119,45 @@ void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
     free(sds);
 }
 
+/*
+ * Demodulator thread: report the counters of the sub-channel to the
+ * status of the ensemble (bandwidth, BER, PER, uncorrected blocks,
+ * transport and continuity errors).
+ */
+void sdr_dab_service_instance_stats(sdr_dab_service_instance_t *sds, struct sdr_state_t *sdr) {
+    dab_ensemble_instance_t *mmi = sdr->mmi;
+    mp4processor_t *mp4 = sds->mp4processor;
+
+    atomic_add(&sdr->berBits, sds->protection->bits);
+    atomic_add(&sdr->berErrors, sds->protection->bitErrors);
+    sds->protection->bits = sds->protection->bitErrors = 0;
+    if (mmi == NULL)
+        return;
+    atomic_add(&mmi->tii_stats.bps, sds->decodedBytes);
+    sds->decodedBytes = 0;
+
+    if (mp4) {
+        /* audio: an AU is a block, lost superframe sync a transport error */
+        atomic_add(&mmi->tii_stats.unc, mp4->statRSUncorrectable);
+        atomic_add(&mmi->tii_stats.te, mp4->statLostBlocks);
+        if (mp4->statAUs) {
+            tvh_mutex_lock(&mmi->tii_stats_mutex);
+            mmi->tii_stats.tc_block += mp4->statAUs;
+            mmi->tii_stats.ec_block += mp4->statAUErrors;
+            tvh_mutex_unlock(&mmi->tii_stats_mutex);
+        }
+        mp4->statAUs = mp4->statAUErrors = 0;
+        mp4->statLostBlocks = mp4->statRSUncorrectable = 0;
+    }
+    if (sds->mot) {
+        /* data (EPG): uncorrectable FEC rows, lost packets */
+        const dab_mot_stats_t *st = dab_mot_decoder_stats(sds->mot);
+        atomic_add(&mmi->tii_stats.unc, st->fec_rows_failed - sds->motStats.fec_rows_failed);
+        atomic_add(&mmi->tii_stats.cc, st->continuity_errors - sds->motStats.continuity_errors);
+        sds->motStats = *st;
+    }
+}
+
 const	int16_t interleaveMap[] = { 0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15 };
 
 void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data);
@@ -141,6 +180,7 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
     }
 
     protection_deconvolve(sds->protection, sds->tempX, sds->outV);
+    sds->decodedBytes += 3 * sds->subChannel->BitRate;
 
     if (sds->mp4processor) {
         mp4Processor_addtoFrame(sds->mp4processor, sds->outV);

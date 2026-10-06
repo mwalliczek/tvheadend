@@ -139,6 +139,7 @@ START_TEST(corruptionTest) {
     feed(dec, pk, 48, 48);
     feed(dec, pk + 2 * 48, len - 2 * 48, 48);
     ck_assert_int_eq(r.count, 0);
+    ck_assert_int_eq(dab_mot_decoder_stats(dec)->continuity_errors, 1);
     feed(dec, pk, len, 48);
     ck_assert_int_eq(r.count, 1);
     check_epg_object(&r);

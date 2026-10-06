@@ -85,6 +85,7 @@ struct dab_mot_decoder {
   size_t              dg_len;
   int                 dg_active;
   int                 dg_ci;
+  int                 last_ci;              /* -1: none yet */
 
   /* MOT directory */
   uint16_t            dir_tid;
@@ -618,6 +619,10 @@ static void parse_packets(dab_mot_decoder_t *dec,
       continue;                       /* other service, padding or command */
     if (useful > (int)size - 5)
       continue;
+    /* the continuity index counts the packets of the address */
+    if (dec->last_ci >= 0 && ci != ((dec->last_ci + 1) & 3))
+      dec->stats.continuity_errors++;
+    dec->last_ci = ci;
 
     if (first) {
       dec->dg_len = 0;
@@ -862,6 +867,7 @@ dab_mot_decoder_t *dab_mot_decoder_create
   dec->dg = malloc(MAX_DATAGROUP_SIZE);
   dec->dir_segs.last = -1;
   dec->fec_layout = -1;
+  dec->last_ci = -1;
   for (i = 0; i < MAX_OBJECTS; i++)
     dec->entries[i].header.last = dec->entries[i].body.last = -1;
   return dec;

@@ -11,6 +11,7 @@ Contents                                                    | Description
 [Getting started](#getting-started)                         | How to receive DAB+ radio
 [Fast tuning](#fast-tuning)                                 | Cached reception parameters
 [Program guide (EPG)](#program-guide-epg-)                  | DAB service and programme information (SPI)
+[Stream status](#stream-status)                             | Meaning of the status columns for DAB
 [Debugging](#debugging)                                     | Trace subsystems
 
 ---
@@ -109,6 +110,26 @@ grabber stays on an ensemble until no new EPG data arrived for two
 minutes (the data carousel is complete) or the time limit is reached.
 Ensembles without an EPG are recognized and skipped later on, see the
 *EPG* column of the ensembles (*Advanced* view).
+
+---
+
+## Stream status
+
+*Status -> Stream* shows for a tuned DAB ensemble:
+
+Column                 | Meaning for DAB
+-----------------------|--------------------------------------------------
+Bandwidth (kb/s)       | Data rate of the decoded sub-channels (audio and EPG).
+BER                    | Channel bit error rate before the Viterbi decoder (FIC and sub-channels), measured since the last status update.
+PER                    | Share of DAB+ audio frames (AUs) with CRC error, i.e. lost audio.
+Uncorrected Blocks     | Reed-Solomon code words that could not be corrected (DAB+ superframes, EPG packet FEC).
+Transport Errors       | Logical frames (24 ms) without DAB+ superframe sync.
+Continuity Errors      | Lost EPG packets (continuity index).
+
+The counters (all but bandwidth and BER) add up until they are cleared.
+As a rule of thumb, a BER up to a few percent (0.02 .. 0.05, depending on
+the protection level) is corrected by the Viterbi decoder; above that,
+audio frames get lost.
 
 ---
 
