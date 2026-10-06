@@ -551,6 +551,7 @@ dab_service_create0
     dab_ensemble_t *mm, uint16_t sid, htsmsg_t *conf )
 {
   time_t dispatch_clock = gclk();
+  elementary_stream_t *st;
 
   /* defaults for older version */
   s->s_dab_created = dispatch_clock;
@@ -561,6 +562,14 @@ dab_service_create0
   if (service_create0((service_t*)s, STYPE_STD, class, uuid,
                       S_DAB, conf) == NULL)
     return NULL;
+
+  /* DAB+ audio is always LATM in SCT_MP4A packets; configs written
+     before 2020 still store the stream as SCT_AAC (AAC-LATM) */
+  tvh_mutex_lock(&s->s_stream_mutex);
+  TAILQ_FOREACH(st, &s->s_components.set_all, es_link)
+    if (st->es_type == SCT_AAC)
+      st->es_type = SCT_MP4A;
+  tvh_mutex_unlock(&s->s_stream_mutex);
 
   /* Create */
   sbuf_init(&s->s_tsbuf);
