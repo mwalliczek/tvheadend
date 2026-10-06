@@ -91,8 +91,24 @@ is tuned, Tvheadend decodes it and feeds the programmes to the EPG of
 the channels mapped to the DAB services. The grabber module is called
 *DAB: SPI EPG Grabber* and can be disabled in
 *Configuration -> Channel / EPG -> EPG Grabber Modules*. The programme
-information is only received while an ensemble is tuned, e.g. while a
+information is received whenever an ensemble is tuned, e.g. while a
 station of the ensemble is played or recorded.
+
+In addition the grabber tunes the ensembles itself to keep the EPG up
+to date (settings of the grabber module, *Advanced* view):
+
+Setting                        | Description
+-------------------------------|------------------------------------------
+Cron multi-line                | When to tune the ensembles, cron syntax, one time per line. Default: every day at 03:14. Empty: only while a station is used.
+Grab after start               | Also tune them two minutes after Tvheadend has started (default on).
+Time limit per ensemble        | Maximum time on one ensemble, default 15 minutes.
+
+The ensembles are tuned one after the other with a low priority
+subscription, so playing and recording always take precedence. The
+grabber stays on an ensemble until no new EPG data arrived for two
+minutes (the data carousel is complete) or the time limit is reached.
+Ensembles without an EPG are recognized and skipped later on, see the
+*EPG* column of the ensembles (*Advanced* view).
 
 ---
 

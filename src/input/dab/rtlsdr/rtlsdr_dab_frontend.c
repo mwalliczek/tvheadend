@@ -276,6 +276,7 @@ static void rtlsdr_frontend_epg_check(rtlsdr_frontend_t *lfe)
 	tvh_mutex_unlock(&mm->mm_tables_lock);
 	if (sds == NULL)
 		return;
+	dab_ensemble_set_epg(mm, DAB_EPG_YES);
 	tvhinfo(LS_DABEPG, "%s: receiving EPG (subchannel %d, packet address %d)",
 		mm->mm_nicename, subChId, address);
 	tvh_mutex_lock(&sdr->active_service_mutex);

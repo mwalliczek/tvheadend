@@ -185,6 +185,30 @@ scan_result_tab[] = {
  { N_("IGNORE"),       MM_SCAN_IGNORE },
 };
 
+static struct strtab
+epg_tab[] = {
+ { N_("Unknown"),      DAB_EPG_UNKNOWN },
+ { N_("Yes"),          DAB_EPG_YES },
+ { N_("No"),           DAB_EPG_NO },
+};
+
+static htsmsg_t *
+dab_ensemble_class_epg_enum ( void *p, const char *lang )
+{
+  return strtab2htsmsg(epg_tab, 1, lang);
+}
+
+/* remember whether the ensemble carries an EPG (for the EPG scheduler) */
+void
+dab_ensemble_set_epg ( dab_ensemble_t *mm, int epg )
+{
+  lock_assert(&global_lock);
+  if (mm->mm_epg != epg) {
+    mm->mm_epg = epg;
+    idnode_changed(&mm->mm_id);
+  }
+}
+
 int
 dab_ensemble_class_scan_state_set ( void *o, const void *p )
 {
@@ -402,6 +426,17 @@ const idclass_t dab_ensemble_class =
       .desc     = N_("When the mux was successfully scanned for the first time."),
       .off      = offsetof(dab_ensemble_t, mm_scan_first),
       .opts     = PO_ADVANCED | PO_RDONLY,
+    },
+    {
+      .type     = PT_INT,
+      .id       = "epg",
+      .name     = N_("EPG"),
+      .desc     = N_("The ensemble carries an electronic programme "
+                     "guide (SPI). Learned while receiving, used by "
+                     "the DAB EPG grabber to select the ensembles."),
+      .off      = offsetof(dab_ensemble_t, mm_epg),
+      .opts     = PO_ADVANCED | PO_RDONLY,
+      .list     = dab_ensemble_class_epg_enum,
     },
     {
       .type     = PT_TIME,

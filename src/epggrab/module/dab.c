@@ -22,11 +22,20 @@
  * ensemble is tuned (see rtlsdr_frontend_epg_check) and queued here as
  * MOT objects; this module maps the programmes to the channels of the
  * DAB services.
+ *
+ * The scheduler tunes the ensembles that carry an EPG (or were not
+ * checked yet) one after the other at the configured times, with a low
+ * priority subscription: it stays on an ensemble until no new object
+ * arrived for a while (the carousel is complete), at most for the
+ * configured time.
  */
 
 #include <string.h>
 
 #include "tvheadend.h"
+#include "atomic.h"
+#include "cron.h"
+#include "subscriptions.h"
 #include "channels.h"
 #include "service.h"
 #include "epg.h"
@@ -49,11 +58,273 @@ typedef struct dab_epggrab_ctx {
   int               broadcasts;
 } dab_epggrab_ctx_t;
 
-static epggrab_module_t *dab_epggrab_mod;
+typedef struct dab_epggrab_module {
+  epggrab_module_t;
+  char     *sched_cron;
+  int       sched_initial;
+  uint32_t  sched_timeout;            /* minutes per ensemble */
+} dab_epggrab_module_t;
+
+static dab_epggrab_module_t *dab_epggrab_mod;
 
 int dab_epggrab_enabled(void)
 {
   return dab_epggrab_mod && dab_epggrab_mod->enabled;
+}
+
+/* ************************************************************************
+ * Scheduler
+ * ***********************************************************************/
+
+#define SCHED_SUBSCRIPTION  "epggrab"
+#define SCHED_TICK          5         /* s */
+#define SCHED_NO_EPG        30        /* s in sync without EPG component */
+#define SCHED_NO_SIGNAL     60        /* s without FIC sync */
+#define SCHED_IDLE          120       /* s without a new object: complete */
+#define SCHED_WAIT_TUNER    3600      /* s to wait for a free tuner */
+#define SCHED_INITIAL_DELAY 120       /* s after the start of tvheadend */
+
+static struct {
+  mtimer_t          tick;
+  mtimer_t          initial;
+  gtimer_t          cron_timer;
+  cron_multi_t     *cron;
+  char            (*queue)[UUID_HEX_SIZE];
+  int               queue_len;
+  int               queue_pos;
+  int64_t           run_start;
+  /* the ensemble being grabbed */
+  char              cur[UUID_HEX_SIZE];
+  int               subscribed;
+  int64_t           start;
+  int64_t           synced;
+  int64_t           retry;
+  dab_ensemble_t   *mm;               /* read by the demodulator thread */
+  volatile int      objects;
+  volatile int64_t  last_object;
+} sched;
+
+static void dab_epggrab_sched_tick(void *aux);
+
+static int dab_epggrab_sched_running(void)
+{
+  return sched.queue != NULL;
+}
+
+static void dab_epggrab_sched_release(dab_ensemble_t *mm)
+{
+  sched.mm = NULL;
+  if (mm && sched.subscribed)
+    dab_ensemble_unsubscribe_by_name(mm, SCHED_SUBSCRIPTION);
+  sched.subscribed = 0;
+  sched.cur[0] = '\0';
+}
+
+static void dab_epggrab_sched_stop(const char *reason)
+{
+  dab_ensemble_t *mm = NULL;
+
+  if (!dab_epggrab_sched_running())
+    return;
+  if (sched.cur[0])
+    mm = idnode_find(sched.cur, &dab_ensemble_class, NULL);
+  dab_epggrab_sched_release(mm);
+  tvhinfo(LS_DABEPG, "EPG grab %s", reason);
+  free(sched.queue);
+  sched.queue = NULL;
+  sched.queue_len = sched.queue_pos = 0;
+  mtimer_disarm(&sched.tick);
+}
+
+/* queue all enabled ensembles which carry an EPG or were not checked yet */
+static void dab_epggrab_sched_start(const char *why)
+{
+  dab_network_t *mn;
+  dab_ensemble_t *mm;
+  int n = 0;
+
+  lock_assert(&global_lock);
+  if (!dab_epggrab_enabled() || dab_epggrab_sched_running())
+    return;
+  LIST_FOREACH(mn, &dab_network_all, mn_global_link)
+    LIST_FOREACH(mm, &mn->mn_ensembles, mm_network_link)
+      n++;
+  if (n == 0)
+    return;
+  sched.queue = calloc(n, sizeof(*sched.queue));
+  sched.queue_len = 0;
+  LIST_FOREACH(mn, &dab_network_all, mn_global_link) {
+    if (!mn->mn_enabled)
+      continue;
+    LIST_FOREACH(mm, &mn->mn_ensembles, mm_network_link)
+      if (mm->mm_is_enabled(mm) && mm->mm_epg != DAB_EPG_NO)
+        idnode_uuid_as_str(&mm->mm_id, sched.queue[sched.queue_len++]);
+  }
+  if (sched.queue_len == 0) {
+    free(sched.queue);
+    sched.queue = NULL;
+    return;
+  }
+  sched.queue_pos = 0;
+  sched.cur[0] = '\0';
+  sched.run_start = mclk();
+  tvhinfo(LS_DABEPG, "EPG grab started (%s), %d ensembles", why, sched.queue_len);
+  mtimer_arm_rel(&sched.tick, dab_epggrab_sched_tick, NULL, sec2mono(1));
+}
+
+static void dab_epggrab_sched_done(dab_ensemble_t *mm, const char *result)
+{
+  tvhinfo(LS_DABEPG, "%s: EPG grab %s, %d objects in %"PRId64" s",
+          mm->mm_nicename, result, atomic_get(&sched.objects),
+          mono2sec(mclk() - sched.start));
+  dab_epggrab_sched_release(mm);
+}
+
+static void dab_epggrab_sched_tick(void *aux)
+{
+  dab_ensemble_t *mm;
+  int r, has_epg, sub, address, subChId, timeout;
+  int64_t now = mclk();
+
+  if (!dab_epggrab_sched_running())
+    return;
+  if (!dab_epggrab_enabled()) {
+    dab_epggrab_sched_stop("stopped (grabber disabled)");
+    return;
+  }
+  mtimer_arm_rel(&sched.tick, dab_epggrab_sched_tick, NULL, sec2mono(SCHED_TICK));
+
+  /* next ensemble */
+  if (sched.cur[0] == '\0') {
+    if (sched.queue_pos >= sched.queue_len) {
+      dab_epggrab_sched_stop("finished");
+      return;
+    }
+    strcpy(sched.cur, sched.queue[sched.queue_pos++]);
+    sched.subscribed = 0;
+    sched.retry = 0;
+  }
+  mm = idnode_find(sched.cur, &dab_ensemble_class, NULL);
+  if (mm == NULL || !mm->mm_is_enabled(mm) || !mm->mm_network->mn_enabled) {
+    dab_epggrab_sched_release(NULL);
+    return;
+  }
+
+  if (!sched.subscribed) {
+    if (sched.retry > now)
+      return;
+    r = dab_ensemble_subscribe(mm, NULL, SCHED_SUBSCRIPTION, SUBSCRIPTION_PRIO_EPG,
+                               SUBSCRIPTION_ONESHOT | SUBSCRIPTION_TABLES);
+    if (r == SM_CODE_NO_FREE_ADAPTER || r == SM_CODE_NO_ADAPTERS) {
+      /* all tuners busy: wait, but not forever */
+      if (now - sched.run_start > sec2mono(SCHED_WAIT_TUNER)) {
+        dab_epggrab_sched_stop("stopped (no free tuner)");
+        return;
+      }
+      tvhtrace(LS_DABEPG, "%s: EPG grab waits for a free tuner", mm->mm_nicename);
+      sched.retry = now + sec2mono(60);
+      return;
+    }
+    if (r) {
+      tvhwarn(LS_DABEPG, "%s: EPG grab cannot tune (%s)", mm->mm_nicename,
+              streaming_code2txt(r));
+      dab_epggrab_sched_release(NULL);
+      return;
+    }
+    tvhdebug(LS_DABEPG, "%s: EPG grab tuning", mm->mm_nicename);
+    sched.subscribed = 1;
+    sched.start = now;
+    sched.synced = 0;
+    atomic_set(&sched.objects, 0);
+    atomic_set_s64(&sched.last_object, now);
+    sched.mm = mm;
+    return;
+  }
+
+  /* a more important subscription took the tuner */
+  sub = 0;
+  {
+    th_subscription_t *s;
+    LIST_FOREACH(s, &mm->mm_raw_subs, ths_mux_link)
+      if (s->ths_title && !strcmp(s->ths_title, SCHED_SUBSCRIPTION))
+        sub = 1;
+  }
+  if (!sub) {
+    dab_epggrab_sched_done(mm, "interrupted");
+    return;
+  }
+
+  if (sched.synced == 0 && mm->mm_active && mm->mm_active->fibProcessorIsSynced)
+    sched.synced = now;
+  tvh_mutex_lock(&mm->mm_tables_lock);
+  has_epg = dab_ensemble_find_epg_component(mm, &subChId, &address);
+  tvh_mutex_unlock(&mm->mm_tables_lock);
+
+  timeout = (dab_epggrab_mod->sched_timeout ?: 15) * 60;
+  if (!has_epg) {
+    if (sched.synced && now - sched.synced > sec2mono(SCHED_NO_EPG)) {
+      dab_ensemble_set_epg(mm, DAB_EPG_NO);
+      dab_epggrab_sched_done(mm, "skipped (no EPG)");
+    } else if (!sched.synced && now - sched.start > sec2mono(SCHED_NO_SIGNAL)) {
+      dab_epggrab_sched_done(mm, "skipped (no reception)");
+    }
+    return;
+  }
+  if (atomic_get(&sched.objects) > 0 &&
+      now - atomic_get_s64(&sched.last_object) > sec2mono(SCHED_IDLE))
+    dab_epggrab_sched_done(mm, "finished");
+  else if (now - sched.start > sec2mono(timeout))
+    dab_epggrab_sched_done(mm, "finished (time limit)");
+}
+
+static void dab_epggrab_sched_cron_arm(void);
+
+static void dab_epggrab_sched_cron_cb(void *aux)
+{
+  dab_epggrab_sched_start("scheduled");
+  dab_epggrab_sched_cron_arm();
+}
+
+static void dab_epggrab_sched_cron_arm(void)
+{
+  time_t next;
+
+  gtimer_disarm(&sched.cron_timer);
+  if (sched.cron == NULL)
+    return;
+  if (cron_multi_next(sched.cron, gclk(), &next)) {
+    tvhwarn(LS_DABEPG, "EPG grab cron config invalid");
+    return;
+  }
+  tvhdebug(LS_DABEPG, "next EPG grab in %"PRId64" s", (int64_t)(next - gclk()));
+  gtimer_arm_absn(&sched.cron_timer, dab_epggrab_sched_cron_cb, NULL, next);
+}
+
+static void dab_epggrab_sched_set_cron(void)
+{
+  free(sched.cron);
+  sched.cron = NULL;
+  if (dab_epggrab_mod && dab_epggrab_mod->sched_cron && dab_epggrab_mod->sched_cron[0])
+    sched.cron = cron_multi_set(dab_epggrab_mod->sched_cron);
+  dab_epggrab_sched_cron_arm();
+}
+
+static void dab_epggrab_sched_initial_cb(void *aux)
+{
+  if (dab_epggrab_mod == NULL)
+    return;
+  dab_epggrab_sched_set_cron();
+  if (dab_epggrab_mod->sched_initial)
+    dab_epggrab_sched_start("after start");
+}
+
+/* demodulator thread: count the new objects of the ensemble being grabbed */
+static void dab_epggrab_sched_object(dab_ensemble_t *mm)
+{
+  if (mm != sched.mm)
+    return;
+  atomic_add(&sched.objects, 1);
+  atomic_set_s64(&sched.last_object, mclk());
 }
 
 /*
@@ -66,6 +337,7 @@ void dab_epggrab_queue(dab_ensemble_t *mm, const dab_mot_object_t *obj)
 
   if (!dab_epggrab_enabled())
     return;
+  dab_epggrab_sched_object(mm);
   /* only programme information is used, service and group information
      is already known from the FIC */
   if (obj->content_type != DAB_MOT_CT_EPG ||
@@ -78,7 +350,7 @@ void dab_epggrab_queue(dab_ensemble_t *mm, const dab_mot_object_t *obj)
   hdr.scope_id_len = obj->scope_id_len;
   tvhdebug(LS_DABEPG, "%s: queue programme information '%s' (%zu bytes)",
            mm->mm_nicename, obj->name ?: "", obj->body_len);
-  epggrab_queue_data(dab_epggrab_mod, &hdr, sizeof(hdr), obj->body, obj->body_len);
+  epggrab_queue_data((epggrab_module_t *)dab_epggrab_mod, &hdr, sizeof(hdr), obj->body, obj->body_len);
 }
 
 /* TV-Anytime ContentCS (urn:tva:metadata:cs:ContentCS:2002:3.x.y) to EN 300 468 */
@@ -236,7 +508,28 @@ static int dab_epggrab_activate(void *m, int e)
 {
   epggrab_module_t *mod = m;
   mod->active = !!e;
+  if (!e)
+    dab_epggrab_sched_stop("stopped (grabber disabled)");
   return 1;
+}
+
+static void dab_epggrab_class_cron_notify(void *self, const char *lang)
+{
+  if (self == dab_epggrab_mod)
+    dab_epggrab_sched_set_cron();
+}
+
+static void dab_epggrab_done_mod(void *m)
+{
+  tvh_mutex_lock(&global_lock);
+  dab_epggrab_sched_stop("stopped");
+  mtimer_disarm(&sched.initial);
+  gtimer_disarm(&sched.cron_timer);
+  free(sched.cron);
+  sched.cron = NULL;
+  dab_epggrab_mod = NULL;
+  tvh_mutex_unlock(&global_lock);
+  free(((dab_epggrab_module_t *)m)->sched_cron);
 }
 
 const idclass_t epggrab_mod_dab_class = {
@@ -244,23 +537,64 @@ const idclass_t epggrab_mod_dab_class = {
   .ic_class      = "epggrab_mod_dab",
   .ic_caption    = N_("DAB EPG grabber"),
   .ic_properties = (const property_t[]){
+    {
+      .type   = PT_STR,
+      .id     = "cron",
+      .name   = N_("Cron multi-line"),
+      .desc   = N_("When the DAB ensembles with an EPG are tuned to "
+                   "receive it (cron time specification, one per line). "
+                   "Leave empty to receive the EPG only while a DAB "
+                   "service is used."),
+      .off    = offsetof(dab_epggrab_module_t, sched_cron),
+      .notify = dab_epggrab_class_cron_notify,
+      .opts   = PO_MULTILINE | PO_ADVANCED,
+      .group  = 1,
+    },
+    {
+      .type   = PT_BOOL,
+      .id     = "initial",
+      .name   = N_("Grab after start"),
+      .desc   = N_("Tune the DAB ensembles with an EPG two minutes "
+                   "after the start of tvheadend."),
+      .off    = offsetof(dab_epggrab_module_t, sched_initial),
+      .opts   = PO_ADVANCED,
+      .group  = 1,
+    },
+    {
+      .type   = PT_U32,
+      .id     = "timeout",
+      .name   = N_("Time limit per ensemble (minutes)"),
+      .desc   = N_("The EPG grab moves on to the next ensemble when no "
+                   "new EPG data arrived for two minutes, at the latest "
+                   "after this time."),
+      .off    = offsetof(dab_epggrab_module_t, sched_timeout),
+      .opts   = PO_ADVANCED,
+      .group  = 1,
+    },
     {}
   }
 };
 
 void dab_epggrab_init(void)
 {
-  epggrab_module_t *mod = calloc(1, sizeof(epggrab_module_t));
+  dab_epggrab_module_t *mod = calloc(1, sizeof(dab_epggrab_module_t));
 
   mod->type         = EPGGRAB_DAB;
   mod->activate     = dab_epggrab_activate;
   mod->process_data = dab_epggrab_process_data;
   /* enabled by default, the data is only received while an ensemble is tuned */
+  mod->done         = dab_epggrab_done_mod;
   mod->enabled      = 1;
   mod->active       = 1;
-  dab_epggrab_mod = epggrab_module_create(mod, &epggrab_mod_dab_class,
-                                          "dab", LS_DABEPG, NULL,
-                                          "DAB: SPI EPG Grabber", 2);
+  mod->sched_cron    = strdup("# Default config (03:14 every day)\n14 3 * * *");
+  mod->sched_initial = 1;
+  mod->sched_timeout = 15;
+  dab_epggrab_mod = (dab_epggrab_module_t *)
+    epggrab_module_create((epggrab_module_t *)mod, &epggrab_mod_dab_class,
+                          "dab", LS_DABEPG, NULL, "DAB: SPI EPG Grabber", 2);
+  /* the configuration is loaded later */
+  mtimer_arm_rel(&sched.initial, dab_epggrab_sched_initial_cb, NULL,
+                 sec2mono(SCHED_INITIAL_DELAY));
 }
 
 void dab_epggrab_done(void)
