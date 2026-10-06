@@ -37,6 +37,38 @@ START_TEST(mp4processorTest) {
     destroy_mp4processor(mp4);
 } END_TEST
     
+/* a byte error in the fire code (first bytes of a superframe) is
+ * repaired by the RS code, the superframe must not be lost */
+START_TEST(firecodeErrorTest) {
+    mp4processor_t* mp4 = init_mp4processor(72, NULL, callback);
+    uint8_t *input = calloc(1728, sizeof(uint8_t));
+    FILE *pFile;
+    int i;
+
+    firecheck_init();
+
+    myResult = NULL;
+    myResultLength = 0;
+    for (i=0; i<=6; i++) {
+        char buffer[128];
+        snprintf(buffer, 128, "input/dab/mp4in%d", i);
+        pFile = fopen (buffer, "rb");
+        ck_assert_int_eq(fread (input, 1, 1728, pFile), 1728);
+        fclose(pFile);
+        /* one bit per byte: corrupt the first byte of every block, one
+           of them is the start of the superframe */
+        input[0] ^= 1;
+        input[3] ^= 1;
+        mp4Processor_addtoFrame(mp4, input);
+    }
+    free(input);
+    ck_assert_ptr_ne(myResult, NULL);
+    ck_assert_int_eq(myResultLength, 361);
+    ck_assert_int_eq(memcmpResult, 0);
+
+    destroy_mp4processor(mp4);
+} END_TEST
+
 void callback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context) {
     if (NULL == myResult && resultLength > 0) {
         FILE *pFile;
@@ -64,6 +96,7 @@ Suite * mp4processor_suite(void) {
     tc_core = tcase_create("Core");
 
     tcase_add_test(tc_core, mp4processorTest);
+    tcase_add_test(tc_core, firecodeErrorTest);
     suite_add_tcase(s, tc_core);
 
     return s;

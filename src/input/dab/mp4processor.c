@@ -91,8 +91,9 @@ void destroy_mp4processor(mp4processor_t* mp4processor) {
     free(mp4processor);
 }
 
-int mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t frameBytes[],
+static int mp4Processor_rsCorrect(mp4processor_t* mp4processor, const uint8_t frameBytes[],
     int16_t base);
+static int mp4Processor_processSuperframe(mp4processor_t* mp4processor);
 
 int16_t mp4Processor_writeFrame(int16_t framelen,
     const stream_parms *sp,
@@ -142,10 +143,26 @@ void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V) {
             mp4processor->frameErrors = 0;
         }
 
-        //	OK, we give it a try, check the fire code
-        if (firecode_check(&mp4processor->frameBytes[mp4processor->blockFillIndex * nbits / 8]) &&
-            (mp4Processor_processSuperframe(mp4processor, mp4processor->frameBytes,
-                mp4processor->blockFillIndex * nbits / 8))) {
+        /*
+         * Is this the start of a superframe? The fire code protects the
+         * header (AU start positions) and is part of the RS protected
+         * data: a byte error in it does not lose the superframe when RS
+         * can correct it.
+         */
+        int16_t base = mp4processor->blockFillIndex * nbits / 8;
+        int sync = firecode_check(&mp4processor->frameBytes[base]);
+        int failed = mp4Processor_rsCorrect(mp4processor, mp4processor->frameBytes, base);
+        if (!sync && failed < mp4processor->RSDims)
+            sync = firecode_check(mp4processor->outVector);
+        if (sync) {
+            /* AUs in uncorrectable RS columns fail their own CRC, the
+               others are still good and the superframe sync stays */
+            if (failed) {
+                mp4processor->rsErrors++;
+                tvhdebug(LS_RTLSDR, "mp4 superframe: %d of %d RS code words uncorrectable",
+                         failed, mp4processor->RSDims);
+            }
+            mp4Processor_processSuperframe(mp4processor);
             //	since we processed a full cycle of 5 blocks, we just start a
             //	new sequence, beginning with block blockFillIndex
             mp4processor->blocksInBuffer = 0;
@@ -162,32 +179,34 @@ void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V) {
     }
 }
 
-int	mp4Processor_processSuperframe(mp4processor_t* mp4processor, const uint8_t frameBytes[],
+/* RS decoding of the superframe starting at base into outVector;
+   uncorrectable code words are copied as received. Returns their number. */
+static int mp4Processor_rsCorrect(mp4processor_t* mp4processor, const uint8_t frameBytes[],
     int16_t base) {
-    uint8_t		num_aus;
-    int16_t		i, j, k;
+    int16_t		j, k;
     uint8_t		rsIn[120];
     uint8_t		rsOut[110];
-    stream_parms	streamParameters;
+    int			failed = 0;
 
-    /**	apply reed-solomon error repar
-      *	OK, what we now have is a vector with RSDims * 120 uint8_t's
-      *	Output is a vector with RSDims * 110 uint8_t's
-      */
-    tvhtrace(LS_RTLSDR, "mp4Processor_processSuperframe");
     for (j = 0; j < mp4processor->RSDims; j++) {
-        int16_t ler = 0;
         for (k = 0; k < 120; k++)
             rsIn[k] = frameBytes[(base + j + k * mp4processor->RSDims) % (mp4processor->RSDims * 120)];
-        //
-        ler = reedSolomon_dec(mp4processor->my_rsDecoder, rsIn, rsOut, 135);
-        if (ler < 0) {
-            tvhdebug(LS_RTLSDR, "reedSolomon_dec %d < 0", ler);
-            return 0;
+        if (reedSolomon_dec(mp4processor->my_rsDecoder, rsIn, rsOut, 135) < 0) {
+            failed++;
+            memcpy(rsOut, rsIn, sizeof(rsOut));
         }
         for (k = 0; k < 110; k++)
             mp4processor->outVector[j + k * mp4processor->RSDims] = rsOut[k];
     }
+    return failed;
+}
+
+static int mp4Processor_processSuperframe(mp4processor_t* mp4processor) {
+    uint8_t		num_aus;
+    int16_t		i;
+    stream_parms	streamParameters;
+
+    tvhtrace(LS_RTLSDR, "mp4Processor_processSuperframe");
     //
     //	OK, the result is N * 110 * 8 bits 
     //	bits 0 .. 15 is firecode
