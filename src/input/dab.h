@@ -217,6 +217,7 @@ struct dab_ensemble
         int                      mm_freq_corr;       ///< last frequency correction (Hz)
         int                      mm_freq_corr_known;
         int                      mm_fic_changed;     ///< FIC organisation changed, save
+        int                      mm_epg;             ///< EPG component: DAB_EPG_UNKNOWN/YES/NO
         mtimer_t                 mm_scan_timeout; ///< Timer to handle timeout
         TAILQ_ENTRY(dab_ensemble)  mm_scan_link;    ///< Link to Queue
         mpegts_mux_scan_state_t  mm_scan_state;   ///< Scanning state
@@ -605,6 +606,11 @@ dab_service_t *dab_ensemble_find_service(dab_ensemble_t *ms, uint16_t sid);
 
 /* DAB EPG grabber (epggrab/module/dab.c) */
 struct dab_mot_object;
+#define DAB_EPG_UNKNOWN 0
+#define DAB_EPG_YES     1
+#define DAB_EPG_NO      2
+void dab_ensemble_set_epg(dab_ensemble_t *mm, int epg);
+
 int dab_epggrab_enabled(void);
 void dab_epggrab_queue(dab_ensemble_t *mm, const struct dab_mot_object *obj);
 

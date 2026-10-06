@@ -41,12 +41,51 @@ const idclass_t rtlsdr_frontend_class =
 };
 
 
+/* gains of the R820T(2), other tuners use the nearest supported value */
+static const int rtlsdr_gains[] = {
+	0, 9, 14, 27, 37, 77, 87, 125, 144, 157, 166, 197, 207, 229, 254, 280,
+	297, 328, 338, 364, 372, 386, 402, 421, 434, 439, 445, 480, 496
+};
+
+static htsmsg_t *
+rtlsdr_frontend_class_gain_list(void *o, const char *lang)
+{
+	htsmsg_t *m = htsmsg_create_list(), *e;
+	char buf[32];
+	size_t i;
+
+	e = htsmsg_create_map();
+	htsmsg_add_s32(e, "key", -1);
+	htsmsg_add_str(e, "val", tvh_gettext_lang(lang, N_("Automatic (tuner AGC)")));
+	htsmsg_add_msg(m, NULL, e);
+	for (i = 0; i < ARRAY_SIZE(rtlsdr_gains); i++) {
+		e = htsmsg_create_map();
+		htsmsg_add_s32(e, "key", rtlsdr_gains[i]);
+		snprintf(buf, sizeof(buf), "%.1f dB", rtlsdr_gains[i] / 10.0);
+		htsmsg_add_str(e, "val", buf);
+		htsmsg_add_msg(m, NULL, e);
+	}
+	return m;
+}
+
 const idclass_t rtlsdr_frontend_dab_class =
 {
 	.ic_super = &rtlsdr_frontend_class,
 	.ic_class = "rtlsdr_frontend_dab",
 	.ic_caption = N_("TV Adapters - RTL SDR DAB Frontend"),
 	.ic_properties = (const property_t[]) {
+		{
+			.type = PT_INT,
+			.id = "gain",
+			.name = N_("Tuner gain"),
+			.desc = N_("Gain of the tuner, default 49.6 dB (maximum) "
+			           "for weak signals. Close to a transmitter a lower "
+			           "gain avoids overload; Automatic lets the tuner "
+			           "adjust it. Applied when the next ensemble is "
+			           "tuned."),
+			.off = offsetof(rtlsdr_frontend_t, lfe_gain),
+			.list = rtlsdr_frontend_class_gain_list,
+		},
 		{
 			.type = PT_DBL,
 			.id = "ppm",
@@ -237,6 +276,7 @@ static void rtlsdr_frontend_epg_check(rtlsdr_frontend_t *lfe)
 	tvh_mutex_unlock(&mm->mm_tables_lock);
 	if (sds == NULL)
 		return;
+	dab_ensemble_set_epg(mm, DAB_EPG_YES);
 	tvhinfo(LS_DABEPG, "%s: receiving EPG (subchannel %d, packet address %d)",
 		mm->mm_nicename, subChId, address);
 	tvh_mutex_lock(&sdr->active_service_mutex);
@@ -585,17 +625,22 @@ rtlsdr_frontend_tune0
 	/*------------------------------------------------
 	Setting gain
 	-------------------------------------------------*/
-	r = rtlsdr_set_tuner_gain_mode(lfe->dev, 1);
+	r = rtlsdr_set_tuner_gain_mode(lfe->dev, lfe->lfe_gain >= 0);
 	if (r != 0)
-		tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain.\n");
+		tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain mode.");
 
 	r = rtlsdr_set_agc_mode(lfe->dev, 1);
 	if (r != 0)
-		tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain.\n");
+		tvherror(LS_RTLSDR, "WARNING: Failed to set RTL AGC mode.");
 
-	r = rtlsdr_set_tuner_gain(lfe->dev, 166);
-	if (r != 0)
-		tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain.\n");
+	if (lfe->lfe_gain >= 0) {
+		r = rtlsdr_set_tuner_gain(lfe->dev, lfe->lfe_gain);
+		if (r != 0)
+			tvherror(LS_RTLSDR, "WARNING: Failed to set tuner gain.");
+		tvhinfo(LS_RTLSDR, "tuner gain %.1f dB (requested %.1f dB)",
+		        rtlsdr_get_tuner_gain(lfe->dev) / 10.0, lfe->lfe_gain / 10.0);
+	} else
+		tvhinfo(LS_RTLSDR, "tuner gain automatic");
 
 	/* Set the frequency */
 	r = rtlsdr_set_center_freq(lfe->dev, freq);
@@ -704,6 +749,9 @@ rtlsdr_frontend_create
 		tvhtrace(LS_RTLSDR, "calloc failed!");
 		return NULL;
 	}
+	/* default: maximum gain (R820T), the tuner AGC did worse in field
+	   tests; overwritten by the config */
+	lfe->lfe_gain = 496;
 	lfe = (rtlsdr_frontend_t *) dab_input_create0((dab_input_t *)lfe, idc, uuid, conf);
 	if (!lfe) {
 		tvhtrace(LS_RTLSDR, "rtlsdr_frontend_create0 failed!");

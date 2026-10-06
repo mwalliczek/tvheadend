@@ -192,7 +192,8 @@ void decodeBlock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno
 
 static void decodeBlockInt(struct sdr_state_t *sdr, const float _Complex* v, int16_t *ibits) {
 	int i;
-	float _Complex r1;
+	float _Complex r1[K];
+	float sum = 0, scale;
 	
 	doFft(sdr, &v[T_g]);
 	
@@ -210,16 +211,30 @@ static void decodeBlockInt(struct sdr_state_t *sdr, const float _Complex* v, int
 		*	The carrier of a block is the reference for the carrier
 		*	on the same position in the next block
 		*/
-		r1 = sdr->ofdmDecoder.fftBuffer[index] * conjf(sdr->ofdmDecoder.phaseReference[index]);
-		//		conjVector[index] = r1;
-		//
-		//	The viterbi decoder expects values in the range 0 .. 255
-		float ab1 = jan_abs(r1);
-		ibits[i] = -crealf(r1) / ab1 * 127.0;
-		ibits[K + i] = -cimagf(r1) / ab1 * 127.0;
+		r1[i] = sdr->ofdmDecoder.fftBuffer[index] * conjf(sdr->ofdmDecoder.phaseReference[index]);
+		sum += jan_abs(r1[i]);
 	}
 	memcpy(sdr->ofdmDecoder.phaseReference,
 		sdr->ofdmDecoder.fftBuffer, T_u * sizeof(float _Complex));
+
+	/**
+	*	Soft bits for the viterbi decoder (-127 .. 127). They keep the
+	*	amplitude of the carrier relative to the average of the block:
+	*	carriers in a fade of a multipath / SFN channel are mostly noise
+	*	and must not get the same weight as strong ones (normalizing
+	*	every carrier to its own amplitude cost 4 - 6 dB there).
+	*	An average carrier (|re| + |im| = sqrt(2) |r| for QPSK) maps
+	*	to +-90, like the phase only values before.
+	*/
+	if (sum <= 0)
+		sum = 1;
+	scale = 127.0f * (float)M_SQRT2 * K / sum;
+	for (i = 0; i < K; i++) {
+		float re = -crealf(r1[i]) * scale;
+		float im = -cimagf(r1[i]) * scale;
+		ibits[i] = re > 127 ? 127 : re < -127 ? -127 : re;
+		ibits[K + i] = im > 127 ? 127 : im < -127 ? -127 : im;
+	}
 }
 
 void decodeFICblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno) {

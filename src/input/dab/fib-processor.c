@@ -367,6 +367,7 @@ int16_t	tabelIndex;
 int16_t	option, protLevel, subChanSize;
 subChannel old	= mm->subChannels [SubChId];
 	(void)pd;		// not used right now, maybe later
+	mm->subChannels [SubChId]. SubChId = SubChId;
 	mm->subChannels [SubChId]. StartAddr = StartAdr;
                 
 	mm->subChannels [SubChId]. inUse	 = 1;
@@ -758,18 +759,16 @@ int16_t	i, j;
 void	FIG0Extension14 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 int16_t	Length	= getBits_5 (d, 3);	// in Bytes
 int16_t	used	= 2;			// in Bytes
-int16_t	i;
 dab_ensemble_t *mm = dei->mmi_ensemble;
 
 	while (used <= Length) {	// entries are one byte long
 	   int16_t SubChId	= getBits_6 (d, used * 8);
 	   uint8_t FEC_scheme	= getBits_2 (d, used * 8 + 6);
 	   used = used + 1;
-	   for (i = 0; i < 64; i ++) {
-              if (mm->subChannels [i]. SubChId == SubChId) {
-                 mm->subChannels [i]. FEC_scheme = FEC_scheme;
-              }
-           }
+	   /* the sub-channel table is indexed by SubChId */
+	   if (mm->subChannels [SubChId]. FEC_scheme != FEC_scheme)
+	      tvhtrace(LS_RTLSDR, "FIG 0/14: sub-channel %d FEC scheme %d", SubChId, FEC_scheme);
+	   mm->subChannels [SubChId]. FEC_scheme = FEC_scheme;
 	}
 }
 

@@ -24,6 +24,7 @@
 #include "tvheadend.h"
 #include "dab_mot.h"
 #include "charsets.h"
+#include "rtlsdr/reed-solomon.h"
 
 #define MAX_DATAGROUP_SIZE   (8 + 2 + 2 + 15 + 8191 + 2)
 #define MAX_OBJECTS          128
@@ -63,6 +64,21 @@ struct dab_mot_decoder {
   dab_mot_object_cb_t cb;
   void               *opaque;
   dab_mot_stats_t     stats;
+
+  /* packet stream: packets continue across logical frames, the bytes of
+     an unfinished packet wait here for the next frame */
+  uint8_t            *stream;
+  size_t              stream_len, stream_size;
+  uint32_t            frames;
+
+  /* packet mode FEC (EN 300 401 clause 5.3.5) */
+  int                 fec;
+  reedSolomon_t      *rs;
+  uint8_t            *fbuf;
+  size_t              fbuf_len, fbuf_size;
+  int                 fec_synced;
+  int                 fec_layout;          /* -1: not known yet */
+  int                 fec_bad_frames;
 
   /* packet to data group assembly */
   uint8_t            *dg;
@@ -543,6 +559,8 @@ void dab_mot_decoder_feed_datagroup(dab_mot_decoder_t *dec,
       tid = (dg[i + 1] << 8) | dg[i + 2];
     i += 1 + li;
   }
+  tvhtrace(LS_DABEPG, "data group type %d, transport id %d, segment %d%s, %zu bytes",
+           type, tid, segno, last ? " (last)" : "", len - i);
   /* MOT always uses segmentation and transport ids */
   if (!seg || !tidflag)
     return;
@@ -550,6 +568,7 @@ void dab_mot_decoder_feed_datagroup(dab_mot_decoder_t *dec,
   return;
 
 fail:
+  tvhtrace(LS_DABEPG, "invalid data group (%zu bytes)", len);
   dec->stats.datagroup_errors++;
 }
 
@@ -557,19 +576,34 @@ fail:
  * Packet mode
  * ***********************************************************************/
 
-void dab_mot_decoder_feed_packets(dab_mot_decoder_t *dec,
-                                  const uint8_t *data, size_t len)
+static void parse_packets(dab_mot_decoder_t *dec,
+                          const uint8_t *data, size_t len)
 {
   size_t i = 0;
+  uint8_t *buf;
+
+  if (len == 0)
+    return;
+  /* a packet (24 .. 96 bytes) can span logical frames, e.g. 96 byte
+     packets in an 8 kbit/s sub-channel (24 bytes per frame) */
+  if (dec->stream_len + len > dec->stream_size) {
+    dec->stream_size = dec->stream_len + len;
+    dec->stream = realloc(dec->stream, dec->stream_size);
+  }
+  memcpy(dec->stream + dec->stream_len, data, len);
+  len += dec->stream_len;
+  buf = dec->stream;
 
   while (i + 24 <= len) {
-    const uint8_t *p = data + i;
+    const uint8_t *p = buf + i;
     size_t size = ((p[0] >> 6) + 1) * 24;
     int ci, first, last, address, useful;
 
-    if (i + size > len || !crc_ok(p, size)) {
+    if (i + size > len)
+      break;                          /* rest of the packet in the next frame */
+    if (!crc_ok(p, size)) {
       dec->stats.packet_crc_errors++;
-      i += 24;                        /* resynchronise */
+      i += 24;                        /* resynchronise, packets are 24 byte aligned */
       continue;
     }
     i += size;
@@ -604,6 +638,212 @@ void dab_mot_decoder_feed_packets(dab_mot_decoder_t *dec,
       dab_mot_decoder_feed_datagroup(dec, dec->dg, dec->dg_len);
     }
   }
+  dec->stream_len = len - i;
+  memmove(dec->stream, buf + i, dec->stream_len);
+}
+
+/*
+ * Packet mode FEC: an FEC frame is the Application Data Table, 12 rows
+ * of 188 bytes (2256 bytes of the packet stream), followed by 9 FEC
+ * packets (24 bytes, address 1022, no CRC) with 22 bytes each of the
+ * RS Data Table, 12 rows of 16 bytes. Every row is a RS(204,188) code
+ * word (shortened RS(255,239), as in EN 300 744). Receivers without FEC
+ * see the unchanged packet stream and skip the FEC packets.
+ *
+ * The order in which the tables are filled (row or column wise) is
+ * detected from the data: with the right one the code words of a
+ * correct frame have no errors. Until it is known the data passes
+ * through uncorrected, like without FEC.
+ */
+#define FEC_ADT_SIZE      2256
+#define FEC_RSD_SIZE      192
+#define FEC_PACKETS       9
+#define FEC_FRAME_SIZE    (FEC_ADT_SIZE + FEC_PACKETS * 24)
+#define FEC_ROWS          12
+#define FEC_ADT_COLS      188
+#define FEC_RSD_COLS      16
+
+static int fec_packet_count(const uint8_t *p)
+{
+  int i, n = 0;
+  for (i = 0; i < FEC_PACKETS; i++, p += 24)
+    if ((p[0] & 0xC3) == 0x03 && p[1] == 0xFE)   /* 24 bytes, address 1022 */
+      n++;
+  return n;
+}
+
+static inline size_t fec_adt_index(int layout, int row, int col)
+{
+  return (layout & 1) ? (size_t)row * FEC_ADT_COLS + col : (size_t)col * FEC_ROWS + row;
+}
+
+static inline size_t fec_rsd_index(int layout, int row, int col)
+{
+  return (layout & 2) ? (size_t)row * FEC_RSD_COLS + col : (size_t)col * FEC_ROWS + row;
+}
+
+/* RS decoding of all rows; corrects adt in place if fix is set.
+   Returns the number of decodable rows, uncorrectable rows are counted
+   in *failed, corrected bytes in *corrected */
+static int fec_decode(dab_mot_decoder_t *dec, int layout, uint8_t *adt,
+                      const uint8_t *rsd, int fix, int *failed, int *corrected)
+{
+  uint8_t cw[FEC_ADT_COLS + FEC_RSD_COLS], out[FEC_ADT_COLS];
+  int row, col, r;
+
+  *failed = *corrected = 0;
+  for (row = 0; row < FEC_ROWS; row++) {
+    for (col = 0; col < FEC_ADT_COLS; col++)
+      cw[col] = adt[fec_adt_index(layout, row, col)];
+    for (col = 0; col < FEC_RSD_COLS; col++)
+      cw[FEC_ADT_COLS + col] = rsd[fec_rsd_index(layout, row, col)];
+    r = reedSolomon_dec_checked(dec->rs, cw, out, 255 - (FEC_ADT_COLS + FEC_RSD_COLS));
+    if (r < 0) {
+      (*failed)++;
+      continue;
+    }
+    *corrected += r;
+    if (fix && r > 0)
+      for (col = 0; col < FEC_ADT_COLS; col++)
+        adt[fec_adt_index(layout, row, col)] = out[col];
+  }
+  return FEC_ROWS - *failed;
+}
+
+static void fec_frame(dab_mot_decoder_t *dec, uint8_t *frame)
+{
+  uint8_t rsd[FEC_PACKETS * 22];
+  int i, failed, corrected, best = -1, best_ok = 0, ok;
+
+  for (i = 0; i < FEC_PACKETS; i++)
+    memcpy(rsd + i * 22, frame + FEC_ADT_SIZE + i * 24 + 2, 22);
+  dec->stats.fec_frames++;
+
+  if (dec->fec_layout < 0) {
+    /* which table layout gives valid code words? With a wrong one the
+       rows look random and (almost) never decode */
+    for (i = 0; i < 4; i++) {
+      ok = fec_decode(dec, i, frame, rsd, 0, &failed, &corrected);
+      if (ok > best_ok) {
+        best_ok = ok;
+        best = i;
+      }
+    }
+    if (best_ok < FEC_ROWS / 2) {
+      dec->stats.fec_rows_failed += FEC_ROWS;
+      return;                       /* pass through uncorrected */
+    }
+    dec->fec_layout = best;
+    tvhdebug(LS_DABEPG, "packet address %d: FEC table layout %d (%d of %d rows decodable)",
+             dec->address, best, best_ok, FEC_ROWS);
+  }
+
+  fec_decode(dec, dec->fec_layout, frame, rsd, 1, &failed, &corrected);
+  dec->stats.fec_bytes_corrected += corrected;
+  dec->stats.fec_rows_failed += failed;
+  if (failed == FEC_ROWS) {
+    /* a wrong layout guess or no signal: look again after a while */
+    if (++dec->fec_bad_frames >= 20) {
+      dec->fec_layout = -1;
+      dec->fec_bad_frames = 0;
+    }
+  } else
+    dec->fec_bad_frames = 0;
+}
+
+static void fec_feed(dab_mot_decoder_t *dec, const uint8_t *data, size_t len)
+{
+  size_t pos = 0, q, n;
+  uint8_t *b;
+
+  if (dec->fbuf_len + len > dec->fbuf_size) {
+    dec->fbuf_size = dec->fbuf_len + len;
+    dec->fbuf = realloc(dec->fbuf, dec->fbuf_size);
+  }
+  memcpy(dec->fbuf + dec->fbuf_len, data, len);
+  dec->fbuf_len += len;
+  b = dec->fbuf;
+
+  while (1) {
+    if (dec->fec_synced) {
+      if (dec->fbuf_len - pos < FEC_FRAME_SIZE)
+        break;
+      if (fec_packet_count(b + pos + FEC_ADT_SIZE) < FEC_PACKETS / 2) {
+        tvhtrace(LS_DABEPG, "packet address %d: FEC frame sync lost", dec->address);
+        dec->fec_synced = 0;
+        continue;
+      }
+      fec_frame(dec, b + pos);
+      parse_packets(dec, b + pos, FEC_ADT_SIZE);
+      pos += FEC_FRAME_SIZE;
+      continue;
+    }
+    /* look for the FEC packets at the end of a frame (24 byte aligned),
+       all of them: shifted by a packet, 8 headers would still match */
+    for (q = pos; q + FEC_PACKETS * 24 <= dec->fbuf_len; q += 24)
+      if (fec_packet_count(b + q) == FEC_PACKETS)
+        break;
+    if (q + FEC_PACKETS * 24 > dec->fbuf_len) {
+      /* not found: pass the data on, keep a frame to correct it when
+         its FEC packets follow */
+      n = dec->fbuf_len - pos > FEC_FRAME_SIZE ? dec->fbuf_len - pos - FEC_FRAME_SIZE : 0;
+      n -= n % 24;
+      parse_packets(dec, b + pos, n);
+      pos += n;
+      break;
+    }
+    tvhtrace(LS_DABEPG, "packet address %d: FEC frame sync", dec->address);
+    if (q - pos >= FEC_ADT_SIZE) {
+      /* a complete frame in the buffer */
+      parse_packets(dec, b + pos, q - FEC_ADT_SIZE - pos);
+      fec_frame(dec, b + q - FEC_ADT_SIZE);
+      parse_packets(dec, b + q - FEC_ADT_SIZE, FEC_ADT_SIZE);
+    } else
+      parse_packets(dec, b + pos, q - pos);
+    pos = q + FEC_PACKETS * 24;
+    dec->fec_synced = 1;
+  }
+  dec->fbuf_len -= pos;
+  memmove(dec->fbuf, b + pos, dec->fbuf_len);
+}
+
+void dab_mot_decoder_set_fec(dab_mot_decoder_t *dec, int fec)
+{
+  fec = !!fec;
+  if (dec->fec == fec)
+    return;
+  tvhdebug(LS_DABEPG, "packet address %d: packet mode FEC %s", dec->address,
+           fec ? "on" : "off");
+  if (dec->fbuf_len && !fec)
+    parse_packets(dec, dec->fbuf, dec->fbuf_len);
+  dec->fbuf_len = 0;
+  dec->fec_synced = 0;
+  dec->fec = fec;
+  if (fec && dec->rs == NULL)
+    dec->rs = init_reedSolomon(8, 0435, 0, 1, FEC_RSD_COLS);
+}
+
+void dab_mot_decoder_feed_packets(dab_mot_decoder_t *dec,
+                                  const uint8_t *data, size_t len)
+{
+  if (dec->fec)
+    fec_feed(dec, data, len);
+  else
+    parse_packets(dec, data, len);
+
+  /* after about 6 s and then every 30 s (logical frames of 24 ms) */
+  if (++dec->frames % 1250 == 250)
+    tvhdebug(LS_DABEPG, "packet address %d: %u packets (%u CRC errors), "
+             "%u data groups (%u errors), %u objects%s",
+             dec->address, dec->stats.packets, dec->stats.packet_crc_errors,
+             dec->stats.datagroups, dec->stats.datagroup_errors,
+             dec->stats.objects, dec->fec ? "" : ", no FEC");
+  if (dec->fec && dec->frames % 1250 == 250)
+    tvhdebug(LS_DABEPG, "packet address %d: FEC %u frames, %u bytes corrected, "
+             "%u of %u rows uncorrectable, layout %d",
+             dec->address, dec->stats.fec_frames, dec->stats.fec_bytes_corrected,
+             dec->stats.fec_rows_failed, dec->stats.fec_frames * FEC_ROWS,
+             dec->fec_layout);
 }
 
 /* ************************************************************************
@@ -621,6 +861,7 @@ dab_mot_decoder_t *dab_mot_decoder_create
   dec->opaque = opaque;
   dec->dg = malloc(MAX_DATAGROUP_SIZE);
   dec->dir_segs.last = -1;
+  dec->fec_layout = -1;
   for (i = 0; i < MAX_OBJECTS; i++)
     dec->entries[i].header.last = dec->entries[i].body.last = -1;
   return dec;
@@ -642,6 +883,10 @@ void dab_mot_decoder_destroy(dab_mot_decoder_t *dec)
   segbuf_clear(&dec->dir_segs);
   free(dec->dir);
   free(dec->dg);
+  free(dec->stream);
+  free(dec->fbuf);
+  if (dec->rs)
+    destroy_reedSolomon(dec->rs);
   free(dec);
 }
 
