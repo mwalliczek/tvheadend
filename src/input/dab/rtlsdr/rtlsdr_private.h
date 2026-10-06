@@ -90,6 +90,9 @@ struct rtlsdr_frontend
 	/* frequency error of the stick learned on any ensemble (ppm) */
 	double                    lfe_ppm;
 	int                       lfe_ppm_known;
+
+	/* tuner gain in 0.1 dB, -1: automatic (tuner AGC) */
+	int                       lfe_gain;
 };
 
 extern const idclass_t rtlsdr_adapter_class;
