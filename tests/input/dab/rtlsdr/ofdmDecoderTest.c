@@ -40,6 +40,7 @@ void process_ficBlock(struct sdr_state_t *sdr, const int16_t data[], int16_t blk
 }
 
 void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
+    memcpy(softbits, data, sizeof(softbits));
 }
 
 /* one OFDM symbol (cyclic prefix + useful part) from its carriers */
@@ -103,10 +104,59 @@ START_TEST(fadedCarrierTest) {
     free(sdr);
 } END_TEST
 
+/* The sample clock offset of the stick turns the phase of carrier k by
+ * slope * k from symbol to symbol, a residual frequency error adds a
+ * common phase. Here 0.3 samples per symbol (~120 ppm) and 20 degrees:
+ * 60 degrees at the band edges, the QPSK decisions there would be wrong
+ * without the correction. */
+START_TEST(clockOffsetTest) {
+    struct sdr_state_t *sdr = calloc(1, sizeof(struct sdr_state_t));
+    static float _Complex car[T_u], sym[T_s];
+    static int bits[2 * K];
+    const float slope = 2 * M_PI * 0.3f / T_u, cpe = 20 * M_PI / 180;
+    int i, s, errors = 0;
+
+    sdr->mmi = calloc(1, sizeof(dab_ensemble_instance_t));
+    initConstOfdmDecoder();
+    initOfdmDecoder(sdr);
+    srand(7);
+
+    for (i = 0; i < K; i++)
+        car[carrierOf(i)] = 1;
+    symbol(car, sym);
+    processBlock_0(sdr, &sym[T_g]);
+    for (s = 1; s < L; s++) {
+        for (i = 0; i < K; i++) {
+            int c = carrierOf(i), k = c > T_u / 2 ? c - T_u : c;
+            bits[i] = rand() & 1;
+            bits[K + i] = rand() & 1;
+            car[c] *= ((bits[i] ? -1 : 1) + I * (bits[K + i] ? -1 : 1)) / sqrtf(2)
+                      * cexpf(I * (slope * k + cpe));
+        }
+        symbol(car, sym);
+        decodeBlock(sdr, sym, s);
+        if (s < L / 2)
+            continue;           /* the slope estimate settles */
+        for (i = 0; i < K; i++) {
+            /* a one is a positive soft bit */
+            errors += (softbits[i] > 0) != bits[i];
+            errors += (softbits[K + i] > 0) != bits[K + i];
+        }
+    }
+    ck_assert_int_eq(errors, 0);
+    ck_assert_msg(fabsf(sdr->ofdmDecoder.slope - slope) < 0.05f * slope,
+                  "slope %g, expected %g", sdr->ofdmDecoder.slope, slope);
+
+    destroyOfdmDecoder(sdr);
+    free(sdr->mmi);
+    free(sdr);
+} END_TEST
+
 static Suite *ofdmDecoder_suite(void) {
     Suite *s = suite_create("ofdmDecoder");
     TCase *tc_core = tcase_create("Core");
     tcase_add_test(tc_core, fadedCarrierTest);
+    tcase_add_test(tc_core, clockOffsetTest);
     suite_add_tcase(s, tc_core);
     return s;
 }

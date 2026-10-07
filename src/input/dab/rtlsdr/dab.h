@@ -51,6 +51,9 @@ struct ofdm_decoder_t {
 	float _Complex *fftBuffer;
 	fftwf_plan plan;
 	float _Complex phaseReference[T_u];
+	/* phase slope over the carriers from symbol to symbol (rad / carrier),
+	   caused by the sample clock offset of the stick */
+	float slope;
 	pthread_t thread;
 	th_pipe_t pipe;
 	float _Complex buffer[L][T_s];
