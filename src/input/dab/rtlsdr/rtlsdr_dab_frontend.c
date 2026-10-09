@@ -136,7 +136,9 @@ rtlsdr_frontend_open_fd(rtlsdr_frontend_t *lfe)
 	if (lfe->dev == NULL) {
 		r = rtlsdr_open(&lfe->dev, lfe->lfe_adapter->dev_index);
 		if (r < 0) {
-			tvherror(LS_RTLSDR, "Failed to open rtlsdr device #%d.", lfe->lfe_adapter->dev_index);
+			tvherror(LS_RTLSDR, "Failed to open rtlsdr device #%d (%d): in use by "
+			         "the kernel driver dvb_usb_rtl28xxu or another program?",
+			         lfe->lfe_adapter->dev_index, r);
 			lfe->dev = NULL;
 			return -1;
 		}

@@ -181,11 +181,18 @@ rtlsdr_adapter_add(int device_number)
 	rtlsdr_adapter_t *la = NULL;
 	htsmsg_t *conf = NULL, *feconf = NULL;
 	int save = 0;
-	char vendor[256], product[256], serial[256];
+	char vendor[256] = "", product[256] = "", serial[256] = "";
 	const char *device_name;
 
 	tvhtrace(LS_RTLSDR, "scanning adapter %d", device_number);
-	rtlsdr_get_device_usb_strings(device_number, vendor, product, serial);
+	/* fails (and leaves the buffers untouched) when the device cannot be
+	   opened: claimed by the kernel DVB driver or used by another program */
+	if (rtlsdr_get_device_usb_strings(device_number, vendor, product, serial) < 0) {
+		vendor[0] = product[0] = serial[0] = '\0';
+		tvhwarn(LS_RTLSDR, "%d: cannot read the USB strings, the device is in use "
+		        "(kernel driver dvb_usb_rtl28xxu loaded, or another program)",
+		        device_number);
+	}
 	device_name = rtlsdr_get_device_name(device_number);
 	tvhinfo(LS_RTLSDR, "  %d:  %s, %s, SN: %s, %s", device_number, vendor, product, serial, device_name);
 	la = rtlsdr_adapter_new(device_number, vendor, product, serial, device_name, &conf, &save);
