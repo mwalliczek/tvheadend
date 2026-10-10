@@ -971,7 +971,6 @@ char		label [17];
 	                                      16);
 	            nameofEnsemble (dei, SId, name);
 	            free (name);
-				tvhinfo(LS_RTLSDR, "FIC in sync");
 		 }
 	      }
 	      tvhtrace(LS_RTLSDR, 
@@ -1210,6 +1209,10 @@ void	nameofEnsemble  (dab_ensemble_instance_t *dei, int id, const char *s) {
 		tvh_mutex_unlock(&global_lock);
 	}
 
-	dei->fibProcessorIsSynced = 1;
-	tvhinfo(LS_RTLSDR, "FIC in sync");
+	/* the ensemble label comes about once a second: log the sync once */
+	if (!dei->fibProcessorIsSynced) {
+		dei->fibProcessorIsSynced = 1;
+		tvhinfo(LS_RTLSDR, "%s: FIC in sync (%s)",
+		        dei->mmi_ensemble->mm_nicename, s);
+	}
 }

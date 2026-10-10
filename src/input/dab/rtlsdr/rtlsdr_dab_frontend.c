@@ -13,6 +13,7 @@
 #define RTLSDR_TUNE_ATTEMPTS 3
 #define RTLSDR_RETUNE_TIMEOUT 10 /* s without FIC sync */
 #define RTLSDR_RETUNES 3
+#define RTLSDR_SNR_FULL 25000 /* dB * 1000 shown as 100 % over HTSP */
 
 static void
 rtlsdr_frontend_monitor(void *aux);
@@ -502,6 +503,20 @@ rtlsdr_frontend_retune_check(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mm
 	lfe->lfe_tuned = mclk();
 }
 
+/*
+ * SNR in dB * 1000 to 0 .. 65535 (0 .. 100 %): 25 dB and more is 100 %,
+ * DAB+ needs about 6 - 8 dB.
+ */
+static int
+rtlsdr_snr_relative(int snr)
+{
+	if (snr <= 0)
+		return 0;
+	if (snr >= RTLSDR_SNR_FULL)
+		return 65535;
+	return (int)((int64_t)snr * 65535 / RTLSDR_SNR_FULL);
+}
+
 static void
 rtlsdr_frontend_monitor(void *aux)
 {
@@ -574,18 +589,22 @@ rtlsdr_frontend_monitor(void *aux)
 
 		/* Send message */
 		sigstat.status_text = signal2str(status);
-		sigstat.snr = mmi->tii_stats.snr;
+		/* the subscribers (HTSP: feSNR / feSignal / feBER / feUNC) get
+		   relative values, Kodi ignores the absolute SNR in dB */
+		sigstat.snr = rtlsdr_snr_relative(mmi->tii_stats.snr);
+		sigstat.snr_scale = SIGNAL_STATUS_SCALE_RELATIVE;
 		sigstat.signal = mmi->tii_stats.signal;
-		sigstat.ber = mmi->tii_stats.ber;
-		sigstat.unc = atomic_get(&mmi->tii_stats.unc);
 		sigstat.signal_scale = mmi->tii_stats.signal_scale;
-		sigstat.snr_scale = mmi->tii_stats.snr_scale;
+		sigstat.unc = atomic_get(&mmi->tii_stats.unc);
 		tvh_mutex_lock(&mmi->tii_stats_mutex);
 		sigstat.ec_bit = mmi->tii_stats.ec_bit;
 		sigstat.tc_bit = mmi->tii_stats.tc_bit;
 		sigstat.ec_block = mmi->tii_stats.ec_block;
 		sigstat.tc_block = mmi->tii_stats.tc_block;
 		tvh_mutex_unlock(&mmi->tii_stats_mutex);
+		/* channel bit errors per million bits of the last period */
+		sigstat.ber = sigstat.tc_bit > 0 ?
+			(int)((int64_t)sigstat.ec_bit * 1000000 / sigstat.tc_bit) : 0;
 		memset(&sm, 0, sizeof(sm));
 		sm.sm_type = SMT_SIGNAL_STATUS;
 		sm.sm_data = &sigstat;
