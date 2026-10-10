@@ -13,6 +13,8 @@
 #define RTLSDR_TUNE_ATTEMPTS 3
 #define RTLSDR_RETUNE_TIMEOUT 10 /* s without FIC sync */
 #define RTLSDR_RETUNES 3
+#define RTLSDR_SUMMARY 10 /* s between the reception summaries */
+#define RTLSDR_SNR_FULL 25000 /* dB * 1000 shown as 100 % over HTSP */
 
 static void
 rtlsdr_frontend_monitor(void *aux);
@@ -467,6 +469,14 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 		rtlsdr_cancel_async(lfe->dev);
 		return;
 	}
+	/* ADC overload: count the samples at full scale */
+	{
+		uint32_t i, clipped = 0;
+		for (i = 0; i < len; i++)
+			clipped += buf[i] == 0 || buf[i] == 255;
+		atomic_add(&lfe->lfe_clipped, clipped);
+		atomic_add(&lfe->lfe_samples, len);
+	}
 	/* write input data into fifo */
 	cbWrite(&(sdr->fifo), buf, len);
 	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
@@ -500,6 +510,73 @@ rtlsdr_frontend_retune_check(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mm
 		tvherror(LS_RTLSDR, "%s - failed to set center freq %u Hz",
 		         mmi->mmi_ensemble->mm_nicename, (uint32_t)lfe->lfe_freq);
 	lfe->lfe_tuned = mclk();
+}
+
+/*
+ * Every RTLSDR_SUMMARY seconds one line with what tells weak signal,
+ * overload and frequency / clock problems apart.
+ */
+static void
+rtlsdr_frontend_rx_summary(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi)
+{
+	struct sdr_state_t *sdr = &lfe->sdr;
+	int samples, clipped;
+	int blocks, errors, unc, ficBits, ficErrors;
+	double ppm;
+
+	if (mclk() - lfe->lfe_summary < sec2mono(RTLSDR_SUMMARY))
+		return;
+	lfe->lfe_summary = mclk();
+
+	ficBits = atomic_exchange(&sdr->ficBerBits, 0);
+	ficErrors = atomic_exchange(&sdr->ficBerErrors, 0);
+	samples = atomic_exchange(&lfe->lfe_samples, 0);
+	clipped = atomic_exchange(&lfe->lfe_clipped, 0);
+	tvh_mutex_lock(&mmi->tii_stats_mutex);
+	blocks = mmi->tii_stats.tc_block - lfe->lfe_summary_blocks;
+	errors = mmi->tii_stats.ec_block - lfe->lfe_summary_errors;
+	lfe->lfe_summary_blocks = mmi->tii_stats.tc_block;
+	lfe->lfe_summary_errors = mmi->tii_stats.ec_block;
+	tvh_mutex_unlock(&mmi->tii_stats_mutex);
+	unc = atomic_get(&mmi->tii_stats.unc);
+	if (unc < lfe->lfe_summary_unc)		/* cleared in the meantime */
+		lfe->lfe_summary_unc = 0;
+	unc -= lfe->lfe_summary_unc;
+	lfe->lfe_summary_unc += unc;
+	/* phase slope from the sample clock: 2 pi k T_s ppm / T_u */
+	ppm = sdr->ofdmDecoder.slope * T_u / (2 * M_PI * T_s) * 1e6;
+
+	tvhdebug(LS_RTLSDR, "%s - reception: snr %.1f dB, level %.3f, clipped %.3f %%, "
+	         "gain %.1f dB, freq corr %.0f Hz, clock %+.1f ppm, sync %s, FIC CRC %d %%, "
+	         "BER %.4f (FIC %.4f), AUs %d/%d bad, RS uncorrectable %d, "
+	         "strongest echo %.1f dB at %+d samples (%+.0f us, guard 246 us), peak/avg %.1f",
+	         mmi->mmi_ensemble->mm_nicename,
+	         mmi->tii_stats.snr / 1000.0, sdr->sLevel,
+	         samples ? 100.0 * clipped / samples : 0.0,
+	         lfe->lfe_gain >= 0 ? lfe->lfe_gain / 10.0 : -1.0,
+	         sdr->currentCorrection, ppm,
+	         sdr->isSynced ? (mmi->fibProcessorIsSynced ? "fic" : "time") : "none",
+	         sdr->fibCRCrate,
+	         mmi->tii_stats.tc_bit ? (double)mmi->tii_stats.ec_bit / mmi->tii_stats.tc_bit : 0.0,
+	         ficBits ? (double)ficErrors / ficBits : 0.0,
+	         errors, blocks, unc,
+	         sdr->echoLevel > 0 ? 20 * log10f(sdr->echoLevel) : -99.0,
+	         sdr->echoDelay, sdr->echoDelay / 2.048, sdr->peakToAverage);
+	sdr->echoLevel = 0;
+}
+
+/*
+ * SNR in dB * 1000 to 0 .. 65535 (0 .. 100 %): 25 dB and more is 100 %,
+ * DAB+ needs about 6 - 8 dB.
+ */
+static int
+rtlsdr_snr_relative(int snr)
+{
+	if (snr <= 0)
+		return 0;
+	if (snr >= RTLSDR_SNR_FULL)
+		return 65535;
+	return (int)((int64_t)snr * 65535 / RTLSDR_SNR_FULL);
 }
 
 static void
@@ -559,6 +636,7 @@ rtlsdr_frontend_monitor(void *aux)
 
 	} else  {
 		rtlsdr_frontend_retune_check(lfe, mmi);
+		rtlsdr_frontend_rx_summary(lfe, mmi);
 		rtlsdr_frontend_epg_check(lfe);
 		rtlsdr_frontend_cache_update(lfe);
 		lfe->lfe_locked = lfe->sdr.mmi->fibProcessorIsSynced;
@@ -574,18 +652,22 @@ rtlsdr_frontend_monitor(void *aux)
 
 		/* Send message */
 		sigstat.status_text = signal2str(status);
-		sigstat.snr = mmi->tii_stats.snr;
+		/* the subscribers (HTSP: feSNR / feSignal / feBER / feUNC) get
+		   relative values, Kodi ignores the absolute SNR in dB */
+		sigstat.snr = rtlsdr_snr_relative(mmi->tii_stats.snr);
+		sigstat.snr_scale = SIGNAL_STATUS_SCALE_RELATIVE;
 		sigstat.signal = mmi->tii_stats.signal;
-		sigstat.ber = mmi->tii_stats.ber;
-		sigstat.unc = atomic_get(&mmi->tii_stats.unc);
 		sigstat.signal_scale = mmi->tii_stats.signal_scale;
-		sigstat.snr_scale = mmi->tii_stats.snr_scale;
+		sigstat.unc = atomic_get(&mmi->tii_stats.unc);
 		tvh_mutex_lock(&mmi->tii_stats_mutex);
 		sigstat.ec_bit = mmi->tii_stats.ec_bit;
 		sigstat.tc_bit = mmi->tii_stats.tc_bit;
 		sigstat.ec_block = mmi->tii_stats.ec_block;
 		sigstat.tc_block = mmi->tii_stats.tc_block;
 		tvh_mutex_unlock(&mmi->tii_stats_mutex);
+		/* channel bit errors per million bits of the last period */
+		sigstat.ber = sigstat.tc_bit > 0 ?
+			(int)((int64_t)sigstat.ec_bit * 1000000 / sigstat.tc_bit) : 0;
 		memset(&sm, 0, sizeof(sm));
 		sm.sm_type = SMT_SIGNAL_STATUS;
 		sm.sm_data = &sigstat;
