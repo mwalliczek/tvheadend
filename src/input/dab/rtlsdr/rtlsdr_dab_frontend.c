@@ -13,6 +13,7 @@
 #define RTLSDR_TUNE_ATTEMPTS 3
 #define RTLSDR_RETUNE_TIMEOUT 10 /* s without FIC sync */
 #define RTLSDR_RETUNES 3
+#define RTLSDR_SUMMARY 10 /* s between the reception summaries */
 #define RTLSDR_SNR_FULL 25000 /* dB * 1000 shown as 100 % over HTSP */
 
 static void
@@ -468,6 +469,14 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 		rtlsdr_cancel_async(lfe->dev);
 		return;
 	}
+	/* ADC overload: count the samples at full scale */
+	{
+		uint32_t i, clipped = 0;
+		for (i = 0; i < len; i++)
+			clipped += buf[i] == 0 || buf[i] == 255;
+		atomic_add(&lfe->lfe_clipped, clipped);
+		atomic_add(&lfe->lfe_samples, len);
+	}
 	/* write input data into fifo */
 	cbWrite(&(sdr->fifo), buf, len);
 	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
@@ -501,6 +510,52 @@ rtlsdr_frontend_retune_check(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mm
 		tvherror(LS_RTLSDR, "%s - failed to set center freq %u Hz",
 		         mmi->mmi_ensemble->mm_nicename, (uint32_t)lfe->lfe_freq);
 	lfe->lfe_tuned = mclk();
+}
+
+/*
+ * Every RTLSDR_SUMMARY seconds one line with what tells weak signal,
+ * overload and frequency / clock problems apart.
+ */
+static void
+rtlsdr_frontend_rx_summary(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi)
+{
+	struct sdr_state_t *sdr = &lfe->sdr;
+	int samples, clipped;
+	int blocks, errors, unc;
+	double ppm;
+
+	if (mclk() - lfe->lfe_summary < sec2mono(RTLSDR_SUMMARY))
+		return;
+	lfe->lfe_summary = mclk();
+
+	samples = atomic_exchange(&lfe->lfe_samples, 0);
+	clipped = atomic_exchange(&lfe->lfe_clipped, 0);
+	tvh_mutex_lock(&mmi->tii_stats_mutex);
+	blocks = mmi->tii_stats.tc_block - lfe->lfe_summary_blocks;
+	errors = mmi->tii_stats.ec_block - lfe->lfe_summary_errors;
+	lfe->lfe_summary_blocks = mmi->tii_stats.tc_block;
+	lfe->lfe_summary_errors = mmi->tii_stats.ec_block;
+	tvh_mutex_unlock(&mmi->tii_stats_mutex);
+	unc = atomic_get(&mmi->tii_stats.unc);
+	if (unc < lfe->lfe_summary_unc)		/* cleared in the meantime */
+		lfe->lfe_summary_unc = 0;
+	unc -= lfe->lfe_summary_unc;
+	lfe->lfe_summary_unc += unc;
+	/* phase slope from the sample clock: 2 pi k T_s ppm / T_u */
+	ppm = sdr->ofdmDecoder.slope * T_u / (2 * M_PI * T_s) * 1e6;
+
+	tvhdebug(LS_RTLSDR, "%s - reception: snr %.1f dB, level %.3f, clipped %.3f %%, "
+	         "gain %.1f dB, freq corr %.0f Hz, clock %+.1f ppm, sync %s, FIC CRC %d %%, "
+	         "BER %.4f, AUs %d/%d bad, RS uncorrectable %d",
+	         mmi->mmi_ensemble->mm_nicename,
+	         mmi->tii_stats.snr / 1000.0, sdr->sLevel,
+	         samples ? 100.0 * clipped / samples : 0.0,
+	         lfe->lfe_gain >= 0 ? lfe->lfe_gain / 10.0 : -1.0,
+	         sdr->currentCorrection, ppm,
+	         sdr->isSynced ? (mmi->fibProcessorIsSynced ? "fic" : "time") : "none",
+	         sdr->fibCRCrate,
+	         mmi->tii_stats.tc_bit ? (double)mmi->tii_stats.ec_bit / mmi->tii_stats.tc_bit : 0.0,
+	         errors, blocks, unc);
 }
 
 /*
@@ -574,6 +629,7 @@ rtlsdr_frontend_monitor(void *aux)
 
 	} else  {
 		rtlsdr_frontend_retune_check(lfe, mmi);
+		rtlsdr_frontend_rx_summary(lfe, mmi);
 		rtlsdr_frontend_epg_check(lfe);
 		rtlsdr_frontend_cache_update(lfe);
 		lfe->lfe_locked = lfe->sdr.mmi->fibProcessorIsSynced;
