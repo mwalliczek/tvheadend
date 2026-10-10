@@ -38,6 +38,9 @@
 #include "ebml.h"
 #include "lang_codes.h"
 #include "epg.h"
+#if ENABLE_RTLSDR
+#include "input/dab/mp4processor.h"
+#endif
 #include "parsers/parsers.h"
 #include "parsers/parser_avc.h"
 #include "parsers/parser_hevc.h"
@@ -60,6 +63,7 @@ typedef struct mk_track {
   int index;
   int avc;
   int hevc;
+  int latm;      /* DAB+: LOAS / LATM frames, written as raw access units */
   int type;
   int tracknum;
   int tracktype;
@@ -276,6 +280,9 @@ mk_build_tracks(mk_muxer_t *mk, streaming_start_t *ss)
       continue;
 
     tr->type = ssc->es_type;
+#if ENABLE_RTLSDR
+    tr->latm = ssc->es_type == SCT_MP4A && ss->ss_si.si_type == S_DAB;
+#endif
     tr->channels = ssc->es_channels;
     tr->aspect_num = ssc->es_aspect_num;
     tr->aspect_den = ssc->es_aspect_den;
@@ -1068,13 +1075,32 @@ mk_close_cluster(mk_muxer_t *mk)
 
 
 /**
+ * Append a SimpleBlock to the current cluster
+ */
+static void
+mk_write_frame_block(mk_muxer_t *mk, mk_track_t *t, const uint8_t *data,
+                     int len, int delta, int keyframe, int skippable)
+{
+  uint8_t c_delta_flags[3];
+
+  ebml_append_id(mk->cluster, 0xa3 ); // SimpleBlock
+  ebml_append_size(mk->cluster, len + 4);
+  ebml_append_size(mk->cluster, t->tracknum);
+
+  c_delta_flags[0] = delta >> 8;
+  c_delta_flags[1] = delta;
+  c_delta_flags[2] = (keyframe << 7) | skippable;
+  htsbuf_append(mk->cluster, c_delta_flags, 3);
+  htsbuf_append(mk->cluster, data, len);
+}
+
+/**
  *
  */
 static void
 mk_write_frame_i(mk_muxer_t *mk, mk_track_t *t, th_pkt_t *pkt)
 {
   int64_t pts = pkt->pkt_pts, delta, nxt;
-  unsigned char c_delta_flags[3];
   const int video = t->tracktype == 1;
   const int audio = t->tracktype == 2;
   int keyframe = 0, skippable = 0;
@@ -1144,6 +1170,19 @@ mk_write_frame_i(mk_muxer_t *mk, mk_track_t *t, th_pkt_t *pkt)
     addcue(mk, pts, t->tracknum);
   }
 
+  if (audio && pkt->a.pkt_keyframe) keyframe = 1;
+
+#if ENABLE_RTLSDR
+  if (t->latm) {
+    // DAB+: the raw access unit of the LATM frame (always shorter)
+    uint8_t *au = malloc(len);
+    int n = au ? mp4Processor_latmPayload(data, len, au, len) : -1;
+    if (n >= 0)
+      mk_write_frame_block(mk, t, au, n, delta, keyframe, skippable);
+    free(au);
+    return;
+  }
+#endif
   if(t->type == SCT_AAC || t->type == SCT_MP4A) {
     // Skip ADTS header
     if(len < 7)
@@ -1153,17 +1192,9 @@ mk_write_frame_i(mk_muxer_t *mk, mk_track_t *t, th_pkt_t *pkt)
     data += 7;
   }
 
-  ebml_append_id(mk->cluster, 0xa3 ); // SimpleBlock
-  ebml_append_size(mk->cluster, len + 4);
-  ebml_append_size(mk->cluster, t->tracknum);
-
-  c_delta_flags[0] = delta >> 8;
-  c_delta_flags[1] = delta;
-  if (audio && pkt->a.pkt_keyframe) keyframe = 1;
-  c_delta_flags[2] = (keyframe << 7) | skippable;
-  htsbuf_append(mk->cluster, c_delta_flags, 3);
-  htsbuf_append(mk->cluster, data, len);
+  mk_write_frame_block(mk, t, data, len, delta, keyframe, skippable);
 }
+
 
 
 /**

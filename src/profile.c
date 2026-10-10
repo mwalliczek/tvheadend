@@ -562,7 +562,11 @@ profile_find_by_list
     res = profile_find_by_name((sflags & SUBSCRIPTION_HTSP) ? "htsp" : NULL, NULL);
     if (profile_verify(res, sflags))
       return res;
-    res = profile_find_by_name((sflags & SUBSCRIPTION_DAB) ? "audio" : NULL, NULL);
+    /* DAB+ is LATM: Matroska with the raw access units plays in
+       VLC / ffmpeg based players, the raw LOAS of "audio" hardly */
+    res = profile_find_by_name((sflags & SUBSCRIPTION_DAB) ? "matroska" : NULL, NULL);
+    if ((sflags & SUBSCRIPTION_DAB) && !profile_verify(res, sflags))
+      res = profile_find_by_name("audio", NULL);
     if (!profile_verify(res, sflags))
       tvherror(LS_PROFILE, "unable to select a working profile (asked '%s' alt '%s')", name, alt);
   }

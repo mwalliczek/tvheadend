@@ -1,3 +1,4 @@
+#include <string.h>
 #include <check.h>
 
 #include "mp4processor.h"
@@ -8,6 +9,7 @@ int16_t myResultLength;
 int memcmpResult;
 
 void callback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context);
+int16_t mp4Processor_writeFrame(int16_t framelen, const stream_parms *sp, uint8_t *output, uint8_t *data);
 
 START_TEST(mp4processorTest) {
 
@@ -90,6 +92,75 @@ void callback(const uint8_t* result, int16_t resultLength, const stream_parms* s
     }
 }
 
+/* AudioSpecificConfig: AAC LC 960, explicit SBR and PS */
+START_TEST(audioSpecificConfigTest) {
+    stream_parms sp = { 0 };
+    uint8_t asc[4];
+
+    sp.CoreSrIndex = 6;         /* 24 kHz */
+    sp.CoreChConfig = 2;
+    ck_assert_int_eq(mp4Processor_audioSpecificConfig(&sp, asc), 2);
+    /* 00010 0110 0010 100 0 */
+    ck_assert_int_eq(asc[0], 0x13);
+    ck_assert_int_eq(asc[1], 0x14);
+
+    sp.sbrFlag = 1;
+    sp.ExtensionSrIndex = 3;    /* 48 kHz */
+    ck_assert_int_eq(mp4Processor_audioSpecificConfig(&sp, asc), 4);
+    /* 00101 0110 0010 0011 00010 100 0000000 */
+    ck_assert_int_eq(asc[0], 0x2B);
+    ck_assert_int_eq(asc[1], 0x11);
+    ck_assert_int_eq(asc[2], 0x8A);
+    ck_assert_int_eq(asc[3], 0x00);
+
+    sp.psFlag = 1;
+    sp.CoreChConfig = 1;
+    ck_assert_int_eq(mp4Processor_audioSpecificConfig(&sp, asc), 4);
+    ck_assert_int_eq(asc[0] >> 3, 29);
+} END_TEST
+
+/* the raw access unit comes back out of the LATM frames we write */
+START_TEST(latmPayloadTest) {
+    static const int lens[] = { 1, 100, 254, 255, 256, 600, 1000 };
+    stream_parms sp = { 0 };
+    uint8_t au[1024], frame[1200], out[1024];
+    int i, k, cfg, n;
+
+    for (i = 0; i < (int)sizeof(au); i++)
+        au[i] = (uint8_t)(i * 7 + 3);
+    for (cfg = 0; cfg < 3; cfg++) {
+        sp.CoreSrIndex = 6;
+        sp.CoreChConfig = cfg == 2 ? 1 : 2;
+        sp.ExtensionSrIndex = 3;
+        sp.sbrFlag = cfg > 0;
+        sp.psFlag = cfg == 2;
+        for (k = 0; k < (int)(sizeof(lens) / sizeof(lens[0])); k++) {
+            memset(frame, 0, sizeof(frame));
+            n = mp4Processor_writeFrame(lens[k], &sp, frame, au);
+            n = mp4Processor_latmPayload(frame, n, out, sizeof(out));
+            ck_assert_int_eq(n, lens[k]);
+            ck_assert_int_eq(memcmp(out, au, n), 0);
+        }
+    }
+
+    /* the frame from the decoder test data */
+    {
+        FILE *f = fopen("input/dab/mp4out", "rb");
+        ck_assert_ptr_ne(f, NULL);
+        n = fread(frame, 1, sizeof(frame), f);
+        fclose(f);
+        ck_assert_int_eq(n, 361);
+        n = mp4Processor_latmPayload(frame, n, out, sizeof(out));
+        ck_assert_int_gt(n, 340);
+        ck_assert_int_lt(n, 361);
+    }
+
+    /* broken input */
+    ck_assert_int_eq(mp4Processor_latmPayload(frame, 2, out, sizeof(out)), -1);
+    frame[0] = 0;
+    ck_assert_int_eq(mp4Processor_latmPayload(frame, 361, out, sizeof(out)), -1);
+} END_TEST
+
 Suite * mp4processor_suite(void) {
     Suite *s;
     TCase *tc_core;
@@ -101,6 +172,8 @@ Suite * mp4processor_suite(void) {
 
     tcase_add_test(tc_core, mp4processorTest);
     tcase_add_test(tc_core, firecodeErrorTest);
+    tcase_add_test(tc_core, audioSpecificConfigTest);
+    tcase_add_test(tc_core, latmPayloadTest);
     suite_add_tcase(s, tc_core);
 
     return s;

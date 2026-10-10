@@ -75,4 +75,11 @@ mp4processor_t* init_mp4processor(int16_t bitRate, void* context, void (*writeCb
 void destroy_mp4processor(mp4processor_t* mp4processor);
 void mp4Processor_addtoFrame(mp4processor_t* mp4processor, const uint8_t *V);
 
+/* AudioSpecificConfig of the stream (960 sample frames, SBR / PS
+   signalled explicitly), 2 or 4 bytes; returns the length */
+int mp4Processor_audioSpecificConfig(const stream_parms *sp, uint8_t out[4]);
+/* raw access unit of a LOAS / LATM frame (AudioMuxVersion 0, one
+   program and layer); returns its length or -1 */
+int mp4Processor_latmPayload(const uint8_t *in, int len, uint8_t *out, int outsize);
+
 #endif

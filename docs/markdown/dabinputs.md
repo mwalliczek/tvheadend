@@ -113,6 +113,18 @@ Ensembles without an EPG are recognized and skipped later on, see the
 
 ---
 
+## Playback
+
+DAB+ audio is HE-AAC with 960 sample frames. Tvheadend delivers it as
+LATM, which carries the decoder configuration in band:
+
+* **HTSP** (Kodi): the stream type is `aac_latm`.
+* **HTTP** (`/stream/channel/...`, VLC, mobile apps): a profile that
+  can not carry DAB (e.g. the default *pass*) is replaced by the
+  *matroska* profile. The Matroska file holds the raw access units with
+  the matching AudioSpecificConfig and plays in VLC and ffmpeg based
+  players. The *audio* profile sends the raw LATM / LOAS frames.
+
 ## Stream status
 
 *Status -> Stream* shows for a tuned DAB ensemble:

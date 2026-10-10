@@ -393,3 +393,108 @@ int16_t	mp4Processor_writeFrame(int16_t framelen,
 	output [2] = len & 0xFF;
 	return len + 3;
 }
+int mp4Processor_audioSpecificConfig(const stream_parms *sp, uint8_t out[4]) {
+	size_t byte_bits = 0;
+	uint8_t *pointer = out - 1;	/* AddBits advances before the first bit */
+
+	memset(out, 0, 4);
+	if (sp->sbrFlag) {
+	   AddBits (sp->psFlag ? 29 : 5, 5, &byte_bits, &pointer);	// SBR / PS
+	   AddBits (sp->CoreSrIndex, 4, &byte_bits, &pointer);
+	   AddBits (sp->CoreChConfig, 4, &byte_bits, &pointer);
+	   AddBits (sp->ExtensionSrIndex, 4, &byte_bits, &pointer);
+	   AddBits (2, 5, &byte_bits, &pointer);			// AAC LC
+	   AddBits (0b100, 3, &byte_bits, &pointer);			// 960 transform
+	   return 4;
+	}
+	AddBits (2, 5, &byte_bits, &pointer);				// AAC LC
+	AddBits (sp->CoreSrIndex, 4, &byte_bits, &pointer);
+	AddBits (sp->CoreChConfig, 4, &byte_bits, &pointer);
+	AddBits (0b100, 3, &byte_bits, &pointer);			// 960 transform
+	return 2;
+}
+
+typedef struct {
+	const uint8_t *data;
+	int pos, end;		/* in bits */
+} latm_bits_t;
+
+static uint32_t latm_read(latm_bits_t *b, int n) {
+	uint32_t v = 0;
+	while (n-- > 0) {
+	   if (b->pos >= b->end) {
+	      b->pos = b->end + 1;	/* mark the overrun */
+	      return 0;
+	   }
+	   v = (v << 1) | ((b->data[b->pos >> 3] >> (7 - (b->pos & 7))) & 1);
+	   b->pos++;
+	}
+	return v;
+}
+
+static int latm_read_sr(latm_bits_t *b) {
+	int sri = latm_read(b, 4);
+	if (sri == 15)
+	   latm_read(b, 24);
+	return sri;
+}
+
+int mp4Processor_latmPayload(const uint8_t *in, int len, uint8_t *out, int outsize) {
+	latm_bits_t b;
+	int muxlen, aot, n, tmp, i;
+
+	if (len < 3 || in[0] != 0x56 || (in[1] & 0xE0) != 0xE0)
+	   return -1;
+	muxlen = ((in[1] & 0x1F) << 8) | in[2];
+	if (muxlen + 3 > len)
+	   return -1;
+	b.data = in + 3;
+	b.pos = 0;
+	b.end = muxlen * 8;
+
+	if (!latm_read(&b, 1)) {			// useSameStreamMux
+	   if (latm_read(&b, 1))			// audioMuxVersion
+	      return -1;
+	   latm_read(&b, 1);				// allStreamsSameTimeFraming
+	   if (latm_read(&b, 6) || latm_read(&b, 4) || latm_read(&b, 3))
+	      return -1;				// subframes, programs, layers
+	   aot = latm_read(&b, 5);
+	   if (aot == 31)
+	      aot = 32 + latm_read(&b, 6);
+	   latm_read_sr(&b);
+	   latm_read(&b, 4);				// channelConfiguration
+	   if (aot == 5 || aot == 29) {
+	      latm_read_sr(&b);
+	      aot = latm_read(&b, 5);
+	   }
+	   if (aot < 1 || aot > 4)
+	      return -1;				// only GASpecificConfig
+	   latm_read(&b, 1);				// frameLengthFlag
+	   if (latm_read(&b, 1))			// dependsOnCoreCoder
+	      latm_read(&b, 14);
+	   if (latm_read(&b, 1))			// extensionFlag
+	      latm_read(&b, 1);
+	   if (latm_read(&b, 3))			// frameLengthType
+	      return -1;
+	   latm_read(&b, 8);				// latmBufferFullness
+	   if (latm_read(&b, 1))			// otherDataPresent
+	      do {
+	         tmp = latm_read(&b, 1);
+	         latm_read(&b, 8);
+	      } while (tmp && b.pos <= b.end);
+	   if (latm_read(&b, 1))			// crcCheckPresent
+	      latm_read(&b, 8);
+	}
+
+	n = 0;						// PayloadLengthInfo
+	do {
+	   tmp = latm_read(&b, 8);
+	   n += tmp;
+	} while (tmp == 255 && b.pos <= b.end);
+
+	if (b.pos > b.end || n > outsize || b.pos + n * 8 > b.end)
+	   return -1;
+	for (i = 0; i < n; i++)
+	   out[i] = latm_read(&b, 8);
+	return n;
+}
