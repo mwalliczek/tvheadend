@@ -73,6 +73,8 @@ void process_ficInput(struct sdr_state_t *sdr, int16_t ficno) {
     protection_deconvolve(sdr->protection, sdr->ofdm_input, sdr->bitBuffer_out);
     atomic_add(&sdr->berBits, sdr->protection->bits);
     atomic_add(&sdr->berErrors, sdr->protection->bitErrors);
+    atomic_add(&sdr->ficBerBits, sdr->protection->bits);
+    atomic_add(&sdr->ficBerErrors, sdr->protection->bitErrors);
     sdr->protection->bits = sdr->protection->bitErrors = 0;
 
     /**

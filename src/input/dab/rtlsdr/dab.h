@@ -129,6 +129,13 @@ struct sdr_state_t {
 	int			fibCRCtotal;
 	int			fibCRCsuccess;
 	int			fibCRCrate;
+
+	/* channel impulse response (phase reference), for the summary:
+	   strongest echo of the period relative to the main path and its
+	   delay in samples (negative: before it), last peak / average */
+	float			echoLevel;
+	int			echoDelay;
+	float			peakToAverage;
 	
 	tvh_mutex_t	active_service_mutex;
 	
@@ -142,6 +149,9 @@ struct sdr_state_t {
 	/* channel bit errors (FIC and sub-channels) since the last status */
 	volatile int	berBits;
 	volatile int	berErrors;
+	/* the same for the FIC alone, for the reception summary */
+	volatile int	ficBerBits;
+	volatile int	ficBerErrors;
 
 #ifdef TRACE_RTLSDR_RAW
  	FILE*		traceFile;

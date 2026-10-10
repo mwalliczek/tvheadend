@@ -521,13 +521,15 @@ rtlsdr_frontend_rx_summary(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi)
 {
 	struct sdr_state_t *sdr = &lfe->sdr;
 	int samples, clipped;
-	int blocks, errors, unc;
+	int blocks, errors, unc, ficBits, ficErrors;
 	double ppm;
 
 	if (mclk() - lfe->lfe_summary < sec2mono(RTLSDR_SUMMARY))
 		return;
 	lfe->lfe_summary = mclk();
 
+	ficBits = atomic_exchange(&sdr->ficBerBits, 0);
+	ficErrors = atomic_exchange(&sdr->ficBerErrors, 0);
 	samples = atomic_exchange(&lfe->lfe_samples, 0);
 	clipped = atomic_exchange(&lfe->lfe_clipped, 0);
 	tvh_mutex_lock(&mmi->tii_stats_mutex);
@@ -546,7 +548,8 @@ rtlsdr_frontend_rx_summary(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi)
 
 	tvhdebug(LS_RTLSDR, "%s - reception: snr %.1f dB, level %.3f, clipped %.3f %%, "
 	         "gain %.1f dB, freq corr %.0f Hz, clock %+.1f ppm, sync %s, FIC CRC %d %%, "
-	         "BER %.4f, AUs %d/%d bad, RS uncorrectable %d",
+	         "BER %.4f (FIC %.4f), AUs %d/%d bad, RS uncorrectable %d, "
+	         "strongest echo %.1f dB at %+d samples (%+.0f us, guard 246 us), peak/avg %.1f",
 	         mmi->mmi_ensemble->mm_nicename,
 	         mmi->tii_stats.snr / 1000.0, sdr->sLevel,
 	         samples ? 100.0 * clipped / samples : 0.0,
@@ -555,7 +558,11 @@ rtlsdr_frontend_rx_summary(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi)
 	         sdr->isSynced ? (mmi->fibProcessorIsSynced ? "fic" : "time") : "none",
 	         sdr->fibCRCrate,
 	         mmi->tii_stats.tc_bit ? (double)mmi->tii_stats.ec_bit / mmi->tii_stats.tc_bit : 0.0,
-	         errors, blocks, unc);
+	         ficBits ? (double)ficErrors / ficBits : 0.0,
+	         errors, blocks, unc,
+	         sdr->echoLevel > 0 ? 20 * log10f(sdr->echoLevel) : -99.0,
+	         sdr->echoDelay, sdr->echoDelay / 2.048, sdr->peakToAverage);
+	sdr->echoLevel = 0;
 }
 
 /*
