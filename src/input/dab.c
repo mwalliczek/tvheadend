@@ -37,7 +37,10 @@ void dab_init(void) {
 
 void dab_done(void) {
   tvhftrace(LS_MAIN, dab_network_scan_done);
-  tvhftrace(LS_MAIN, dab_network_done);
-
+  /* the adapters first: they write a pending save of their config
+     (the learned frequency correction is saved often) while still
+     linked to the networks; deleting the networks first removes the
+     links and saved the frontends without their network assignment */
   tvhftrace(LS_MAIN, rtlsdr_done);
+  tvhftrace(LS_MAIN, dab_network_done);
 }
