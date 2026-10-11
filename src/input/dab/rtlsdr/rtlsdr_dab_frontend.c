@@ -469,16 +469,27 @@ static void rtlsdr_dab_callback(uint8_t *buf, uint32_t len, void *ctx)
 		rtlsdr_cancel_async(lfe->dev);
 		return;
 	}
-	/* ADC overload: count the samples at full scale */
-	{
-		uint32_t i, clipped = 0;
-		for (i = 0; i < len; i++)
-			clipped += buf[i] == 0 || buf[i] == 255;
-		atomic_add(&lfe->lfe_clipped, clipped);
-		atomic_add(&lfe->lfe_samples, len);
-	}
 	/* write input data into fifo */
-	cbWrite(&(sdr->fifo), buf, len);
+	{
+		CircularBuffer *cb = &sdr->fifo;
+		uint32_t i, pos = cb->end, written, clipped = 0;
+
+		cbWrite(cb, buf, len);
+		/* ADC overload: count the samples at full scale. On the copy:
+		   buf is a zero-copy USB buffer of librtlsdr, uncached memory on
+		   a Raspberry Pi, where reading it byte by byte took half a core */
+		written = (cb->end + cb->size - pos) % cb->size;
+		for (i = 0; i < written; ) {
+			const uint8_t *p = &cb->elems[pos];
+			uint32_t j, n = MIN(written - i, cb->size - pos);
+			for (j = 0; j < n; j++)
+				clipped += p[j] == 0 || p[j] == 255;
+			i += n;
+			pos = 0;
+		}
+		atomic_add(&lfe->lfe_clipped, clipped);
+		atomic_add(&lfe->lfe_samples, written);
+	}
 	tvh_write(lfe->lfe_control_pipe.wr, "", 1);
 }
 

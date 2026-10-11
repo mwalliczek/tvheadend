@@ -65,12 +65,24 @@ float convTable[] = {
 
 /* the oscillator rotates by -freqOffset / INPUT_RATE turns per sample */
 static void osc_set_offset(struct sdr_state_t *sdr, int32_t freqOffset) {
-    double w;
+    double w, re, im, t, sre, sim;
+    int k;
     if (freqOffset == sdr->oscOffset)
         return;
     w = -2.0 * M_PI * freqOffset / INPUT_RATE;
-    sdr->oscStepRe = cos(w);
-    sdr->oscStepIm = sin(w);
+    sre = cos(w);
+    sim = sin(w);
+    sdr->oscStepRe = sre;
+    sdr->oscStepIm = sim;
+    re = sre;
+    im = sim;
+    for (k = 0; k < OSC_BLOCK; k++) {
+        sdr->oscTabRe[k] = re;
+        sdr->oscTabIm[k] = im;
+        t = re * sre - im * sim;
+        im = re * sim + im * sre;
+        re = t;
+    }
     sdr->oscOffset = freqOffset;
 }
 
@@ -81,15 +93,21 @@ static void osc_normalize(struct sdr_state_t *sdr) {
     sdr->oscIm /= m;
 }
 
+/*
+ * Convert and mix the samples to the corrected frequency. The samples of
+ * a block are rotated with the phasor of the block start times a table
+ * of the step powers, and the level is summed per block: no sample
+ * depends on the one before, which keeps the FPU pipeline busy (the
+ * recursive oscillator and level average were most of the time of the
+ * demodulator thread on a Raspberry Pi).
+ */
 uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, int32_t freqOffset) {
     struct sdr_state_t *sdr = &lfe->sdr;
-    uint32_t i = 0, k, n;
+    uint32_t i = 0, k, m, n;
     const uint8_t *buffer;
-    float oRe, oIm, sRe, sIm, level;
+    float *out;
 
     osc_set_offset(sdr, freqOffset);
-    sRe = sdr->oscStepRe;
-    sIm = sdr->oscStepIm;
     while (i < size) {
         buffer = cbReadPtr(&sdr->fifo, &n);
         n /= 2;
@@ -101,25 +119,33 @@ uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, in
         if (n > size - i)
             n = size - i;
 
-        oRe = sdr->oscRe;
-        oIm = sdr->oscIm;
-        level = sdr->sLevel;
-        for (k = 0; k < n; k++, i++) {
-            float re = convTable[buffer[2 * k]], im = convTable[buffer[2 * k + 1]];
-            float t = oRe * sRe - oIm * sIm;
-            oIm = oRe * sIm + oIm * sRe;
-            oRe = t;
-            t = re * oRe - im * oIm;
-            im = re * oIm + im * oRe;
-            re = t;
-            v[i] = re + im * I;
-            level = LEVEL_ALPHA * (fabsf(re) + fabsf(im)) + (1 - LEVEL_ALPHA) * level;
+        for (k = 0; k < n; k += m) {
+            const uint8_t *b = buffer + 2 * k;
+            float bRe = sdr->oscRe, bIm = sdr->oscIm, sum = 0, t;
+            uint32_t j;
+
+            m = n - k < OSC_BLOCK ? n - k : OSC_BLOCK;
+            out = (float *)&v[i + k];
+            for (j = 0; j < m; j++) {
+                float pRe = bRe * sdr->oscTabRe[j] - bIm * sdr->oscTabIm[j];
+                float pIm = bRe * sdr->oscTabIm[j] + bIm * sdr->oscTabRe[j];
+                float re = convTable[b[2 * j]], im = convTable[b[2 * j + 1]];
+                float oRe = re * pRe - im * pIm;
+                float oIm = re * pIm + im * pRe;
+                out[2 * j] = oRe;
+                out[2 * j + 1] = oIm;
+                sum += fabsf(oRe) + fabsf(oIm);
+            }
+            /* advance the phasor by m steps */
+            t = bRe * sdr->oscTabRe[m - 1] - bIm * sdr->oscTabIm[m - 1];
+            sdr->oscIm = bRe * sdr->oscTabIm[m - 1] + bIm * sdr->oscTabRe[m - 1];
+            sdr->oscRe = t;
+            osc_normalize(sdr);
+            /* long term average, (1 - a)^m ~ 1 - a m for a m << 1 */
+            sdr->sLevel = (1 - LEVEL_ALPHA * m) * sdr->sLevel + LEVEL_ALPHA * sum;
         }
-        sdr->oscRe = oRe;
-        sdr->oscIm = oIm;
-        sdr->sLevel = level;
-        osc_normalize(sdr);
         cbConsume(&sdr->fifo, 2 * n);
+        i += n;
     }
     return size;
 }
@@ -172,9 +198,8 @@ void sdr_init(struct sdr_state_t *sdr) {
     sdr->sLevel = 0;
     sdr->oscRe = 1;
     sdr->oscIm = 0;
-    sdr->oscStepRe = 1;
-    sdr->oscStepIm = 0;
-    sdr->oscOffset = 0;
+    sdr->oscOffset = INT32_MIN;
+    osc_set_offset(sdr, 0);
     sdr->oscCount = 0;
 
     sdr->mmi->fibProcessorIsSynced = 0;

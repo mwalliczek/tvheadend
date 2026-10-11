@@ -38,6 +38,7 @@
 #include "../mp4processor.h"
 #include "../dab_mot.h"
 
+#define OSC_BLOCK 256
 #define DEFAULT_BUF_LENGTH (16 * 16384)
 
 typedef struct sdr_dab_service_instance       sdr_dab_service_instance_t;
@@ -54,6 +55,11 @@ struct ofdm_decoder_t {
 	/* phase slope over the carriers from symbol to symbol (rad / carrier),
 	   caused by the sample clock offset of the stick */
 	float slope;
+	/* exp(-j slope k) for the carrier of soft bit i, rebuilt when the
+	   slope has moved (it is smoothed and changes slowly) */
+	float rotRe[K], rotIm[K];
+	float rotSlope;
+	int rotValid;
 	pthread_t thread;
 	th_pipe_t pipe;
 	float _Complex buffer[L][T_s];
@@ -112,6 +118,9 @@ struct sdr_state_t {
 	/* local oscillator for the frequency correction: a rotating phasor */
 	float		oscRe, oscIm;
 	float		oscStepRe, oscStepIm;
+	/* oscStep^(k + 1), k = 0 .. OSC_BLOCK - 1: getSamples() rotates a
+	   block of samples without a sample to sample dependency */
+	float		oscTabRe[OSC_BLOCK], oscTabIm[OSC_BLOCK];
 	int32_t		oscOffset;
 	uint32_t	oscCount;
 	float		sLevel;
