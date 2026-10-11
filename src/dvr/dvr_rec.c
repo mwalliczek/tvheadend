@@ -1354,6 +1354,39 @@ dvr_rec_set_state(dvr_entry_t *de, dvr_rs_state_t newstate, int error)
   dvr_entry_set_state(de, de->de_sched_state, newstate, error);
 }
 
+/*
+ * DAB delivers elementary stream packets only, the MPEG-TS pass-through
+ * of the pass and raw profiles can not write them: record the audio as
+ * it comes (DAB+: LATM, played by ffmpeg / VLC / mpv)
+ */
+static muxer_t *
+dvr_rec_dab_muxer(dvr_entry_t *de, profile_chain_t *prch,
+                  const streaming_start_t *ss)
+{
+  muxer_t *m = prch->prch_muxer;
+  muxer_config_t c;
+
+  if (ss->ss_si.si_type != S_DAB || m == NULL ||
+      (m->m_config.m_type != MC_PASS && m->m_config.m_type != MC_RAW))
+    return m;
+
+  memset(&c, 0, sizeof(c));
+  c.m_type = MC_MP4A;
+  c.m_cache = m->m_config.m_cache;
+  c.m_file_permissions = m->m_config.m_file_permissions;
+  c.m_directory_permissions = m->m_config.m_directory_permissions;
+  c.m_output_chunk = m->m_config.m_output_chunk;
+  c.u.audioes.m_force_type = MC_UNKNOWN;
+  c.u.audioes.m_index = 0;
+
+  muxer_destroy(m);
+  prch->prch_muxer = m = muxer_create(&c, NULL);
+  tvhinfo(LS_DVR, "\"%s\": DAB service, recording the audio stream "
+          "instead of MPEG-TS pass-through",
+          lang_str_get(de->de_title, NULL));
+  return m;
+}
+
 /**
  *
  */
@@ -1399,6 +1432,8 @@ dvr_rec_start(dvr_entry_t *de, const streaming_start_t *ss)
     }
     muxer = prch->prch_muxer;
   }
+
+  muxer = dvr_rec_dab_muxer(de, prch, ss);
 
   if(!muxer) {
     dvr_rec_fatal_error(de, "Unable to create muxer");
