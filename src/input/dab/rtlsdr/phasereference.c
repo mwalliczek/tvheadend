@@ -199,6 +199,29 @@ int32_t	phaseReferenceFindIndex(struct sdr_state_t *sdr, const float _Complex* v
     if (Max < 3 * sum / T_u)
         return  -fabsf(Max * T_u / sum) - 1;
     /**
+    *	For the reception summary: the strongest echo (impulse response
+    *	peak more than 8 samples away from the main path), per period
+    */
+    {
+        int32_t echo = -1, d;
+        float echoMax = 0;
+        for (i = 0; i < T_u; i++) {
+            d = (i - maxIndex + T_u + T_u / 2) % T_u - T_u / 2;
+            if (d >= -8 && d <= 8)
+                continue;
+            float absValue = cabsf(sdr->phaseReference.fftBuffer[i]);
+            if (absValue > echoMax) {
+                echoMax = absValue;
+                echo = d;
+            }
+        }
+        if (echo != -1 && echoMax / Max > sdr->echoLevel) {
+            sdr->echoLevel = echoMax / Max;
+            sdr->echoDelay = echo;
+        }
+        sdr->peakToAverage = Max * T_u / sum;
+    }
+    /**
     *	In a single frequency network a later path (another transmitter)
     *	may be stronger than the first one. Starting the FFT window at the
     *	strongest path then lets the next symbol of the earlier path leak

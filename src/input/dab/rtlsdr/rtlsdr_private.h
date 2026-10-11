@@ -85,6 +85,12 @@ struct rtlsdr_frontend
 	time_t                    lfe_monitor;
 	int64_t                   lfe_tuned;      /* mclk of the last (re)tune */
 	int                       lfe_retunes;    /* re-tunes without FIC sync */
+
+	/* reception summary (rtlsdr_frontend_rx_summary) */
+	volatile int              lfe_samples;    /* I and Q bytes from the stick */
+	volatile int              lfe_clipped;    /* of these at 0 or 255 */
+	int64_t                   lfe_summary;    /* mclk of the last summary */
+	int                       lfe_summary_blocks, lfe_summary_errors, lfe_summary_unc;
 	mtimer_t                  lfe_monitor_timer;
 	
 	uint32_t                  lfe_status_period;
