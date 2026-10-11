@@ -335,7 +335,7 @@ dab_service_start(service_t *t, int instance, int weight, int flags)
   dab_ensemble_t          *m = s->s_dab_ensemble;
   dab_ensemble_instance_t *mmi;
 
-  tvhdebug(LS_RTLSDR, "%s - start service", s->s_dab_svcname);
+  tvhdebug(LS_RTLSDR, "%s - start service", s->s_nicename);
 
   /* Validate */
   assert(s->s_status      == SERVICE_IDLE);
@@ -375,7 +375,7 @@ dab_service_stop(service_t *t)
   dab_service_t *s  = (dab_service_t*)t;
   dab_input_t   *i  = s->s_dab_active_input;
 
-  tvhdebug(LS_RTLSDR, "%s - stop service", s->s_dab_svcname);
+  tvhdebug(LS_RTLSDR, "%s - stop service", s->s_nicename);
 
   /* Validate */
   assert(s->s_source_type == S_DAB);
