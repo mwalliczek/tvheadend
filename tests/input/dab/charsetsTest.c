@@ -25,10 +25,11 @@ START_TEST(ebuLatinNonAsciiTest) {
     check_conv("5\xa9", -1, EbuLatin, "5\xe2\x82\xac");
     /* every non-zero character gives valid, non-empty output */
     for (int c = 1; c < 256; c++) {
-        char in[2] = { (char)c, 'x' };
-        char *s = toStringUsingCharset(in, EbuLatin, 2);
-        ck_assert_int_ge(strlen(s), 2);
-        ck_assert_int_le(strlen(s), 4);
+        /* between letters: a space is not trimmed */
+        char in[3] = { 'x', (char)c, 'y' };
+        char *s = toStringUsingCharset(in, EbuLatin, 3);
+        ck_assert_int_ge(strlen(s), 3);
+        ck_assert_int_le(strlen(s), 5);
         free(s);
     }
 } END_TEST
@@ -39,6 +40,18 @@ START_TEST(trimTest) {
     check_conv("A ", 0, EbuLatin, "");
     /* an embedded NUL terminates a fixed size label */
     check_conv("ABC\0DEF", 7, EbuLatin, "ABC");
+    /* padding at both ends, spaces inside stay */
+    check_conv("DIE NEUE 107.7  ", 16, EbuLatin, "DIE NEUE 107.7");
+    check_conv("     SWR3       ", 16, EbuLatin, "SWR3");
+} END_TEST
+
+START_TEST(labelTrimTest) {
+    char a[] = "DIE NEUE 107.7  ", b[] = "  x y ", c[] = "   ", d[] = "abc";
+    ck_assert_str_eq(dab_label_trim(a), "DIE NEUE 107.7");
+    ck_assert_str_eq(dab_label_trim(b), "x y");
+    ck_assert_str_eq(dab_label_trim(c), "");
+    ck_assert_str_eq(dab_label_trim(d), "abc");
+    ck_assert_ptr_eq(dab_label_trim(NULL), NULL);
 } END_TEST
 
 START_TEST(otherCharsetsTest) {
@@ -53,6 +66,7 @@ static Suite *charsets_suite(void) {
     tcase_add_test(tc_core, ebuLatinAsciiTest);
     tcase_add_test(tc_core, ebuLatinNonAsciiTest);
     tcase_add_test(tc_core, trimTest);
+    tcase_add_test(tc_core, labelTrimTest);
     tcase_add_test(tc_core, otherCharsetsTest);
     suite_add_tcase(s, tc_core);
     return s;

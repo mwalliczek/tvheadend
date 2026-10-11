@@ -26,6 +26,7 @@
 #include "settings.h"
 #include "config.h"
 #include "epggrab.h"
+#include "charsets.h"
 
 /* **************************************************************************
  * Class definition
@@ -570,6 +571,10 @@ dab_service_create0
     if (st->es_type == SCT_AAC)
       st->es_type = SCT_MP4A;
   tvh_mutex_unlock(&s->s_stream_mutex);
+
+  /* names saved before the labels were trimmed: "DIE NEUE 107.7  " */
+  dab_label_trim(s->s_dab_svcname);
+  dab_label_trim(s->s_dab_provider);
 
   /* Create */
   sbuf_init(&s->s_tsbuf);

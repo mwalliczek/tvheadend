@@ -88,7 +88,7 @@ static size_t put_utf8(char *d, uint16_t c) {
  * Convert a DAB label (FIG 1, X-PAD, EPG strings) to a newly allocated,
  * NUL-terminated UTF-8 string. size == -1 means buffer is NUL-terminated,
  * otherwise at most size bytes are used (stopping at an embedded NUL).
- * Trailing spaces are removed. The caller has to free the result.
+ * Spaces at both ends are removed. The caller has to free the result.
  */
 char* toStringUsingCharset (const char* buffer,
 	                          CharacterSet charset, int size) {
@@ -138,9 +138,27 @@ size_t i, o = 0;
 	      }
 	      break;
 	}
-	while (o > 0 && s[o - 1] == ' ')
-	   o--;
 	s[o] = '\0';
+	dab_label_trim (s);
 
+	return s;
+}
+
+/*
+ * Labels are padded with spaces to 16 characters (some are centred):
+ * remove the spaces at both ends, in place.
+ */
+char* dab_label_trim (char *s) {
+size_t	b = 0, e;
+
+	if (s == NULL)
+	   return s;
+	e = strlen (s);
+	while (e > 0 && s[e - 1] == ' ')
+	   e--;
+	while (b < e && s[b] == ' ')
+	   b++;
+	memmove (s, s + b, e - b);
+	s[e - b] = '\0';
 	return s;
 }
