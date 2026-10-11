@@ -4268,6 +4268,16 @@ htsp_stream_deliver(htsp_subscription_t *hs, th_pkt_t *pkt)
 }
 
 /**
+ * Kodi (pvr.hts) passes the stream type name to ffmpeg as codec name
+ */
+static int
+htsp_client_wants_ffmpeg_names(htsp_connection_t *htsp)
+{
+  return htsp->htsp_clientname &&
+         !strncmp(htsp->htsp_clientname, "Kodi", 4);
+}
+
+/**
  * Send a 'subscriptionStart' message to client informing about
  * delivery start and all components.
  */
@@ -4306,7 +4316,11 @@ htsp_subscription_start(htsp_subscription_t *hs, const streaming_start_t *ss)
     htsmsg_add_u32(c, "index", ssc->es_index);
     if (ss->ss_si.si_type == S_DAB &&
         (ssc->es_type == SCT_MP4A || ssc->es_type == SCT_AAC))
-      type = "aac_latm"; /* DAB+ is sent as LATM (960 sample frames), not ADTS */
+      /* DAB+ is sent as LATM (960 sample frames), not ADTS. Kodi maps
+         the type name to the ffmpeg decoder and needs "aac_latm"; other
+         clients (e.g. TvhClient: VLCKit / mpv) know only the tvheadend
+         names and detect the LATM framing in the data themselves */
+      type = htsp_client_wants_ffmpeg_names(hs->hs_htsp) ? "aac_latm" : "AAC";
     else if (ssc->es_type == SCT_AAC)
       type = "AAC"; /* override */
     else
