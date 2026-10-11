@@ -54,6 +54,11 @@ struct ofdm_decoder_t {
 	/* phase slope over the carriers from symbol to symbol (rad / carrier),
 	   caused by the sample clock offset of the stick */
 	float slope;
+	/* exp(-j slope k) for the carrier of soft bit i, rebuilt when the
+	   slope has moved (it is smoothed and changes slowly) */
+	float rotRe[K], rotIm[K];
+	float rotSlope;
+	int rotValid;
 	pthread_t thread;
 	th_pipe_t pipe;
 	float _Complex buffer[L][T_s];

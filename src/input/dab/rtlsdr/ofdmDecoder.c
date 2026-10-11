@@ -72,6 +72,7 @@ void initOfdmDecoder(struct sdr_state_t *sdr) {
 
 	sdr->mmi->tii_stats.snr = 0;
 	sdr->ofdmDecoder.slope = 0;
+	sdr->ofdmDecoder.rotValid = 0;
 
 	tvhdebug(LS_RTLSDR, "initOfdmDecoder");
 	sdr->ofdmDecoder.fftBuffer = fftwf_malloc(sizeof(fftwf_complex) * T_u);
@@ -207,41 +208,75 @@ void decodeBlock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno
  * common error. In simulation this brings the channel bit error rate at
  * 48 ppm and 8 dB SNR from 4.1 % back to 3.2 % (3.1 % without offset).
  */
-static void correctPhase(struct sdr_state_t *sdr, float _Complex *r1) {
+static void correctPhaseTable(struct sdr_state_t *sdr, float slope) {
+	struct ofdm_decoder_t *od = &sdr->ofdmDecoder;
 	float _Complex rot[K + 1];	/* exp(-j slope k), k = -K/2 .. K/2 */
-	float _Complex lo = 0, hi = 0, all = 0, z, d, step, c;
-	float slope = sdr->ofdmDecoder.slope;
+	float _Complex step = cexpf(-I * slope);
 	int i;
 
-	step = cexpf(-I * slope);
 	rot[K / 2] = 1;
 	for (i = 1; i <= K / 2; i++) {
 		rot[K / 2 + i] = rot[K / 2 + i - 1] * step;
 		rot[K / 2 - i] = conjf(rot[K / 2 + i]);
 	}
-
 	for (i = 0; i < K; i++) {
-		z = r1[i] * rot[K / 2 + myMapper[i]];
-		d = (crealf(z) > 0 ? 1.0f : -1.0f) + I * (cimagf(z) > 0 ? 1.0f : -1.0f);
-		z *= conjf(d);
-		all += z;
-		if (myMapper[i] > 0)
-			hi += z;
-		else
-			lo += z;
+		od->rotRe[i] = crealf(rot[K / 2 + myMapper[i]]);
+		od->rotIm[i] = cimagf(rot[K / 2 + myMapper[i]]);
+	}
+	od->rotSlope = slope;
+	od->rotValid = 1;
+}
+
+static void correctPhase(struct sdr_state_t *sdr, float _Complex *r1) {
+	struct ofdm_decoder_t *od = &sdr->ofdmDecoder;
+	float *r = (float *)r1;		/* re, im of the K carriers */
+	float slope = od->slope;
+	float loRe = 0, loIm = 0, hiRe = 0, hiIm = 0, cRe, cIm, m;
+	int i;
+
+	/* at most 1 mrad off at the band edges */
+	if (!od->rotValid || fabsf(slope - od->rotSlope) * (K / 2) > 1e-3f)
+		correctPhaseTable(sdr, slope);
+
+	/* the slope, and the phase error with the QPSK decision removed */
+	for (i = 0; i < K; i++) {
+		float re = r[2 * i] * od->rotRe[i] - r[2 * i + 1] * od->rotIm[i];
+		float im = r[2 * i] * od->rotIm[i] + r[2 * i + 1] * od->rotRe[i];
+		float dRe = re > 0 ? 1.0f : -1.0f, dIm = im > 0 ? 1.0f : -1.0f;
+		r[2 * i] = re;
+		r[2 * i + 1] = im;
+		if (myMapper[i] > 0) {
+			hiRe += re * dRe + im * dIm;
+			hiIm += im * dRe - re * dIm;
+		} else {
+			loRe += re * dRe + im * dIm;
+			loIm += im * dRe - re * dIm;
+		}
 	}
 
 	/* common phase with the current slope */
-	c = cabsf(all) > 0 ? conjf(all) / cabsf(all) : 1;
-	for (i = 0; i < K; i++)
-		r1[i] *= rot[K / 2 + myMapper[i]] * c;
+	cRe = hiRe + loRe;
+	cIm = -(hiIm + loIm);
+	m = sqrtf(cRe * cRe + cIm * cIm);
+	if (m > 0) {
+		cRe /= m;
+		cIm /= m;
+		for (i = 0; i < K; i++) {
+			float re = r[2 * i] * cRe - r[2 * i + 1] * cIm;
+			r[2 * i + 1] = r[2 * i] * cIm + r[2 * i + 1] * cRe;
+			r[2 * i] = re;
+		}
+	}
 
 	/* the halves are K / 2 carriers apart on average */
-	if (cabsf(hi) > 0 && cabsf(lo) > 0) {
-		slope = 0.95f * slope + 0.05f * (slope + cargf(hi * conjf(lo)) / (K / 2));
-		sdr->ofdmDecoder.slope = fabsf(slope) > SLOPE_MAX ? 0 : slope;
+	if ((hiRe != 0 || hiIm != 0) && (loRe != 0 || loIm != 0)) {
+		/* arg(hi * conj(lo)) */
+		float d = atan2f(hiIm * loRe - hiRe * loIm, hiRe * loRe + hiIm * loIm);
+		slope = 0.95f * slope + 0.05f * (slope + d / (K / 2));
+		od->slope = fabsf(slope) > SLOPE_MAX ? 0 : slope;
 	}
 }
+
 
 static void decodeBlockInt(struct sdr_state_t *sdr, const float _Complex* v, int16_t *ibits) {
 	int i;
