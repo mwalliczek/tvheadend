@@ -26,7 +26,8 @@ void *rtlsdr_demod_thread_fn(void *arg)
 	int32_t		syncBufferSize = 32768;
 	int32_t		syncBufferMask = syncBufferSize - 1;
 	float		envBuffer[syncBufferSize];
-	float _Complex ofdmBuffer[T_s];
+	/* a symbol, or the null symbol skipped at the end of a frame (longer) */
+	float _Complex ofdmBuffer[T_null > T_s ? T_null : T_s];
 	int		ofdmSymbolCount = 0;
 	int		dip_attempts = 0;
 	int		index_attempts = 0;
