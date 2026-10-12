@@ -209,6 +209,15 @@ rtlsdr_adapter_add(int device_number)
 		rtlsdr_adapter_changed(la);
 }
 
+/*
+ * Is the hardware an RTL-SDR (DAB) adapter
+ */
+int
+rtlsdr_is_adapter(struct tvh_hardware *th)
+{
+	return idnode_is_instance(&th->th_id, &rtlsdr_adapter_class);
+}
+
 void rtlsdr_init() {
 	int i, device_count;
 	idclass_register(&rtlsdr_adapter_class);

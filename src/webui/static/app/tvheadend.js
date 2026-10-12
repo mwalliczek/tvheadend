@@ -1172,7 +1172,7 @@ function accessUpdate(o) {
             });
 
             if (tvheadend.capabilities.indexOf('tvadapters') !== -1)
-                tvheadend.tvadapters(dabin);
+                tvheadend.dab.adapters(dabin);
             tvheadend.dab.networks(dabin);
             tvheadend.dab.muxes(dabin);
             tvheadend.dab.services(dabin);
