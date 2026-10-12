@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 324" width="1004" height="324" role="img" aria-label="FIC chain">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="324" rx="12" class="bgcard"/>
+
+  <g font-size="12">
+    <rect x="10" y="20" width="120" height="70" rx="8" class="f-ofdm"/><text x="70" y="44" text-anchor="middle" class="b">3 symbols</text><text x="70" y="62" text-anchor="middle" class="t-m">3 × 3072</text><text x="70" y="78" text-anchor="middle" class="t-m">= 9216 soft bits</text>
+    <path d="M130 55 H156" class="arr"/>
+    <rect x="160" y="20" width="120" height="70" rx="8" class="f-fec"/><text x="220" y="44" text-anchor="middle" class="b">4 × 2304</text><text x="220" y="62" text-anchor="middle" class="t-m">process_ficBlock</text><text x="220" y="78" text-anchor="middle" class="t-m">one per CIF</text>
+    <path d="M280 55 H306" class="arr"/>
+    <rect x="310" y="20" width="130" height="70" rx="8" class="f-fec"/><text x="375" y="44" text-anchor="middle" class="b">depuncture</text><text x="375" y="62" text-anchor="middle" class="t-m">2304 → 3096</text><text x="375" y="78" text-anchor="middle" class="t-m">holes = 0 (unknown)</text>
+    <path d="M440 55 H466" class="arr"/>
+    <rect x="470" y="20" width="130" height="70" rx="8" class="f-fec"/><text x="535" y="44" text-anchor="middle" class="b">Viterbi</text><text x="535" y="62" text-anchor="middle" class="t-m">K=7, rate 1/4</text><text x="535" y="78" text-anchor="middle" class="t-m">64 states → 768 bits</text>
+    <path d="M600 55 H626" class="arr"/>
+    <rect x="630" y="20" width="130" height="70" rx="8" class="f-fec"/><text x="695" y="44" text-anchor="middle" class="b">energy</text><text x="695" y="62" text-anchor="middle" class="t-m">dispersal</text><text x="695" y="78" text-anchor="middle" class="t-m">XOR PRBS</text>
+    <path d="M760 55 H786" class="arr"/>
+    <rect x="790" y="20" width="180" height="70" rx="8" class="f-audio"/><text x="880" y="44" text-anchor="middle" class="b">3 FIBs × 256 bit</text><text x="880" y="62" text-anchor="middle" class="t-m">30 bytes + CRC‑16</text><text x="880" y="78" text-anchor="middle" class="mono t-m">check_CRC_bits</text>
+  </g>
+  <!-- BER -->
+  <g font-size="12">
+    <rect x="470" y="104" width="290" height="44" rx="8" class="card"/>
+    <text x="615" y="122" text-anchor="middle">re‑encode the result, compare with input</text>
+    <text x="615" y="139" text-anchor="middle" class="t-m mono">protection_count_errors → BER in Kodi/UI</text>
+    <path d="M535 90 V104" class="ln"/>
+  </g>
+  <!-- FIGs -->
+  <g transform="translate(10,170)" font-size="12">
+    <text x="0" y="0" class="b">process_FIB → FIGs (fib-processor.c)</text>
+    <rect x="0" y="14" width="180" height="104" rx="8" class="f-audio"/>
+    <text x="12" y="36" class="b">FIG 0/1</text><text x="72" y="36" class="t-m">sub‑channels:</text>
+    <text x="12" y="54" class="t-m">StartAddr, Length,</text>
+    <text x="12" y="72" class="t-m">protection, bitrate</text>
+    <text x="12" y="98" class="b">FIG 0/2</text><text x="72" y="98" class="t-m">service → subch</text>
+    <rect x="196" y="14" width="200" height="104" rx="8" class="f-audio"/>
+    <text x="208" y="36" class="b">FIG 1/0, 1/1, 1/4</text>
+    <text x="208" y="54" class="t-m">ensemble, service and</text>
+    <text x="208" y="72" class="t-m">component labels (16 chars,</text>
+    <text x="208" y="90" class="t-m">trimmed: dab_label_trim,</text>
+    <text x="208" y="108" class="t-m">PR #21)</text>
+    <rect x="412" y="14" width="200" height="104" rx="8" class="f-audio"/>
+    <text x="424" y="36" class="b">FIG 0/13, 0/14</text>
+    <text x="424" y="54" class="t-m">user applications (EPG),</text>
+    <text x="424" y="72" class="t-m">packet FEC</text>
+    <text x="424" y="98" class="b">FIG 0/9, 0/10</text><text x="424" y="114" class="t-m">time, country</text>
+    <rect x="628" y="14" width="332" height="104" rx="8" class="card"/>
+    <text x="640" y="36" class="b">→ dab_ensemble / dab_service</text>
+    <text x="640" y="56" class="t-m">tvheadend creates services and channels,</text>
+    <text x="640" y="74" class="t-m">fibProcessorIsSynced = 1 stops the coarse</text>
+    <text x="640" y="92" class="t-m">frequency search, the CRC rate shows in the</text>
+    <text x="640" y="110" class="t-m">reception summary</text>
+  </g>
+
+</svg>

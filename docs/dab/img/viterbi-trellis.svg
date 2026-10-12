@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 484 274" width="484" height="274" role="img" aria-label="Viterbi trellis">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="484" height="274" rx="12" class="bgcard"/>
+
+  <text x="10" y="20" font-size="13" class="b">The decoder: most likely path through a trellis</text>
+  <g transform="translate(30,40)">
+    <g class="ln">
+      <path d="M0 0 L70 0 M0 0 L70 60 M0 60 L70 120 M0 60 L70 180 M0 120 L70 0 M0 120 L70 60 M0 180 L70 120 M0 180 L70 180"/>
+      <path d="M70 0 L140 0 M70 0 L140 60 M70 60 L140 120 M70 60 L140 180 M70 120 L140 0 M70 120 L140 60 M70 180 L140 120 M70 180 L140 180"/>
+      <path d="M140 0 L210 0 M140 0 L210 60 M140 60 L210 120 M140 60 L210 180 M140 120 L210 0 M140 120 L210 60 M140 180 L210 120 M140 180 L210 180"/>
+      <path d="M210 0 L280 0 M210 0 L280 60 M210 60 L280 120 M210 60 L280 180 M210 120 L280 0 M210 120 L280 60 M210 180 L280 120 M210 180 L280 180"/>
+    </g>
+    <path d="M0 0 L70 60 L140 120 L210 60 L280 0" class="st-fec" stroke-width="3.5"/>
+    <g class="s-fec">
+      <circle cx="0" cy="0" r="5"/><circle cx="70" cy="60" r="5"/><circle cx="140" cy="120" r="5"/><circle cx="210" cy="60" r="5"/><circle cx="280" cy="0" r="5"/>
+    </g>
+    <g class="soft">
+      <circle cx="0" cy="60" r="4"/><circle cx="0" cy="120" r="4"/><circle cx="0" cy="180" r="4"/>
+      <circle cx="70" cy="0" r="4"/><circle cx="70" cy="120" r="4"/><circle cx="70" cy="180" r="4"/>
+      <circle cx="140" cy="0" r="4"/><circle cx="140" cy="60" r="4"/><circle cx="140" cy="180" r="4"/>
+      <circle cx="210" cy="0" r="4"/><circle cx="210" cy="120" r="4"/><circle cx="210" cy="180" r="4"/>
+      <circle cx="280" cy="60" r="4"/><circle cx="280" cy="120" r="4"/><circle cx="280" cy="180" r="4"/>
+    </g>
+    <text x="300" y="10" font-size="11" class="t-m">4 of 64</text>
+    <text x="300" y="26" font-size="11" class="t-m">states shown</text>
+    <text x="300" y="90" font-size="11">per bit: 64 ×</text>
+    <text x="300" y="106" font-size="11">add‑compare‑</text>
+    <text x="300" y="122" font-size="11">select, then</text>
+    <text x="300" y="138" font-size="11">trace back</text>
+  </g>
+
+</svg>

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 408" width="1004" height="408" role="img" aria-label="Superframe and RS">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="408" rx="12" class="bgcard"/>
+
+  <g font-size="12">
+    <text x="10" y="20" class="b">5 CIFs → superframe of 5 × 216 = 1080 bytes (72 kbit/s, RSDims = 9)</text>
+    <g transform="translate(10,32)">
+      <rect x="0" y="0" width="120" height="30" class="f-audio"/><rect x="120" y="0" width="120" height="30" class="f-audio" opacity="0.7"/><rect x="240" y="0" width="120" height="30" class="f-audio"/><rect x="360" y="0" width="120" height="30" class="f-audio" opacity="0.7"/><rect x="480" y="0" width="120" height="30" class="f-audio"/>
+      <text x="60" y="20" text-anchor="middle">CIF n</text><text x="180" y="20" text-anchor="middle">n+1</text><text x="300" y="20" text-anchor="middle">n+2</text><text x="420" y="20" text-anchor="middle">n+3</text><text x="540" y="20" text-anchor="middle">n+4</text>
+      <text x="620" y="14" class="t-m">firecode_check on the first 11 bytes:</text>
+      <text x="620" y="30" class="t-m">found → superframe start, else shift by 1 CIF</text>
+    </g>
+  </g>
+  <!-- RS matrix -->
+  <g transform="translate(10,90)" font-size="11.5">
+    <text x="0" y="0" class="b" font-size="12.5">Reed‑Solomon RS(120,110): bytes written row by row, decoded column by column</text>
+    <g transform="translate(0,14)">
+      <!-- 9 cols x 120 rows; draw 9 columns 36 wide, rows compressed: data 0..110 height 176, parity 16 -->
+      <rect x="0" y="0" width="324" height="176" class="f-audio" opacity="0.5"/>
+      <rect x="0" y="176" width="324" height="30" class="f-out"/>
+      <g class="ln">
+        <path d="M36 0 V206 M72 0 V206 M108 0 V206 M144 0 V206 M180 0 V206 M216 0 V206 M252 0 V206 M288 0 V206"/>
+      </g>
+      <rect x="108" y="0" width="36" height="206" fill="none" stroke="var(--c-fec)" stroke-width="3"/>
+      <path d="M0 8 H320" class="st-sync" stroke-width="2" marker-end="url(#ah)"/>
+      <text x="162" y="100" text-anchor="middle" class="b">110 data bytes</text>
+      <text x="162" y="196" text-anchor="middle" class="b">10 parity bytes</text>
+      <text x="126" y="226" text-anchor="middle" class="t-fec">one code word</text>
+      <text x="0" y="244" class="t-m">9 columns × 120 = 1080. A burst of up to 9 × 5 = 45 wrong</text>
+      <text x="0" y="260" class="t-m">bytes in a row is spread over 9 code words, 5 errors each: all fixable.</text>
+    </g>
+  </g>
+  <!-- AU layout -->
+  <g transform="translate(380,104)" font-size="11.5">
+    <text x="0" y="0" class="b" font-size="12.5">Corrected 990 bytes: header + access units (AUs)</text>
+    <g transform="translate(0,14)">
+      <rect x="0" y="0" width="54" height="40" class="f-fec"/><text x="27" y="18" text-anchor="middle">fire</text><text x="27" y="32" text-anchor="middle">code</text>
+      <rect x="54" y="0" width="56" height="40" class="f-fec" opacity="0.7"/><text x="82" y="18" text-anchor="middle">config</text><text x="82" y="32" text-anchor="middle">SBR,PS,sr</text>
+      <rect x="110" y="0" width="56" height="40" class="f-fec" opacity="0.5"/><text x="138" y="18" text-anchor="middle">AU</text><text x="138" y="32" text-anchor="middle">starts</text>
+      <rect x="166" y="0" width="140" height="40" class="f-audio"/><text x="236" y="24" text-anchor="middle">AU 0 + CRC</text>
+      <rect x="306" y="0" width="130" height="40" class="f-audio" opacity="0.7"/><text x="371" y="24" text-anchor="middle">AU 1 + CRC</text>
+      <rect x="436" y="0" width="120" height="40" class="f-audio"/><text x="496" y="24" text-anchor="middle">AU 2 + CRC</text>
+      <rect x="556" y="0" width="34" height="40" class="soft"/>
+    </g>
+    <text x="0" y="82" class="t-m">AUs per superframe: 2 (16 kHz core + SBR), 3 (24 kHz + SBR),</text>
+    <text x="0" y="98" class="t-m">4 (32 kHz), 6 (48 kHz). Each AU = 960 core samples.</text>
+    <text x="0" y="128">Each AU's own CRC is checked. An AU in an uncorrectable</text>
+    <text x="0" y="144">column fails and is dropped, the others still play.</text>
+    <!-- LATM -->
+    <text x="0" y="182" class="b" font-size="12.5">mp4Processor_writeFrame: one LOAS/LATM frame per AU</text>
+    <g transform="translate(0,196)">
+      <rect x="0" y="0" width="90" height="36" class="f-out"/><text x="45" y="16" text-anchor="middle" class="mono">0x56E…</text><text x="45" y="30" text-anchor="middle" font-size="10.5">sync 0x2B7 + len</text>
+      <rect x="90" y="0" width="190" height="36" class="f-out" opacity="0.7"/><text x="185" y="16" text-anchor="middle">StreamMuxConfig + ASC</text><text x="185" y="30" text-anchor="middle" font-size="10.5">AOT, sr, 960 frame, SBR/PS</text>
+      <rect x="280" y="0" width="60" height="36" class="f-out" opacity="0.5"/><text x="310" y="22" text-anchor="middle">length</text>
+      <rect x="340" y="0" width="220" height="36" class="f-audio"/><text x="450" y="22" text-anchor="middle">raw AAC access unit</text>
+    </g>
+  </g>
+
+</svg>

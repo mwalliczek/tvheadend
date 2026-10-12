@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 344" width="1004" height="344" role="img" aria-label="OFDM decode steps">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="344" rx="12" class="bgcard"/>
+
+  <g font-size="12">
+    <rect x="10" y="20" width="160" height="80" rx="10" class="f-ofdm"/>
+    <text x="90" y="44" text-anchor="middle" class="b">① FFT 2048</text>
+    <text x="90" y="62" text-anchor="middle" class="t-m">fftwf, skip T_g</text>
+    <text x="90" y="80" text-anchor="middle" class="mono t-m">doFft(&amp;v[T_g])</text>
+    <path d="M170 60 H200" class="arr"/>
+    <rect x="204" y="20" width="180" height="80" rx="10" class="f-ofdm"/>
+    <text x="294" y="44" text-anchor="middle" class="b">② differential demod</text>
+    <text x="294" y="62" text-anchor="middle" class="t-m">r = X_now · conj(X_prev)</text>
+    <text x="294" y="80" text-anchor="middle" class="t-m">per carrier</text>
+    <path d="M384 60 H414" class="arr"/>
+    <rect x="418" y="20" width="170" height="80" rx="10" class="f-ofdm"/>
+    <text x="503" y="44" text-anchor="middle" class="b">③ correctPhase</text>
+    <text x="503" y="62" text-anchor="middle" class="t-m">clock slope · k</text>
+    <text x="503" y="80" text-anchor="middle" class="t-m">+ common phase</text>
+    <path d="M588 60 H618" class="arr"/>
+    <rect x="622" y="20" width="160" height="80" rx="10" class="f-ofdm"/>
+    <text x="702" y="44" text-anchor="middle" class="b">④ soft bits</text>
+    <text x="702" y="62" text-anchor="middle" class="t-m">−Re, −Im scaled</text>
+    <text x="702" y="80" text-anchor="middle" class="t-m">to ±127</text>
+    <path d="M782 60 H812" class="arr"/>
+    <rect x="816" y="20" width="154" height="80" rx="10" class="f-ofdm"/>
+    <text x="893" y="44" text-anchor="middle" class="b">⑤ deinterleave</text>
+    <text x="893" y="62" text-anchor="middle" class="t-m">frequency, via</text>
+    <text x="893" y="80" text-anchor="middle" class="mono t-m">myMapper[i]</text>
+  </g>
+  <!-- spectrum -->
+  <g transform="translate(10,130)">
+    <text x="0" y="0" font-size="12" class="b">FFT output: 2048 bins, 1536 used</text>
+    <path d="M0 130 H460" class="ax"/>
+    <rect x="10" y="118" width="70" height="12" class="soft"/>
+    <rect x="380" y="118" width="70" height="12" class="soft"/>
+    <g class="s-ofdm">
+      <rect x="80" y="40" width="3" height="90"/><rect x="86" y="52" width="3" height="78"/><rect x="92" y="34" width="3" height="96"/><rect x="98" y="60" width="3" height="70"/><rect x="104" y="44" width="3" height="86"/><rect x="110" y="38" width="3" height="92"/><rect x="116" y="70" width="3" height="60"/><rect x="122" y="48" width="3" height="82"/><rect x="128" y="36" width="3" height="94"/><rect x="134" y="56" width="3" height="74"/><rect x="140" y="42" width="3" height="88"/><rect x="146" y="64" width="3" height="66"/><rect x="152" y="40" width="3" height="90"/><rect x="158" y="46" width="3" height="84"/><rect x="164" y="88" width="3" height="42"/><rect x="170" y="100" width="3" height="30"/><rect x="176" y="92" width="3" height="38"/><rect x="182" y="66" width="3" height="64"/><rect x="188" y="42" width="3" height="88"/><rect x="194" y="38" width="3" height="92"/><rect x="200" y="50" width="3" height="80"/><rect x="206" y="44" width="3" height="86"/><rect x="212" y="58" width="3" height="72"/>
+      <rect x="236" y="40" width="3" height="90"/><rect x="242" y="50" width="3" height="80"/><rect x="248" y="36" width="3" height="94"/><rect x="254" y="62" width="3" height="68"/><rect x="260" y="44" width="3" height="86"/><rect x="266" y="40" width="3" height="90"/><rect x="272" y="54" width="3" height="76"/><rect x="278" y="46" width="3" height="84"/><rect x="284" y="38" width="3" height="92"/><rect x="290" y="58" width="3" height="72"/><rect x="296" y="42" width="3" height="88"/><rect x="302" y="66" width="3" height="64"/><rect x="308" y="40" width="3" height="90"/><rect x="314" y="48" width="3" height="82"/><rect x="320" y="36" width="3" height="94"/><rect x="326" y="52" width="3" height="78"/><rect x="332" y="44" width="3" height="86"/><rect x="338" y="40" width="3" height="90"/><rect x="344" y="60" width="3" height="70"/><rect x="350" y="42" width="3" height="88"/><rect x="356" y="50" width="3" height="80"/><rect x="362" y="38" width="3" height="92"/><rect x="368" y="46" width="3" height="84"/>
+    </g>
+    <text x="224" y="146" text-anchor="middle" font-size="11" class="t-m">DC (unused)</text>
+    <text x="170" y="30" text-anchor="middle" font-size="11" class="t-out">fade (echo)</text>
+    <text x="45" y="112" text-anchor="middle" font-size="11" class="t-m">noise → SNR</text>
+    <text x="415" y="112" text-anchor="middle" font-size="11" class="t-m">noise → SNR</text>
+  </g>
+  <!-- constellation -->
+  <g transform="translate(560,140)">
+    <text x="0" y="0" font-size="12" class="b">π/4‑DQPSK after ②: four clouds</text>
+    <g transform="translate(80,112)">
+      <path d="M-62 0 H62 M0 -62 V62" class="ax"/>
+      <circle cx="40" cy="-40" r="11" class="s-ofdm" opacity="0.4"/><circle cx="-40" cy="-40" r="11" class="s-ofdm" opacity="0.4"/>
+      <circle cx="40" cy="40" r="11" class="s-ofdm" opacity="0.4"/><circle cx="-40" cy="40" r="11" class="s-ofdm" opacity="0.4"/>
+      <circle cx="44" cy="-36" r="2.5" class="s-ofdm"/><circle cx="36" cy="-44" r="2.5" class="s-ofdm"/><circle cx="38" cy="-35" r="2.5" class="s-ofdm"/>
+      <circle cx="-42" cy="-38" r="2.5" class="s-ofdm"/><circle cx="-36" cy="-45" r="2.5" class="s-ofdm"/>
+      <circle cx="41" cy="44" r="2.5" class="s-ofdm"/><circle cx="35" cy="37" r="2.5" class="s-ofdm"/>
+      <circle cx="-44" cy="38" r="2.5" class="s-ofdm"/><circle cx="-37" cy="43" r="2.5" class="s-ofdm"/>
+      <circle cx="12" cy="-10" r="2.5" class="s-out"/><circle cx="-8" cy="6" r="2.5" class="s-out"/>
+      <text x="66" y="4" font-size="11">Re → bit 1</text>
+      <text x="6" y="-54" font-size="11">Im → bit 2</text>
+    </g>
+    <text x="225" y="60" font-size="11.5">Soft bit = position, not just sign.</text>
+    <text x="225" y="78" font-size="11.5" class="t-out">● faded carriers land near 0</text>
+    <text x="225" y="96" font-size="11.5">→ Viterbi trusts them less.</text>
+    <text x="225" y="124" font-size="11.5" class="t-m">One QPSK symbol per carrier:</text>
+    <text x="225" y="142" font-size="11.5" class="t-m">1536 × 2 = 3072 bits/symbol</text>
+  </g>
+
+</svg>
