@@ -47,5 +47,8 @@ typedef enum {
 char* toStringUsingCharset(const char* buffer,
 	                         CharacterSet charset, int size);
 
+/* remove the padding spaces of a label at both ends, in place */
+char* dab_label_trim(char *s);
+
 #endif // CHARSETS_H
 
