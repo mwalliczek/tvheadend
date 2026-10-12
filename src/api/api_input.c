@@ -26,14 +26,39 @@
 #include "access.h"
 #include "api.h"
 
+static int
+api_input_hw_is_dab ( tvh_hardware_t *th )
+{
+#if ENABLE_RTLSDR
+  return rtlsdr_is_adapter(th);
+#else
+  return 0;
+#endif
+}
+
 static idnode_set_t *
-api_input_hw_tree ( void )
+api_input_hw_tree0 ( int dab )
 {
   tvh_hardware_t *th;
   idnode_set_t *is = idnode_set_create(0);
   TVH_HARDWARE_FOREACH(th)
-    idnode_set_add(is, &th->th_id, NULL, NULL);
+    if (dab == api_input_hw_is_dab(th))
+      idnode_set_add(is, &th->th_id, NULL, NULL);
   return is;
+}
+
+/* the DVB Inputs tab: the RTL-SDR (DAB) sticks are listed under DAB */
+static idnode_set_t *
+api_input_hw_tree ( void )
+{
+  return api_input_hw_tree0(0);
+}
+
+/* the DAB Inputs tab: the RTL-SDR sticks */
+static idnode_set_t *
+api_input_hw_dab_tree ( void )
+{
+  return api_input_hw_tree0(1);
 }
 
 #if ENABLE_SATIP_CLIENT
@@ -60,6 +85,7 @@ void api_input_init ( void )
 {
   static api_hook_t ah[] = {
     { "hardware/tree", ACCESS_ADMIN,     api_idnode_tree, api_input_hw_tree }, 
+    { "hardware/dab/tree", ACCESS_ADMIN, api_idnode_tree, api_input_hw_dab_tree },
 #if ENABLE_SATIP_CLIENT
     { "hardware/satip/discover", ACCESS_ADMIN, api_input_satip_discover, NULL },
 #endif
