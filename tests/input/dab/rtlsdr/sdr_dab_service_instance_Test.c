@@ -111,20 +111,20 @@ START_TEST(mscOutOfRangeTest) {
     /* a complete CIF with a valid subchannel is passed on */
     for (int blk = 4; blk < 4 + numberofblocksperCIF; blk++)
         process_mscBlock(sdr, data, blk);
-    ck_assert_int_eq(sds->nextIn, 1);
+    ck_assert_int_eq(sds->countforInterleaver, 1);
 
     /* a subchannel beyond the end of the CIF (864 CU) is ignored */
     ensemble->subChannels[0].StartAddr = 850;
     for (int blk = 4; blk < 4 + numberofblocksperCIF; blk++)
         process_mscBlock(sdr, data, blk);
-    ck_assert_int_eq(sds->nextIn, 1);
+    ck_assert_int_eq(sds->countforInterleaver, 1);
 
     /* as is a subchannel which was resized after the service was started */
     ensemble->subChannels[0].StartAddr = 0;
     ensemble->subChannels[0].Length = 60;
     for (int blk = 4; blk < 4 + numberofblocksperCIF; blk++)
         process_mscBlock(sdr, data, blk);
-    ck_assert_int_eq(sds->nextIn, 1);
+    ck_assert_int_eq(sds->countforInterleaver, 1);
 
     sdr_dab_service_instance_destroy(sds);
     free(sdr);
@@ -234,6 +234,129 @@ START_TEST(packetModeEndToEndTest) {
     sdr_dab_service_instance_destroy(sds);
 } END_TEST
 
+
+START_TEST(symbolMaskTest) {
+    struct sdr_state_t *sdr = calloc(1, sizeof(struct sdr_state_t));
+    sdr_dab_service_instance_t *a, *b;
+
+    LIST_INIT(&sdr->active_service_instance);
+    ck_assert_uint_eq(msc_symbol_mask(sdr), 0);
+
+    /* a symbol carries 48 CU: CU 0 .. 53 are in symbols 0 and 1 */
+    a = sdr_dab_service_instance_create(service);
+    LIST_INSERT_HEAD(&sdr->active_service_instance, a, service_link);
+    ck_assert_uint_eq(msc_symbol_mask(sdr), 0x3);
+
+    /* a second station of the ensemble, CU 500 .. 571: symbols 10 and 11 */
+    ensemble->subChannels[1].BitRate = 96;
+    ensemble->subChannels[1].Length = 72;
+    ensemble->subChannels[1].StartAddr = 500;
+    service->subChId = 1;
+    b = sdr_dab_service_instance_create(service);
+    LIST_INSERT_HEAD(&sdr->active_service_instance, b, service_link);
+    ck_assert_uint_eq(msc_symbol_mask(sdr), 0xC03);
+
+    /* the last CU of the CIF is in symbol 17 */
+    ensemble->subChannels[1].StartAddr = 864 - 72;
+    ck_assert_uint_eq(msc_symbol_mask(sdr), 0x30003);
+
+    /* a sub-channel beyond the end of the CIF is ignored */
+    ensemble->subChannels[1].StartAddr = 850;
+    ck_assert_uint_eq(msc_symbol_mask(sdr), 0x3);
+
+    LIST_REMOVE(b, service_link);
+    sdr_dab_service_instance_destroy(b);
+    LIST_REMOVE(a, service_link);
+    sdr_dab_service_instance_destroy(a);
+    free(sdr);
+} END_TEST
+
+static uint8_t two_pi[1024];
+static size_t two_pilen;
+
+static void on_two_object(const dab_mot_object_t *obj, void *opaque) {
+    (*(int *)opaque)++;
+    ck_assert_int_eq(obj->body_len, two_pilen);
+    ck_assert_int_eq(memcmp(obj->body, two_pi, two_pilen), 0);
+}
+
+/*
+ * Two packet mode sub-channels of the same ensemble through process_mscBlock,
+ * like the OFDM thread hands them over: only the symbols of the mask carry
+ * data, the others are passed as NULL (not demodulated). Both decoders must
+ * get the complete object.
+ */
+START_TEST(twoStationsTest) {
+    struct sdr_state_t *sdr = calloc(1, sizeof(struct sdr_state_t));
+    static const int start[2] = { 0, 500 };
+    sdr_dab_service_instance_t *sds[2];
+    uint8_t stream[16384];
+    int objects[2] = { 0, 0 };
+    size_t len;
+    int frames, fragment;
+    int16_t (*soft)[72 * CUSize];
+    uint32_t mask;
+    FILE *f;
+
+    LIST_INIT(&sdr->active_service_instance);
+    for (int n = 0; n < 2; n++) {
+        ensemble->subChannels[3 + n].inUse = 1;
+        ensemble->subChannels[3 + n].BitRate = 96;
+        ensemble->subChannels[3 + n].Length = 72;
+        ensemble->subChannels[3 + n].protLevel = 2;
+        ensemble->subChannels[3 + n].StartAddr = start[n];
+        sds[n] = sdr_dab_data_instance_create(ensemble, 3 + n, 2, on_two_object, &objects[n]);
+        ck_assert_ptr_ne(sds[n], NULL);
+        LIST_INSERT_HEAD(&sdr->active_service_instance, sds[n], service_link);
+    }
+    fragment = sds[0]->fragmentSize;
+    mask = msc_symbol_mask(sdr);
+    ck_assert_uint_eq(mask, 0xC03);
+
+    f = fopen("input/dab/epg/packets_directory.bin", "rb");
+    ck_assert_ptr_ne(f, NULL);
+    len = fread(stream, 1, sizeof(stream), f);
+    fclose(f);
+    f = fopen("input/dab/epg/pi.bin", "rb");
+    ck_assert_ptr_ne(f, NULL);
+    two_pilen = fread(two_pi, 1, sizeof(two_pi), f);
+    fclose(f);
+
+    frames = (len + 287) / 288;
+    soft = calloc(frames + 16, sizeof(*soft));
+    for (int t = 0; t < frames + 16; t++) {
+        uint8_t bytes[288];
+        memset(bytes, 0, sizeof(bytes));
+        if (t < frames)
+            memcpy(bytes, stream + t * 288, len - t * 288 < 288 ? len - t * 288 : 288);
+        encode_frame(sds[0]->protection, bytes, soft[t], fragment);
+    }
+
+    for (int t = 0; t < frames + 16; t++) {
+        static int16_t cif[numberofblocksperCIF * 2 * K];
+        /* the symbols outside the mask are garbage, they must not be used */
+        for (int i = 0; i < numberofblocksperCIF * 2 * K; i++)
+            cif[i] = (i * 7919) % 255 - 127;
+        for (int n = 0; n < 2; n++)
+            for (int i = 0; i < fragment; i++) {
+                int src = t - interleave_map[i & 15];
+                cif[start[n] * CUSize + i] = src >= 0 ? soft[src][i] : 0;
+            }
+        for (int blk = 0; blk < numberofblocksperCIF; blk++)
+            process_mscBlock(sdr, (mask & (1u << blk)) ? &cif[blk * 2 * K] : NULL, 4 + blk);
+    }
+
+    ck_assert_int_eq(objects[0], 1);
+    ck_assert_int_eq(objects[1], 1);
+
+    free(soft);
+    for (int n = 0; n < 2; n++) {
+        LIST_REMOVE(sds[n], service_link);
+        sdr_dab_service_instance_destroy(sds[n]);
+    }
+    free(sdr);
+} END_TEST
+
 static Suite *sdr_dab_service_instance_suite(void) {
     Suite *s = suite_create("sdr_dab_service_instance");
     TCase *tc_core = tcase_create("Core");
@@ -244,6 +367,8 @@ static Suite *sdr_dab_service_instance_suite(void) {
     tcase_add_test(tc_core, audioParametersTest);
     tcase_add_test(tc_core, mscOutOfRangeTest);
     tcase_add_test(tc_core, packetModeEndToEndTest);
+    tcase_add_test(tc_core, symbolMaskTest);
+    tcase_add_test(tc_core, twoStationsTest);
     suite_add_tcase(s, tc_core);
     return s;
 }

@@ -24,7 +24,8 @@ static int carrierOf(int i) {
 
 /* stubs from input_sdr.c / ficHandler.c / mscHandler.c */
 void process_ficBlock(struct sdr_state_t *sdr, const int16_t data[], int16_t blkno);
-void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno);
+void process_mscBlock(struct sdr_state_t *sdr, const int16_t data[], int16_t blkno);
+uint32_t msc_symbol_mask(struct sdr_state_t *sdr);
 float jan_abs(float _Complex z) {
     return fabsf(crealf(z)) + fabsf(cimagf(z));
 }
@@ -39,8 +40,22 @@ void process_ficBlock(struct sdr_state_t *sdr, const int16_t data[], int16_t blk
     memcpy(softbits, data, sizeof(softbits));
 }
 
-void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno) {
+/* MSC symbols to demodulate, and per symbol of the frame what was handed on */
+static uint32_t mscMask = 0x3FFFF;
+static int16_t mscBits[L][2 * K];
+static int mscDecoded[L], mscCalls[L];
+
+uint32_t msc_symbol_mask(struct sdr_state_t *sdr) {
+    return mscMask;
+}
+
+void process_mscBlock(struct sdr_state_t *sdr, const int16_t data[], int16_t blkno) {
+    mscCalls[blkno]++;
+    if (data == NULL)
+        return;
+    mscDecoded[blkno]++;
     memcpy(softbits, data, sizeof(softbits));
+    memcpy(mscBits[blkno], data, sizeof(softbits));
 }
 
 /* one OFDM symbol (cyclic prefix + useful part) from its carriers */
@@ -152,11 +167,71 @@ START_TEST(clockOffsetTest) {
     free(sdr);
 } END_TEST
 
+
+/* Only the MSC symbols of the active sub-channels are demodulated. The
+ * others are still handed on (as NULL, the CIF must be completed), and
+ * the symbol before a demodulated one serves as its phase reference:
+ * with a gap, across the CIF boundary (symbol 17 -> symbol 0 of the next
+ * CIF) and after the FIC (the first symbol of the frame). */
+START_TEST(mscSymbolMaskTest) {
+    struct sdr_state_t *sdr = calloc(1, sizeof(struct sdr_state_t));
+    static float _Complex car[T_u], sym[L][T_s];
+    static int bits[L][2 * K];
+    int i, s, errors = 0;
+
+    sdr->mmi = calloc(1, sizeof(dab_ensemble_instance_t));
+    initConstOfdmDecoder();
+    initOfdmDecoder(sdr);
+    srand(11);
+
+    /* one frame with random data */
+    for (i = 0; i < K; i++)
+        car[carrierOf(i)] = cexpf(I * 2 * M_PI * rand() / RAND_MAX);
+    symbol(car, sym[0]);
+    for (s = 1; s < L; s++) {
+        for (i = 0; i < K; i++) {
+            int c = carrierOf(i);
+            bits[s][i] = rand() & 1;
+            bits[s][K + i] = rand() & 1;
+            car[c] *= ((bits[s][i] ? -1 : 1) + I * (bits[s][K + i] ? -1 : 1)) / sqrtf(2);
+        }
+        symbol(car, sym[s]);
+    }
+
+    /* symbol 0 (after the FIC), 9 (after a gap) and 17 (the last one) */
+    mscMask = (1u << 0) | (1u << 9) | (1u << 17);
+    memset(mscDecoded, 0, sizeof(mscDecoded));
+    memset(mscCalls, 0, sizeof(mscCalls));
+    processBlock_0(sdr, &sym[0][T_g]);
+    for (s = 1; s < L; s++)
+        decodeBlock(sdr, sym[s], s);
+
+    for (s = 4; s < L; s++) {
+        int cs = (s - 4) % numberofblocksperCIF;
+        ck_assert_int_eq(mscCalls[s], 1);
+        ck_assert_int_eq(mscDecoded[s], (mscMask >> cs) & 1);
+        if (!mscDecoded[s])
+            continue;
+        for (i = 0; i < K; i++) {
+            /* a one is a positive soft bit */
+            errors += (mscBits[s][i] > 0) != bits[s][i];
+            errors += (mscBits[s][K + i] > 0) != bits[s][K + i];
+        }
+    }
+    ck_assert_int_eq(errors, 0);
+    mscMask = 0x3FFFF;
+
+    destroyOfdmDecoder(sdr);
+    free(sdr->mmi);
+    free(sdr);
+} END_TEST
+
 static Suite *ofdmDecoder_suite(void) {
     Suite *s = suite_create("ofdmDecoder");
     TCase *tc_core = tcase_create("Core");
     tcase_add_test(tc_core, fadedCarrierTest);
     tcase_add_test(tc_core, clockOffsetTest);
+    tcase_add_test(tc_core, mscSymbolMaskTest);
     suite_add_tcase(s, tc_core);
     return s;
 }

@@ -60,6 +60,9 @@ struct ofdm_decoder_t {
 	float rotRe[K], rotIm[K];
 	float rotSlope;
 	int rotValid;
+	/* MSC symbols (bit 0 .. 17 of a CIF) of the active sub-channels,
+	   taken at the start of each CIF */
+	uint32_t mscMask;
 	pthread_t thread;
 	th_pipe_t pipe;
 	float _Complex buffer[L][T_s];
@@ -80,9 +83,6 @@ struct sdr_dab_service_instance
 	int16_t		interleaverIndex;
 	int16_t		countforInterleaver;
         uint8_t*        outV;
-	int16_t		nextIn;
-	int16_t		nextOut;
-	int16_t*	theData [20];
 	int16_t*	tempX;
 	
 	int64_t		dts;

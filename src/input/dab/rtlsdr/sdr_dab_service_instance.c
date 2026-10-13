@@ -53,10 +53,6 @@ sdr_dab_instance_create(subChannel *subChannel, int subChId)
             res->subChannel->protLevel);
 
     res->tempX = calloc(res->fragmentSize, sizeof(int16_t));
-    res->nextIn = 0;
-    res->nextOut = 0;
-    for (i = 0; i < 20; i++)
-        res->theData[i] = calloc(res->fragmentSize, sizeof(int16_t));
 
     tvhdebug(LS_RTLSDR, "created sdr_dab_service_instance_t %p", res);
 
@@ -109,8 +105,6 @@ void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
     free(sds->outV);
     for (i = 0; i < 16; i++)
         free(sds->interleaveData[i]);
-    for (i = 0; i < 20; i++)
-        free(sds->theData[i]);
     protection_destroy(sds->protection);
     if (sds->mp4processor)
         destroy_mp4processor(sds->mp4processor);
@@ -205,9 +199,7 @@ sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int
             sds->subChannel->Length * CUSize, sds->fragmentSize);
         return;
     }
-    memcpy(sds->theData[sds->nextIn], v, sds->fragmentSize * sizeof(int16_t));
-    processSegment(sds, sds->theData[sds->nextIn]);
-    sds->nextIn = (sds->nextIn + 1) % 20;
+    processSegment(sds, v);
 }
 
 static const int aac_sample_rates[16] =

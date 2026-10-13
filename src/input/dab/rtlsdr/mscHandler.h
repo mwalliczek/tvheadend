@@ -24,6 +24,7 @@
 
 #include "dab.h"
 
-void process_mscBlock(struct sdr_state_t *sdr, int16_t data[], int16_t blkno);
+uint32_t msc_symbol_mask(struct sdr_state_t *sdr);
+void process_mscBlock(struct sdr_state_t *sdr, const int16_t data[], int16_t blkno);
 
 #endif
