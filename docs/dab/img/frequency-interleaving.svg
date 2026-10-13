@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 484 254" width="484" height="254" role="img" aria-label="Frequency interleaving">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="484" height="254" rx="12" class="bgcard"/>
+
+  <text x="10" y="20" font-size="13" class="b">⑤ Frequency de‑interleaving</text>
+  <text x="10" y="40" font-size="11.5" class="t-m">Neighbouring bits are spread over far apart carriers,</text>
+  <text x="10" y="56" font-size="11.5" class="t-m">so one fade does not wipe out a run of bits.</text>
+  <g font-size="10" class="mono">
+    <g transform="translate(20,80)">
+      <rect x="0" y="0" width="26" height="22" class="f-ofdm"/><rect x="26" y="0" width="26" height="22" class="f-ofdm"/><rect x="52" y="0" width="26" height="22" class="f-ofdm"/><rect x="78" y="0" width="26" height="22" class="f-ofdm"/><rect x="104" y="0" width="26" height="22" class="f-ofdm"/><rect x="130" y="0" width="26" height="22" class="f-ofdm"/>
+      <text x="13" y="15" text-anchor="middle">0</text><text x="39" y="15" text-anchor="middle">1</text><text x="65" y="15" text-anchor="middle">2</text><text x="91" y="15" text-anchor="middle">3</text><text x="117" y="15" text-anchor="middle">4</text><text x="143" y="15" text-anchor="middle">5</text>
+      <text x="166" y="15" font-size="11" class="t-m">… bit index i</text>
+    </g>
+    <path d="M33 102 L120 166" class="arr"/><path d="M59 102 L380 166" class="arr"/><path d="M85 102 L60 166" class="arr"/><path d="M111 102 L300 166" class="arr"/><path d="M137 102 L200 166" class="arr"/>
+    <g transform="translate(20,170)">
+      <rect x="0" y="0" width="420" height="22" class="soft"/>
+      <text x="210" y="15" text-anchor="middle" font-size="11">carrier = myMapper[i]  (tmp = (13·tmp + 511) mod 2048)</text>
+    </g>
+  </g>
+
+</svg>

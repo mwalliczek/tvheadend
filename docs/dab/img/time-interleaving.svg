@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 254" width="1004" height="254" role="img" aria-label="Time interleaving">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="254" rx="12" class="bgcard"/>
+
+  <text x="10" y="18" font-size="12" class="t-m">bit position i mod 16 →  delay  interleaveMap = {0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15} CIFs</text>
+  <g transform="translate(40,30)">
+    <!-- draw bars: column c width 54, offset 56*c, height delay*10 -->
+    <rect x="0" y="0" width="50" height="10" class="s-fec"/>
+    <rect x="56" y="0" width="50" height="90" class="s-fec" opacity="0.8"/>
+    <rect x="112" y="0" width="50" height="50" class="s-fec" opacity="0.8"/>
+    <rect x="168" y="0" width="50" height="130" class="s-fec" opacity="0.8"/>
+    <rect x="224" y="0" width="50" height="30" class="s-fec" opacity="0.8"/>
+    <rect x="280" y="0" width="50" height="110" class="s-fec" opacity="0.8"/>
+    <rect x="336" y="0" width="50" height="70" class="s-fec" opacity="0.8"/>
+    <rect x="392" y="0" width="50" height="150" class="s-fec" opacity="0.8"/>
+    <rect x="448" y="0" width="50" height="20" class="s-fec" opacity="0.8"/>
+    <rect x="504" y="0" width="50" height="100" class="s-fec" opacity="0.8"/>
+    <rect x="560" y="0" width="50" height="60" class="s-fec" opacity="0.8"/>
+    <rect x="616" y="0" width="50" height="140" class="s-fec" opacity="0.8"/>
+    <rect x="672" y="0" width="50" height="40" class="s-fec" opacity="0.8"/>
+    <rect x="728" y="0" width="50" height="120" class="s-fec" opacity="0.8"/>
+    <rect x="784" y="0" width="50" height="80" class="s-fec" opacity="0.8"/>
+    <rect x="840" y="0" width="50" height="160" class="s-fec" opacity="0.8"/>
+    <g font-size="10.5" text-anchor="middle">
+      <text x="25" y="182">0</text><text x="81" y="182">1</text><text x="137" y="182">2</text><text x="193" y="182">3</text><text x="249" y="182">4</text><text x="305" y="182">5</text><text x="361" y="182">6</text><text x="417" y="182">7</text><text x="473" y="182">8</text><text x="529" y="182">9</text><text x="585" y="182">10</text><text x="641" y="182">11</text><text x="697" y="182">12</text><text x="753" y="182">13</text><text x="809" y="182">14</text><text x="865" y="182">15</text>
+    </g>
+    <text x="900" y="160" font-size="11" class="t-m">15 CIFs</text>
+    <text x="900" y="174" font-size="11" class="t-m">= 360 ms</text>
+  </g>
+
+</svg>

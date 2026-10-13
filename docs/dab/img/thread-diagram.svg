@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 384" width="1004" height="384" role="img" aria-label="Thread diagram">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="384" rx="12" class="bgcard"/>
+
+  <!-- lanes -->
+  <g font-size="13">
+    <rect x="0" y="10" width="980" height="78" rx="10" class="soft"/>
+    <rect x="0" y="98" width="980" height="78" rx="10" class="soft"/>
+    <rect x="0" y="186" width="980" height="78" rx="10" class="soft"/>
+    <rect x="0" y="274" width="980" height="78" rx="10" class="soft"/>
+    <text x="14" y="36" class="b">USB reader</text><text x="14" y="54" font-size="11.5" class="mono t-m">rtlsdr_read_thread_fn</text><text x="14" y="72" font-size="11.5" class="t-m">librtlsdr async</text>
+    <text x="14" y="124" class="b">Demodulator</text><text x="14" y="142" font-size="11.5" class="mono t-m">rtlsdr_demod_thread_fn</text><text x="14" y="160" font-size="11.5" class="t-m">"rtlsdr-demod"</text>
+    <text x="14" y="212" class="b">OFDM decoder</text><text x="14" y="230" font-size="11.5" class="mono t-m">run_thread_fn</text><text x="14" y="248" font-size="11.5" class="t-m">"rtlsdr-ofdm"</text>
+    <text x="14" y="300" class="b">Monitor (timer)</text><text x="14" y="318" font-size="11.5" class="mono t-m">rtlsdr_frontend_monitor</text><text x="14" y="336" font-size="11.5" class="t-m">every 250 ms</text>
+  </g>
+  <!-- usb -->
+  <g>
+    <rect x="200" y="26" width="80" height="44" rx="6" class="f-rf"/><text x="240" y="53" text-anchor="middle" font-size="12">256 kB</text>
+    <rect x="290" y="26" width="80" height="44" rx="6" class="f-rf"/><text x="330" y="53" text-anchor="middle" font-size="12">256 kB</text>
+    <rect x="380" y="26" width="80" height="44" rx="6" class="f-rf"/><text x="420" y="53" text-anchor="middle" font-size="12">256 kB</text>
+    <text x="474" y="44" font-size="12" class="t-m">every 64 ms: cbWrite into the</text>
+    <text x="474" y="60" font-size="12" class="t-m">ring buffer, count clipped samples, 1 byte → control pipe</text>
+    <text x="940" y="53" text-anchor="end" class="b t-rf" font-size="14">5.5 %</text>
+  </g>
+  <path d="M420 70 V104" class="arr"/>
+  <text x="428" y="92" font-size="11" class="t-m">FIFO (sdr_fifo.c), 4 frames</text>
+  <!-- demod -->
+  <g>
+    <rect x="200" y="112" width="70" height="50" rx="6" class="f-sync"/><text x="235" y="134" text-anchor="middle" font-size="11.5">null</text><text x="235" y="150" text-anchor="middle" font-size="11.5">skip</text>
+    <rect x="276" y="112" width="70" height="50" rx="6" class="f-sync"/><text x="311" y="134" text-anchor="middle" font-size="11.5">sym 0</text><text x="311" y="150" text-anchor="middle" font-size="11.5">sync</text>
+    <rect x="352" y="112" width="46" height="50" rx="6" class="f-sync"/><text x="375" y="142" text-anchor="middle" font-size="11.5">1</text>
+    <rect x="404" y="112" width="46" height="50" rx="6" class="f-sync"/><text x="427" y="142" text-anchor="middle" font-size="11.5">2</text>
+    <rect x="456" y="112" width="46" height="50" rx="6" class="f-sync"/><text x="479" y="142" text-anchor="middle" font-size="11.5">3</text>
+    <rect x="508" y="112" width="46" height="50" rx="6" class="f-sync"/><text x="531" y="142" text-anchor="middle" font-size="11.5">4</text>
+    <text x="566" y="142" font-size="14" class="t-m">· · ·</text>
+    <rect x="606" y="112" width="46" height="50" rx="6" class="f-sync"/><text x="629" y="142" text-anchor="middle" font-size="11.5">75</text>
+    <text x="664" y="132" font-size="12" class="t-m">getSamples, phase reference,</text>
+    <text x="664" y="148" font-size="12" class="t-m">cyclic prefix correlation</text>
+    <text x="940" y="141" text-anchor="end" class="b t-sync" font-size="14">10 %</text>
+  </g>
+  <!-- handoff arrows -->
+  <path d="M311 162 V196" class="arr"/><path d="M375 162 V196" class="arr"/><path d="M427 162 V196" class="arr"/><path d="M479 162 V196" class="arr"/><path d="M531 162 V196" class="arr"/><path d="M629 162 V196" class="arr"/>
+  <text x="640" y="182" font-size="11" class="t-m">decodeBlock: copy into buffer[blkno], write blkno to a pipe</text>
+  <!-- ofdm -->
+  <g>
+    <rect x="290" y="200" width="70" height="50" rx="6" class="f-ofdm"/><text x="325" y="222" text-anchor="middle" font-size="11.5">FFT</text><text x="325" y="238" text-anchor="middle" font-size="11.5">ref.</text>
+    <rect x="364" y="200" width="150" height="50" rx="6" class="f-fec"/><text x="439" y="222" text-anchor="middle" font-size="11.5">FIC 1–3</text><text x="439" y="238" text-anchor="middle" font-size="11.5">FFT · demod · Viterbi</text>
+    <rect x="518" y="200" width="134" height="50" rx="6" class="f-ofdm"/><text x="585" y="222" text-anchor="middle" font-size="11.5">MSC 4–75</text><text x="585" y="238" text-anchor="middle" font-size="11.5">FFT · demod · collect</text>
+    <rect x="656" y="200" width="100" height="50" rx="6" class="f-audio"/><text x="706" y="222" text-anchor="middle" font-size="11.5">per CIF:</text><text x="706" y="238" text-anchor="middle" font-size="11.5">Viterbi, RS, AU</text>
+    <text x="940" y="229" text-anchor="end" class="b t-ofdm" font-size="14">39 %</text>
+  </g>
+  <!-- monitor -->
+  <g font-size="12">
+    <rect x="200" y="290" width="120" height="44" rx="6" class="f-out"/><text x="260" y="316" text-anchor="middle">signal status</text>
+    <rect x="330" y="290" width="160" height="44" rx="6" class="f-out"/><text x="410" y="316" text-anchor="middle">10 s reception summary</text>
+    <rect x="500" y="290" width="120" height="44" rx="6" class="f-out"/><text x="560" y="316" text-anchor="middle">retune check</text>
+    <rect x="630" y="290" width="120" height="44" rx="6" class="f-out"/><text x="690" y="316" text-anchor="middle">EPG scheduler</text>
+    <text x="940" y="317" text-anchor="end" class="t-m">≈ 0 %</text>
+  </g>
+
+</svg>

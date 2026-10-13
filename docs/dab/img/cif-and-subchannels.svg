@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 194" width="1004" height="194" role="img" aria-label="CIF and subchannels">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="194" rx="12" class="bgcard"/>
+
+  <text x="10" y="20" font-size="13" class="b">One CIF: 864 CUs (24 ms of every station)</text>
+  <!-- 864 CU -> 960 px: 1.111 px/CU -->
+  <g transform="translate(10,32)" font-size="11">
+    <rect x="0" y="0" width="960" height="44" class="soft"/>
+    <rect x="0" y="0" width="60" height="44" class="f-ofdm" opacity="0.6"/>
+    <rect x="60" y="0" width="80" height="44" class="f-ofdm" opacity="0.4"/>
+    <rect x="140" y="0" width="60" height="44" class="f-audio"/>
+    <rect x="200" y="0" width="80" height="44" class="f-ofdm" opacity="0.6"/>
+    <rect x="280" y="0" width="60" height="44" class="f-ofdm" opacity="0.4"/>
+    <rect x="340" y="0" width="100" height="44" class="f-ofdm" opacity="0.6"/>
+    <rect x="440" y="0" width="60" height="44" class="f-ofdm" opacity="0.4"/>
+    <rect x="500" y="0" width="80" height="44" class="f-ofdm" opacity="0.6"/>
+    <rect x="580" y="0" width="22" height="44" class="f-fec"/>
+    <rect x="602" y="0" width="60" height="44" class="f-ofdm" opacity="0.4"/>
+    <rect x="662" y="0" width="80" height="44" class="f-ofdm" opacity="0.6"/>
+    <rect x="742" y="0" width="60" height="44" class="f-ofdm" opacity="0.4"/>
+    <rect x="802" y="0" width="100" height="44" class="f-ofdm" opacity="0.6"/>
+    <text x="170" y="27" text-anchor="middle" class="b">your station</text>
+    <text x="591" y="27" text-anchor="middle" class="b">EPG</text>
+    <path d="M140 48 V70 M200 48 V70" class="st-audio"/>
+    <text x="140" y="86" font-size="11.5" class="t-audio">StartAddr</text>
+    <text x="210" y="86" font-size="11.5" class="t-audio">+ Length (54 CU for 72 kbit/s EEP‑3A)</text>
+    <text x="10" y="116" font-size="12" class="t-m">→ myBegin[Length·64] soft bits → sdr_dab_service_instance_process_data → processSegment</text>
+  </g>
+
+</svg>
