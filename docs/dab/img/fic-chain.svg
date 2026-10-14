@@ -61,8 +61,8 @@ svg .b { font-weight: 700; }
     <text x="208" y="36" class="b">FIG 1/0, 1/1, 1/4</text>
     <text x="208" y="54" class="t-m">ensemble, service and</text>
     <text x="208" y="72" class="t-m">component labels (16 chars,</text>
-    <text x="208" y="90" class="t-m">trimmed: dab_label_trim,</text>
-    <text x="208" y="108" class="t-m">PR #21)</text>
+    <text x="208" y="90" class="t-m">trimmed: dab_label_trim)</text>
+    <text x="208" y="108" class="t-m"></text>
     <rect x="412" y="14" width="200" height="104" rx="8" class="f-audio"/>
     <text x="424" y="36" class="b">FIG 0/13, 0/14</text>
     <text x="424" y="54" class="t-m">user applications (EPG),</text>

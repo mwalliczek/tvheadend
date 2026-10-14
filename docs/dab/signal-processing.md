@@ -1,6 +1,6 @@
 # From the antenna to the speaker
 
-How tvheadend turns 4 MB/s of raw radio samples from an RTL‑SDR stick into a 72 kbit/s HE‑AAC stream that Kodi plays. The page follows every stage, names the files and functions involved, and lists each optimization with what it saved.
+How tvheadend turns 4 MB/s of raw radio samples from an RTL‑SDR stick into a 72 kbit/s HE‑AAC stream that Kodi plays. The page follows every stage, names the files and functions involved, and gives the run time of each stage.
 
 | | |
 |---|---|
@@ -8,7 +8,7 @@ How tvheadend turns 4 MB/s of raw radio samples from an RTL‑SDR stick into a 7
 | **96 ms** | one DAB transmission frame (mode I) |
 | **1536** | carriers, 1 kHz apart, DQPSK |
 | **≈ 0.5 s** | pipeline latency (time interleaver + superframe) |
-| **≈ 55 %** | of one Raspberry Pi 3 core, all three threads together |
+| **≈ 50 %** | of one Raspberry Pi 3 core, all three threads together, one station |
 
 ## Contents
 
@@ -25,7 +25,6 @@ How tvheadend turns 4 MB/s of raw radio samples from an RTL‑SDR stick into a 7
 - [10 · Stage 7 · DAB+ audio: superframe, Reed‑Solomon, access units](#10--stage-7--dab-audio-superframe-reedsolomon-access-units)
 - [11 · Stage 8 · Into tvheadend, over HTSP, out of the speaker](#11--stage-8--into-tvheadend-over-htsp-out-of-the-speaker)
 - [12 · Where the time goes](#12--where-the-time-goes)
-- [13 · Optimizations at a glance](#13--optimizations-at-a-glance)
 
 ## 00 · The whole journey
 
@@ -37,11 +36,11 @@ The time interleaver (16 CIFs = 360 ms) and the audio superframe (120 ms) make u
 
 ## 01 · Three threads, one pipeline
 
-The work is split so that the slow parts overlap. The USB thread only copies bytes. The demodulator thread keeps the frame timing and hands every OFDM symbol, as raw time samples, to the OFDM thread, which does all the heavy maths: FFT, demodulation and every Viterbi and Reed‑Solomon decoder.
+The work is split so that the slow parts overlap. The USB thread only copies bytes. The demodulator thread keeps the frame timing and hands every OFDM symbol, as raw time samples, to the OFDM thread, which does all the heavy maths: FFT, demodulation and every Viterbi and Reed‑Solomon decoder. Of the 72 MSC symbols it demodulates only those that carry an open station (see stage 4).
 
 ![Thread diagram](img/thread-diagram.svg)
 
-CPU per thread measured with `top -H` on a Raspberry Pi 3 (1.2 GHz Cortex‑A53, 32‑bit build without NEON) while playing one station, after [PR #18](https://github.com/mwalliczek/tvheadend/pull/18). 100 % is one full core.
+CPU per thread measured with `top -H` on a Raspberry Pi 3 (1.2 GHz Cortex‑A53, 32‑bit build without NEON) while playing one station. 100 % is one full core.
 
 **Code:**
 
@@ -59,7 +58,7 @@ DAB transmission mode I sends a frame every 96 ms: a null symbol (the transmitte
 
 **Code:**
 
-- [`dab.h`](../../src/input/dab.h): `T_F 196608 · T_null 2656 · T_s 2552 · T_u 2048 · T_g 504 · K 1536 · L 76 · CUSize 64`
+- [`dab_constants.h`](../../src/input/dab/dab_constants.h): `T_F 196608 · T_null 2656 · T_s 2552 · T_u 2048 · T_g 504 · K 1536 · L 76 · CUSize 64`
 
 ## 03 · What the signal looks like
 
@@ -151,7 +150,7 @@ Every carrier after the FFT is one complex number. Its phase is the transmitted 
 
 A soft bit is not just 0 or 1 but a confidence from −127 to +127. In ③ (a weak signal) the clouds overlap and many values sit near 0; the histogram above shows the same for a real recorded FIC block. The Viterbi decoder uses exactly this: it weighs certain bits more than uncertain ones, which is why the FIC still decodes. In the code: `ibits[i] = −Re(r) · scale`, `ibits[K + i] = −Im(r) · scale` in `decodeBlockInt`.
 
-The recording predates [`c5b5f122c`](https://github.com/mwalliczek/tvheadend/commit/c5b5f122c): these are phase‑only soft bits, which is why they gather around ±90. Today the amplitude is kept as well, so faded carriers move towards 0 on their own.
+The recorded block comes from a build with phase‑only soft bits, which is why the values gather around ±90. The current decoder keeps the amplitude of each carrier as well, so faded carriers move towards 0 on their own.
 
 ### 3.8 · What the corrections are for *(simulated)*
 
@@ -163,16 +162,15 @@ The same differential demodulation as ②, with one impairment switched on each 
 <img src="img/strong-echo-2-db-44-s.svg" alt="Strong echo (−2 dB, 44 µs)" width="32%">
 </p>
 
-First: a residual frequency error turns all clouds by 2π·Δf·T<sub>s</sub>; at 0.06 carriers that is 27°. The fine frequency loop and the common‑phase part of `correctPhase` remove it. Second: a sample clock off by tens of ppm slips the FFT window, which turns carrier k by an amount proportional to k: the fan that the slope estimate in `correctPhase` ([PR #12](https://github.com/mwalliczek/tvheadend/pull/12)) undoes. Third: an echo inside the guard keeps the clouds in place, but at some frequencies the two paths cancel. Those carriers end up near the centre, and keeping their amplitude in the soft bits ([`c5b5f122c`](https://github.com/mwalliczek/tvheadend/commit/c5b5f122c)) tells the Viterbi decoder not to trust them.
+First: a residual frequency error turns all clouds by 2π·Δf·T<sub>s</sub>; at 0.06 carriers that is 27°. The fine frequency loop and the common‑phase part of `correctPhase` remove it. Second: a sample clock off by tens of ppm slips the FFT window, which turns carrier k by an amount proportional to k: the fan that the slope estimate in `correctPhase` undoes. Third: an echo inside the guard keeps the clouds in place, but at some frequencies the two paths cancel. Those carriers end up near the centre, and keeping their amplitude in the soft bits tells the Viterbi decoder not to trust them.
 
 ## 04 · Stage 1 · Stick, USB and the ring buffer
 
 The R820T tuner moves the 1.5 MHz wide ensemble (for example channel 9B, 204.640 MHz) down to an intermediate frequency. The RTL2832U samples it with an 8‑bit ADC and delivers complex baseband: one byte I, one byte Q, 2 048 000 times per second. `rtlsdr_set_sample_rate(dev, 2048000)` matches the DAB sample clock exactly, so no resampling is needed.
 
-<p>
-<img src="img/iq-bytes.svg" alt="IQ bytes" width="49%">
-<img src="img/usb-thread-before-and-after.svg" alt="USB thread before and after" width="49%">
-</p>
+![IQ bytes](img/iq-bytes.svg)
+
+The callback copies each USB buffer into the ring buffer with one `memcpy` and counts the clipped samples (0 or 255) on that copy. On a Raspberry Pi the zero‑copy USB buffers of librtlsdr are uncached memory, where reading byte by byte is slow; the copy in the FIFO is cached.
 
 **Code:**
 
@@ -180,20 +178,20 @@ The R820T tuner moves the 1.5 MHz wide ensemble (for example channel 9B, 204.640
 - [`sdr_fifo.c`](../../src/input/dab/rtlsdr/sdr_fifo.c): `cbInit · cbWrite · cbReadPtr`
 - [`input_sdr.c`](../../src/input/dab/rtlsdr/input_sdr.c): `cbInit(&sdr->fifo, 196608·2·4)`
 
-**⏱ Pi 3: 5.5 % ≈ 5.3 ms per 96 ms frame**
+**⏱ Pi 3: 7 % ≈ 7 ms per 96 ms frame**
 
 ## 05 · Stage 2 · Bytes become complex samples
 
-`getSamples` takes byte pairs from the FIFO, turns them into floats with a 256‑entry lookup table (`convTable`: (b − 128)/128), and mixes them with a numerically controlled oscillator running at minus the measured frequency error. The stick's crystal is off by tens of ppm (here −47 ppm ≈ −9.6 kHz at 204 MHz), so without this the whole spectrum would sit 9–10 carriers off. It also keeps the long‑term signal level `sLevel` that the null detector needs.
+`getSamples` takes byte pairs from the FIFO, turns them into floats with a 256‑entry lookup table (`convTable`: (b − 128)/128), and mixes them with a numerically controlled oscillator running at minus the measured frequency error. The stick's crystal is off by tens of ppm (here −47 ppm ≈ −9.6 kHz at 204 MHz), so without this the whole spectrum would sit 9–10 carriers off. It also keeps the long‑term signal level `sLevel` that the null detector needs. The samples are processed in blocks of 256 (`OSC_BLOCK`): within a block the phasor of each sample is the block start times a table of step powers, and the level is summed per block, so no sample depends on the one before it and the FPU pipeline stays busy.
 
 ![getSamples block diagram](img/getsamples-block-diagram.svg)
 
 **Code:**
 
 - [`input_sdr.c`](../../src/input/dab/rtlsdr/input_sdr.c): `getSamples · getSample · osc_set_offset · osc_normalize · convTable · get_db`
-- [`dab.h`](../../src/input/dab.h): `OSC_BLOCK 256`
+- [`dab.h`](../../src/input/dab/rtlsdr/dab.h): `OSC_BLOCK 256`
 
-**⏱ x86: 1.73 ns/sample → 0.34 ms per frame** **Pi 3: the largest part of the demodulator thread's 10 %**
+**⏱ x86: 1.73 ns/sample → 0.34 ms per frame** **Pi 3: the largest part of the demodulator thread's 15 %**
 
 ## 06 · Stage 3 · Finding the frame: time and frequency sync
 
@@ -211,7 +209,7 @@ Symbol 0 is the same in every frame (`refTable`, ETSI EN 300 401 §14.3.2). `pha
 
 ![Impulse response](img/impulse-response.svg)
 
-The window starts at the **earliest** path that is at least a third of the strongest one (commit [`0f97f6929`](https://github.com/mwalliczek/tvheadend/commit/0f97f6929)), not at the strongest. Starting at the strongest would push the first path's symbol into the previous window and cause inter‑symbol interference. The 16 sample margin absorbs the drift from the stick's clock error over the frame (≈ 0.15 samples per symbol at 50 ppm). The echo statistics in the reception summary come from this picture; on 9B with the new antenna it showed an echo of −14 dB at 134 µs, well inside the guard interval.
+The window starts at the **earliest** path that is at least a third of the strongest one, not at the strongest. Starting at the strongest would push the first path's symbol into the previous window and cause inter‑symbol interference. The 16 sample margin absorbs the drift from the stick's clock error over the frame (≈ 0.15 samples per symbol at 50 ppm). The echo statistics in the reception summary come from this picture; on 9B in this setup it shows an echo of −14 dB at 134 µs, well inside the guard interval.
 
 ### 3c · Coarse frequency: which carrier is carrier 0?
 
@@ -219,7 +217,7 @@ The window starts at the **earliest** path that is at least a third of the stron
 
 `phaseReferenceEstimateOffset` compares the phase differences between neighbouring carriers of the received symbol 0 with those of `refTable` for every shift of ±35 carriers (±35 kHz) and takes the best match. It is only run until the FIC decodes (`fibProcessorIsSynced`). The result goes into `coarseCorrector`.
 
-The correction found last time is stored per adapter (`initialCorrection`, commit [`6e3413537`](https://github.com/mwalliczek/tvheadend/commit/6e3413537)), so tuning to the next mux usually starts already on the right carrier.
+The correction found last time is stored per adapter (`initialCorrection`), so tuning to the next mux usually starts already on the right carrier.
 
 ### 3d · Fine frequency: the cyclic prefix knows the phase drift
 
@@ -246,13 +244,18 @@ Each symbol arrives in the OFDM thread as 2552 complex samples. `decodeBlockInt`
 <img src="img/frequency-interleaving.svg" alt="Frequency interleaving" width="49%">
 </p>
 
-> **Optimizations here.** **Soft bits keep the amplitude** ([`c5b5f122c`](https://github.com/mwalliczek/tvheadend/commit/c5b5f122c)): earlier every carrier was normalized to its own magnitude, so a carrier in a deep fade got the same confidence as a strong one. Keeping the amplitude relative to the block average gains 4–6 dB in multipath. **Clock‑offset correction** ([PR #12](https://github.com/mwalliczek/tvheadend/pull/12)) adds ③; in simulation at 48 ppm and 8 dB SNR it brings the bit error rate from 4.1 % back to 3.2 %. **Cached rotation table** ([PR #18](https://github.com/mwalliczek/tvheadend/pull/18)): `correctPhaseTable` recomputes the 1536 rotations only when the slope moves by more than 1 mrad at the band edge; the cost of ③ fell from 9 µs to 4 µs per symbol on x86 (26 → 21 µs for the whole symbol).
+> **Soft bits keep the amplitude.** Each carrier is scaled relative to the average of its symbol, not normalized to its own magnitude, so a carrier in a deep fade gets a small weight instead of full confidence (4–6 dB in multipath). **Clock slope.** ③ estimates the phase slope over the carriers caused by the stick's sample clock offset (decision directed: upper vs. lower half of the band) and removes it together with the common phase; `correctPhaseTable` rebuilds the 1536 rotations only when the slope moves by more than 1 mrad at the band edge.
+
+### Only the symbols of the open stations
+
+The FIC symbols are always demodulated. Of the 72 MSC symbols only those that carry a part of an open sub‑channel are: at the start of each CIF, `msc_symbol_mask` collects these symbols for all active service instances (audio and the EPG data channel). A symbol carries 48 CU, so a 72 kbit/s station needs 2 or 3 of the 18 symbols of a CIF. The symbol just before a demodulated one gets its FFT only, as the phase reference for the differential decoding; all other MSC symbols are skipped. `process_mscBlock` is still called for every symbol (with `NULL` for a skipped one), so the CIF is handed to the services when it is complete. With no station open (scan, FIC only) no MSC symbol is touched.
 
 **Code:**
 
-- [`ofdmDecoder.c`](../../src/input/dab/rtlsdr/ofdmDecoder.c): `processBlock_0 · processBlock_0_int · get_snr · decodeBlockInt · correctPhase · correctPhaseTable · initConstOfdmDecoder (myMapper)`
+- [`ofdmDecoder.c`](../../src/input/dab/rtlsdr/ofdmDecoder.c): `processBlock_0 · processBlock_0_int · get_snr · decodeBlockInt · decodeMscblock · correctPhase · correctPhaseTable · initConstOfdmDecoder (myMapper)`
+- [`mscHandler.c`](../../src/input/dab/rtlsdr/mscHandler.c): `msc_symbol_mask`
 
-**⏱ x86: 21 µs per symbol (17 µs without ③) → 1.6 ms per frame**
+**⏱ x86: 21 µs per demodulated symbol (17 µs without ③) → ≈ 0.5 ms per frame with one station (FIC + ≈ 12 MSC symbols), ≈ 0.7 ms with two**
 
 ## 08 · Stage 5 · FIC: the table of contents
 
@@ -273,7 +276,7 @@ The three FIC symbols carry 9216 soft bits per frame. They are cut into four blo
 
 ## 09 · Stage 6 · MSC: cut out one station and undo the protection
 
-18 symbols × 3072 bits = 55 296 bits = one CIF of 864 **capacity units** (CU) of 64 bits. Every station occupies a contiguous run of CUs that FIG 0/1 announced. `process_mscBlock` collects a CIF and copies out the part of every active service.
+18 symbols × 3072 bits = 55 296 bits = one CIF of 864 **capacity units** (CU) of 64 bits. Every station occupies a contiguous run of CUs that FIG 0/1 announced. `process_mscBlock` collects a CIF and hands the part of every active service to it.
 
 ![CIF and subchannels](img/cif-and-subchannels.svg)
 
@@ -292,7 +295,7 @@ Before transmission every bit was delayed by 0 to 15 CIFs depending on its posit
 <img src="img/viterbi-trellis.svg" alt="Viterbi trellis" width="49%">
 </p>
 
-> **Optimizations in the Viterbi decoder.** **Half the work** ([`e6de9c2c3`](https://github.com/mwalliczek/tvheadend/commit/e6de9c2c3)): the decoder ran its trellis over twice the needed length; it now decodes exactly the frame and the decisions are aligned. **SIMD actually used** ([`54f409a9d`](https://github.com/mwalliczek/tvheadend/commit/54f409a9d)): the spiral SSE2 / NEON butterflies (16 states per instruction) were compiled but not selected; now `viterbi-simd.h` picks SSE2 on x86 and NEON on ARM if `CONFIG_NEON` is set. Measured on x86: 2.3× faster than the plain C kernel. *The Pi in this setup was built without NEON, so it still runs the plain C kernel.*
+> **SIMD kernels.** The Viterbi decoder runs one add‑compare‑select step for all 64 states per bit, using the spiral butterflies (16 states per instruction): `viterbi-simd.h` picks SSE2 on x86 and NEON on ARM when built with `CONFIG_NEON` (`--enable-neon`), otherwise the plain C kernel. On x86 SSE2 is 2.3× faster than plain C. *The Pi measured here was built without NEON, so it runs the plain C kernel.*
 
 **Code:**
 
@@ -310,7 +313,7 @@ The Viterbi output is a sub‑channel bit stream: 24 × bitrate bits per CIF (17
 
 ![Superframe and RS](img/superframe-and-rs.svg)
 
-> **Optimizations / fixes here.** **RS decoder fixed** ([`1cd1540b0`](https://github.com/mwalliczek/tvheadend/commit/1cd1540b0)): it computed wrong corrections before, so a correctable superframe was lost. **Keep the superframe** ([`d2a6084c9`](https://github.com/mwalliczek/tvheadend/commit/d2a6084c9)): the fire code is itself inside RS‑protected data. If it fails, the RS decoder runs first and the fire code is checked again on the corrected bytes. Uncorrectable columns no longer drop the whole superframe; only the AUs inside them fail their CRC. **Why LATM?** DAB+ uses 960‑sample frames, which ADTS cannot signal; LATM carries the AudioSpecificConfig with the frame length in‑band ([PR #11](https://github.com/mwalliczek/tvheadend/pull/11)).
+> **Fire code and RS.** The fire code is itself inside the RS‑protected data. If it fails, the RS decoder runs first and the fire code is checked again on the corrected bytes. An uncorrectable RS column does not drop the whole superframe; only the AUs inside it fail their CRC. **Why LATM?** DAB+ uses 960‑sample frames, which ADTS cannot signal; LATM carries the AudioSpecificConfig with the frame length in‑band.
 
 **Code:**
 
@@ -338,7 +341,7 @@ The Viterbi output is a sub‑channel bit stream: 24 × bitrate bits per CIF (17
 
 Two different kinds of number, kept apart on purpose:
 
-- **Raspberry Pi 3, measured**: CPU per thread from `top -H`, one station playing, after [PR #18](https://github.com/mwalliczek/tvheadend/pull/18). These are the real numbers.
+- **Raspberry Pi 3, measured**: CPU per thread from `top -H` over 10 s, one station playing. These are the real numbers.
 - **x86, micro‑benchmarks**: each function timed alone in a loop (Xeon 2.8 GHz, shared VM, gcc ‑O2, one run each, roughly ±20 %). They show the *relative* cost of the stages, which `top` cannot.
 
 ### Raspberry Pi 3: the 96 ms budget of one core
@@ -349,15 +352,15 @@ Two different kinds of number, kept apart on purpose:
 
 ![Stage cost x86](img/stage-cost-x86.svg)
 
-Per 96 ms frame, one 72 kbit/s station. On x86 the whole chain needs ≈ 2.8 ms per frame, about 3 % of a core. The Pi 3 needs ≈ 52 ms (≈ 15× slower: lower clock, in‑order core, 32‑bit build, plain C Viterbi). With the plain C Viterbi, the OFDM thread splits roughly into FFT/demod ½, MSC Viterbi ⅓, FIC Viterbi ⅛ and audio ¹⁄₂₀.
+Per 96 ms frame, one 72 kbit/s station. On x86 the whole chain needs ≈ 1.7 ms per frame, about 2 % of a core. The Pi 3 needs ≈ 48 ms (lower clock, in‑order core, 32‑bit build, plain C Viterbi). With the plain C Viterbi, the OFDM thread splits roughly into MSC Viterbi ½, FFT/demod ¼, FIC Viterbi ⅕ and audio ¹⁄₁₀.
 
 | Stage | Function | Thread | per call (x86) | calls / frame | ms / frame (x86) |
 |---|---|---|---|---|---|
-| `1` USB copy + clip count | `rtlsdr_dab_callback` | USB | – | 1.5 | – (Pi: 5.3) |
+| `1` USB copy + clip count | `rtlsdr_dab_callback` | USB | – | 1.5 | – (Pi: 7) |
 | `2` bytes → mixed float | `getSamples` | demod | 1.73 ns / sample | 196 608 | 0.34 |
 | `3` timing | `phaseReferenceFindIndex` | demod | 28–64 µs | 1 | ≈ 0.05 |
 | `3` coarse frequency | `phaseReferenceEstimateOffset` | demod | 8–13 µs | 0 – 1 | ≈ 0.01 |
-| `4` FFT, DQPSK, phase, soft bits | `decodeBlockInt` | OFDM | 21 µs | 75 | 1.6 |
+| `4` FFT, DQPSK, phase, soft bits | `decodeBlockInt` | OFDM | 21 µs | ≈ 15 (+ ≈ 4 FFT only) | ≈ 0.5 |
 | `5` FIC depuncture + Viterbi | `protection_deconvolve` | OFDM | 47 µs (110 C) | 4 | 0.19 (0.44) |
 | `6` time deinterleave | `processSegment` | OFDM | small | 4 | < 0.05 |
 | `6` MSC Viterbi 72 kbit/s | `protection_deconvolve` | OFDM | 104 µs (261 C) | 4 | 0.42 (1.04) |
@@ -365,34 +368,13 @@ Per 96 ms frame, one 72 kbit/s station. On x86 the whole chain needs ≈ 2.8 ms 
 | `7` … one RS code word | `reedSolomon_dec` | OFDM | ≈ 10 µs | 7.2 | (included) |
 | `7` … fire code | `firecode_check` | OFDM | 0.02 µs | 4 | (included) |
 | `8` packet → HTSP | `dataCallback` | OFDM | – | 2.4 – 4.8 | negligible |
-| Total, x86 (SSE2) |  |  |  |  | ≈ 2.8 |
-| Measured on the Pi 3: OFDM 37 + demodulator 9.6 + USB 5.3 |  |  |  |  | ≈ 52 |
+| Total, x86 (SSE2) |  |  |  |  | ≈ 1.7 |
+| Measured on the Pi 3: OFDM 27 + demodulator 14 + USB 7 |  |  |  |  | ≈ 48 |
 
-A second 72 kbit/s station on the same mux adds only the MSC part (≈ 0.6 ms on x86): sync, FFT and FIC are shared.
+A second 72 kbit/s station on the same mux adds only its own symbols and its MSC part (≈ 0.8 ms on x86): sync and FIC are shared.
 
-## 13 · Optimizations at a glance
-
-![Optimization before and after](img/optimization-before-and-after.svg)
-
-| Where | Change | Effect | Ref |
-|---|---|---|---|
-| Architecture | Separate OFDM thread; per‑symbol buffers with `acquireBuffer` | Demodulation and decoding overlap on two cores | `ofdmDecoder.c` |
-| USB callback | Count clipped samples on the FIFO copy, not on the uncached USB buffer | USB thread 52 % → 5.5 % on the Pi | [PR #18](https://github.com/mwalliczek/tvheadend/pull/18) |
-| getSamples | Oscillator and level in blocks of 256 with a step table | 3.1–3.7 → 1.73 ns per sample | [PR #18](https://github.com/mwalliczek/tvheadend/pull/18) |
-| Demodulator | `ofdmBuffer` sized max(T_null, T_s) | Fixes a stack overflow present since 2020 (found by ASan) | [PR #18](https://github.com/mwalliczek/tvheadend/pull/18) |
-| correctPhase | Cache the 1536 rotations, rebuild only on a slope change > 1 mrad | 26 → 21 µs per symbol | [PR #18](https://github.com/mwalliczek/tvheadend/pull/18) |
-| correctPhase | Estimate and remove the sample clock slope | BER 4.1 % → 3.2 % at 48 ppm, 8 dB SNR (simulation) | [PR #12](https://github.com/mwalliczek/tvheadend/pull/12) |
-| Soft bits | Keep carrier amplitude relative to the symbol average | 4–6 dB better in multipath | [`c5b5f122c`](https://github.com/mwalliczek/tvheadend/commit/c5b5f122c) |
-| Time sync | FFT window on the first path in SFNs, 16 sample margin | No inter‑symbol interference from early transmitters | [`0f97f6929`](https://github.com/mwalliczek/tvheadend/commit/0f97f6929) |
-| Tuning | Cache frequency correction and reception parameters per adapter | Faster lock after a mux change | [`6e3413537`](https://github.com/mwalliczek/tvheadend/commit/6e3413537) |
-| Viterbi | Decode exactly the frame length, aligned decisions | Half the work | [`e6de9c2c3`](https://github.com/mwalliczek/tvheadend/commit/e6de9c2c3) |
-| Viterbi | Actually select the SSE2 / NEON spiral kernel | 2.3× faster on x86; NEON needs `--enable-neon` | [`54f409a9d`](https://github.com/mwalliczek/tvheadend/commit/54f409a9d) |
-| Reed‑Solomon | Correct error values | Correctable superframes are no longer lost | [`1cd1540b0`](https://github.com/mwalliczek/tvheadend/commit/1cd1540b0) |
-| Superframe | Fire code checked again after RS; bad columns only drop their AUs | Fewer audio dropouts at the edge of reception | [`d2a6084c9`](https://github.com/mwalliczek/tvheadend/commit/d2a6084c9) |
-| Audio format | LOAS/LATM with in‑band config; AAC for non‑Kodi clients | Correct 960‑sample frames; TvhClient plays | [PR #11](https://github.com/mwalliczek/tvheadend/pull/11), [#19](https://github.com/mwalliczek/tvheadend/pull/19) |
-
-> **Next easy win on this Pi.** The build has `CONFIG_NEON = no`, so both Viterbi decoders run the plain C kernel. Building with `CFLAGS="-mcpu=cortex-a53 -mfpu=neon-fp-armv8" ./configure --enable-neon …` selects the NEON kernel. If the x86 ratio carries over, the OFDM thread would drop from ≈ 39 % to roughly 25–30 %.
+> **NEON on the Pi.** A build without `CONFIG_NEON` runs both Viterbi decoders with the plain C kernel. `CFLAGS="-mcpu=cortex-a53 -mfpu=neon-fp-armv8" ./configure --enable-neon …` selects the NEON kernel; going by the x86 ratio this would cut the Viterbi share of the OFDM thread by about half.
 
 ---
 
-Sources: `src/input/dab/` and `src/input/dab/rtlsdr/` of mwalliczek/tvheadend at [`8b4385f38`](https://github.com/mwalliczek/tvheadend/commit/8b4385f38). Pi figures measured with `top -H` and `perf` on a Raspberry Pi 3 (armv7l). x86 figures from a stand‑alone benchmark of the same sources (gcc ‑O2, Xeon 2.8 GHz VM). DAB parameters per ETSI EN 300 401 (mode I) and ETSI TS 102 563 (DAB+).
+Sources: `src/input/dab/` and `src/input/dab/rtlsdr/` of mwalliczek/tvheadend, master at `810edf950`. Pi figures measured with `top -H` and `perf` on a Raspberry Pi 3 (armv7l). x86 figures from a stand‑alone benchmark of the same sources (gcc ‑O2, Xeon 2.8 GHz VM). DAB parameters per ETSI EN 300 401 (mode I) and ETSI TS 102 563 (DAB+).
