@@ -335,12 +335,36 @@ void decodeFICblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t bl
 	process_ficBlock(sdr, ibits, blkno);
 }
 
+/*
+ * An MSC symbol which no active sub-channel uses is not demodulated. Only
+ * when the next symbol is needed, its FFT is taken as the phase reference
+ * for that one (the data is coded differentially from symbol to symbol).
+ * One 72 kbit/s station needs 2 or 3 of the 18 symbols of a CIF, so most
+ * of the FFT and demodulation work of the OFDM thread falls away.
+ */
 void decodeMscblock(struct sdr_state_t *sdr, const float _Complex* v, int32_t blkno) {
 	int16_t ibits[2 * K];
-	
-	decodeBlockInt(sdr, v, ibits);
+	int32_t s = (blkno - 4) % numberofblocksperCIF;
+	uint32_t mask;
 
-	process_mscBlock(sdr, ibits, blkno);
+	if (s == 0)
+		sdr->ofdmDecoder.mscMask = msc_symbol_mask(sdr);
+	mask = sdr->ofdmDecoder.mscMask;
+
+	if (mask & (1u << s)) {
+		decodeBlockInt(sdr, v, ibits);
+		process_mscBlock(sdr, ibits, blkno);
+		return;
+	}
+	/* the last symbol of a CIF is the reference for the first one of the
+	   next CIF; that one of the last CIF of the frame is not followed by
+	   a data symbol */
+	if (blkno < L - 1 && (mask & (1u << ((s + 1) % numberofblocksperCIF)))) {
+		doFft(sdr, &v[T_g]);
+		memcpy(sdr->ofdmDecoder.phaseReference,
+			sdr->ofdmDecoder.fftBuffer, T_u * sizeof(float _Complex));
+	}
+	process_mscBlock(sdr, NULL, blkno);
 }
 
 #ifndef DAB_SINGLE_THREAD
