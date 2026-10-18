@@ -9,8 +9,20 @@ static void fill(uint8_t *buf, int len, int start) {
         buf[i] = (uint8_t)(start + i);
 }
 
+/* read an I/Q pair the way the sample reader does (cbReadPtr, cbConsume);
+   copied before it is released to the producer */
+static void readPair(CircularBuffer *cb, uint8_t out[2]) {
+    uint32_t n;
+    const uint8_t *p = cbReadPtr(cb, &n);
+    ck_assert_int_ge(n, 2);
+    out[0] = p[0];
+    out[1] = p[1];
+    cbConsume(cb, 2);
+}
+
 START_TEST(writeReadWrapTest) {
     CircularBuffer cb;
+    uint8_t pair[2];
     uint8_t buf[8];
     cbInit(&cb, 8);
     ck_assert(cbIsEmpty(&cb));
@@ -18,17 +30,19 @@ START_TEST(writeReadWrapTest) {
     fill(buf, 6, 0);
     cbWrite(&cb, buf, 6);
     ck_assert_int_eq(cb.count, 6);
-    ck_assert_int_eq(cbReadDouble(&cb)[0], 0);
-    ck_assert_int_eq(cbReadDouble(&cb)[1], 3);
+    readPair(&cb, pair);
+    ck_assert_int_eq(pair[0], 0);
+    readPair(&cb, pair);
+    ck_assert_int_eq(pair[1], 3);
 
     /* wraps around the end of the buffer */
     fill(buf, 4, 6);
     cbWrite(&cb, buf, 4);
     ck_assert_int_eq(cb.count, 6);
     for (int i = 4; i < 10; i += 2) {
-        uint8_t *p = cbReadDouble(&cb);
-        ck_assert_int_eq(p[0], i);
-        ck_assert_int_eq(p[1], i + 1);
+        readPair(&cb, pair);
+        ck_assert_int_eq(pair[0], i);
+        ck_assert_int_eq(pair[1], i + 1);
     }
     ck_assert(cbIsEmpty(&cb));
     cbFree(&cb);
@@ -36,6 +50,7 @@ START_TEST(writeReadWrapTest) {
 
 START_TEST(exactlyFullTest) {
     CircularBuffer cb;
+    uint8_t pair[2];
     uint8_t buf[8];
     cbInit(&cb, 8);
     fill(buf, 4, 0);
@@ -45,12 +60,14 @@ START_TEST(exactlyFullTest) {
     /* filling the buffer completely must not drop anything */
     ck_assert(cbIsFull(&cb));
     ck_assert_int_eq(cb.start, 0);
-    ck_assert_int_eq(cbReadDouble(&cb)[0], 0);
+    readPair(&cb, pair);
+    ck_assert_int_eq(pair[0], 0);
     cbFree(&cb);
 } END_TEST
 
 START_TEST(overflowDropsNewDataTest) {
     CircularBuffer cb;
+    uint8_t pair[2];
     uint8_t buf[12];
     cbInit(&cb, 8);
     fill(buf, 6, 0);
@@ -58,16 +75,20 @@ START_TEST(overflowDropsNewDataTest) {
     fill(buf, 4, 6);
     cbWrite(&cb, buf, 4);           /* only bytes 6 and 7 still fit */
     ck_assert(cbIsFull(&cb));
-    for (int i = 0; i < 8; i += 2)
-        ck_assert_int_eq(cbReadDouble(&cb)[0], i);
+    for (int i = 0; i < 8; i += 2) {
+        readPair(&cb, pair);
+        ck_assert_int_eq(pair[0], i);
+    }
     ck_assert(cbIsEmpty(&cb));
 
     /* a single write larger than the buffer is cut */
     fill(buf, 12, 100);
     cbWrite(&cb, buf, 12);
     ck_assert(cbIsFull(&cb));
-    for (int i = 100; i < 108; i += 2)
-        ck_assert_int_eq(cbReadDouble(&cb)[0], i);
+    for (int i = 100; i < 108; i += 2) {
+        readPair(&cb, pair);
+        ck_assert_int_eq(pair[0], i);
+    }
     cbFree(&cb);
 } END_TEST
 
@@ -92,12 +113,12 @@ START_TEST(concurrentProducerConsumerTest) {
     cbInit(&cb, 1024);
     pthread_create(&thread, NULL, producer, &cb);
     while (expected < 200000) {
-        uint8_t *p;
+        uint8_t pair[2];
         if (cbCount(&cb) < 2)
             continue;
-        p = cbReadDouble(&cb);
-        ck_assert_int_eq(p[0], (uint8_t)expected);
-        ck_assert_int_eq(p[1], (uint8_t)expected);
+        readPair(&cb, pair);
+        ck_assert_int_eq(pair[0], (uint8_t)expected);
+        ck_assert_int_eq(pair[1], (uint8_t)expected);
         expected++;
     }
     pthread_join(thread, NULL);

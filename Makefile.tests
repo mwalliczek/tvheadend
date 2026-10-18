@@ -31,7 +31,7 @@ TESTS = viterbiTest ficHandlerTest mp4processorTest mp2processorTest firecheckTe
 .PHONY: tests clean
 
 clean:
-		rm -f tests/*.o tests/*.d tests/*.xml $(addprefix tests/,$(TESTS)) tests/viterbiTest-neu
+		rm -f tests/*.o tests/*.d tests/*.xml $(addprefix tests/,$(TESTS))
 
 tests:		$(addprefix tests/,$(TESTS))
 		@failed=""; for t in $(TESTS); do \
@@ -75,9 +75,6 @@ SDR_INPUT  = tests/input_sdr.o tests/ficHandler.o tests/phasereference.o tests/s
              tests/fic_protection.o tests/ofdmDecoder.o $(PROTECTION)
 
 tests/viterbiTest:	tests/viterbiTest.o $(VITERBI) tests/utilities.o
-		gcc $(CFLAGS) $^ $(LIBS) -o $@
-
-tests/viterbiTest-neu:	tests/viterbiTest.o tests/viterbi-neu.o tests/utilities.o
 		gcc $(CFLAGS) $^ $(LIBS) -o $@
 
 tests/ficHandlerTest:	tests/ficHandlerTest.o tests/ficHandler.o tests/fic_protection.o $(PROTECTION) \

@@ -117,9 +117,6 @@ static inline void rtlsdr_adapter_changed(rtlsdr_adapter_t *la)
 
 rtlsdr_frontend_t * rtlsdr_frontend_create(htsmsg_t *conf, rtlsdr_adapter_t *la);
 
-int
-rtlsdr_frontend_get_weight(dab_input_t *mi, dab_ensemble_t *mm, int flags, int weight );
-
 void rtlsdr_frontend_save(rtlsdr_frontend_t *lfe, htsmsg_t *m);
 
 void rtlsdr_frontend_destroy(rtlsdr_frontend_t *lfe);
@@ -131,8 +128,6 @@ int rtlsdr_frontend_tune0(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi, 
 int rtlsdr_frontend_tune1(rtlsdr_frontend_t *lfe, dab_ensemble_instance_t *mmi, uint32_t freq);
 
 void rtlsdr_frontend_create_ensemble_instance0(rtlsdr_frontend_t *lfe, dab_ensemble_t *mm);
-
-void rtlsdr_frontend_set_enabled ( rtlsdr_frontend_t *mi, int enabled );
 
 uint32_t getSamples(rtlsdr_frontend_t *lfe, float _Complex *v, uint32_t size, int32_t freqOffset);
 uint32_t getSample(rtlsdr_frontend_t *lfe, float _Complex *v, float *abs, int32_t freqOffset);

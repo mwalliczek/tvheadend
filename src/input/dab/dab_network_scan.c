@@ -281,19 +281,6 @@ dab_network_scan_ensemble_active ( dab_ensemble_t *mm )
   TAILQ_INSERT_TAIL(&mn->mn_scan_active, mm, mm_scan_link);
 }
 
-/* Mux has been reactivated */
-void
-dab_network_scan_ensemble_reactivate ( dab_ensemble_t *mm )
-{
-  dab_network_t *mn = mm->mm_network;
-  if (mm->mm_scan_state == MM_SCAN_STATE_ACTIVE)
-    return;
-  dab_network_scan_queue_del0(mm);
-  mm->mm_scan_init  = 0;
-  mm->mm_scan_state = MM_SCAN_STATE_ACTIVE;
-  TAILQ_INSERT_TAIL(&mn->mn_scan_active, mm, mm_scan_link);
-}
-
 /******************************************************************************
  * Mux queue handling
  *****************************************************************************/

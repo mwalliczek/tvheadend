@@ -828,17 +828,6 @@ dab_input_set_networks ( dab_input_t *mi, htsmsg_t *msg )
   return save;
 }
 
-int
-dab_input_grace( dab_input_t *mi, dab_ensemble_t *mm )
-{
-  /* Get timeout */
-  int t = 0;
-  if (mi && mi->mi_get_grace)
-    t = mi->mi_get_grace(mi, mm);
-  if (t < 5) t = 5; // lower bound
-  return t;
-}
-
 /******************************************************************************
  * Wizard
  *****************************************************************************/

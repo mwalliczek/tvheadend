@@ -34,9 +34,5 @@
 
 	void	process_FIB		(dab_ensemble_instance_t *dei, const uint8_t *, uint16_t);
 
-	void	setupforNewFrame	(dab_ensemble_instance_t *dei);
-	void	clearEnsemble		(dab_ensemble_instance_t *dei);
-
-
 #endif
 

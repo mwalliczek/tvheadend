@@ -29,9 +29,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //#include <mmintrin.h>
 #include "SSE2NEON.h"
 #include	"spiral-neon.h"
-void init_FULL_SPIRAL(void) {
-}
-
 void FULL_SPIRAL_neon(int amount, int32_t  *Y, int32_t  *X, int32_t  *syms, unsigned char  *dec, int32_t  *Branchtab) {
 int i9;
 //    for(i9 = 0; i9 <= amount; i9++) {
