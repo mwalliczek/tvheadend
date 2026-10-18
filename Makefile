@@ -454,6 +454,7 @@ SRCS-RTLSDR = \
     src/input/dab/dab_network_scan.c \
     src/input/dab/fib-processor.c \
     src/input/dab/mp4processor.c \
+    src/input/dab/mp2processor.c \
     src/input/dab/charsets.c \
     src/input/dab/dab_mot.c \
     src/input/dab/dab_epg.c \

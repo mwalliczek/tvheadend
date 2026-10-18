@@ -12,7 +12,10 @@ Contents                                            | Description
 ## Overview
 
 Services are automatically pulled from the ensembles and can be mapped
-to Channels. DAB+ audio services are delivered as AAC (LATM) streams.
+to Channels. DAB+ audio services are delivered as AAC (LATM) streams,
+classic DAB services as MPEG-1 Audio Layer II (MP2) streams. The
+*Audio Service Component Type* (advanced view) tells them apart: 63 is
+DAB+, any other value classic DAB.
 
 ---
 

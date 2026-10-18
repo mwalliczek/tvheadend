@@ -6,6 +6,7 @@
 #include "dab_mot.h"
 
 void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context);
+void sdr_dab_service_instance_mp2Callback(const uint8_t* frame, int len, int sampleRate, int channels, void* context);
 
 extern streaming_message_t *streaming_last_delivered;
 
@@ -22,6 +23,7 @@ static void setup(void) {
     service = calloc(1, sizeof(dab_service_t));
     service->s_dab_ensemble = ensemble;
     service->subChId = 0;
+    service->ASCTy = DAB_ASCTY_DABPLUS;
     service->s_nicename = (char *)"test";
 }
 
@@ -95,6 +97,51 @@ START_TEST(audioParametersTest) {
     pkt = streaming_last_delivered->sm_data;
     ck_assert_int_eq(pkt->a.pkt_sri, 3);
     ck_assert_int_eq(pkt->a.pkt_ext_sri, 0);
+
+    streaming_service_deliver(NULL, NULL);
+    sdr_dab_service_instance_destroy(sds);
+} END_TEST
+
+START_TEST(processorChoiceTest) {
+    /* DAB+ (ASCTy 63): superframes; classic DAB: MPEG Layer II frames */
+    sdr_dab_service_instance_t* sds = sdr_dab_service_instance_create(service);
+    ck_assert_ptr_ne(sds->mp4processor, NULL);
+    ck_assert_ptr_eq(sds->mp2processor, NULL);
+    sdr_dab_service_instance_destroy(sds);
+
+    service->ASCTy = 0;
+    sds = sdr_dab_service_instance_create(service);
+    ck_assert_ptr_eq(sds->mp4processor, NULL);
+    ck_assert_ptr_ne(sds->mp2processor, NULL);
+    sdr_dab_service_instance_destroy(sds);
+} END_TEST
+
+START_TEST(mp2DeliveryTest) {
+    /* a Layer II frame is 1152 samples: 24 ms at 48 kHz, 48 ms at 24 kHz */
+    static const uint8_t frame[384] = { 0xff, 0xfc, 0x84, 0x00 };
+    sdr_dab_service_instance_t* sds;
+    th_pkt_t *pkt;
+
+    service->ASCTy = 0;
+    sds = sdr_dab_service_instance_create(service);
+    sds->dts = 0;
+    sdr_dab_service_instance_mp2Callback(frame, sizeof(frame), 48000, 2, sds);
+    ck_assert_ptr_ne(streaming_last_delivered, NULL);
+    pkt = streaming_last_delivered->sm_data;
+    ck_assert_int_eq(pkt->pkt_type, SCT_MPEG2AUDIO);
+    ck_assert_int_eq(pktbuf_len(pkt->pkt_payload), 384);
+    ck_assert_int_eq(pkt->pkt_duration, 90000 * 24 / 1000);
+    ck_assert_int_eq(pkt->a.pkt_sri, 3);
+    ck_assert_int_eq(pkt->a.pkt_channels, 2);
+    ck_assert_int_eq(pkt->a.pkt_ext_sri, 0);
+    ck_assert_int_eq(sds->dts, 90000 * 24 / 1000);
+
+    sdr_dab_service_instance_mp2Callback(frame, sizeof(frame), 24000, 1, sds);
+    pkt = streaming_last_delivered->sm_data;
+    ck_assert_int_eq(pkt->pkt_duration, 90000 * 48 / 1000);
+    ck_assert_int_eq(pkt->a.pkt_sri, 6);
+    ck_assert_int_eq(pkt->a.pkt_channels, 1);
+    ck_assert_int_eq(sds->dts, 90000 * 72 / 1000);
 
     streaming_service_deliver(NULL, NULL);
     sdr_dab_service_instance_destroy(sds);
@@ -365,6 +412,8 @@ static Suite *sdr_dab_service_instance_suite(void) {
     tcase_add_test(tc_core, invalidSubchannelTest);
     tcase_add_test(tc_core, frameDurationTest);
     tcase_add_test(tc_core, audioParametersTest);
+    tcase_add_test(tc_core, processorChoiceTest);
+    tcase_add_test(tc_core, mp2DeliveryTest);
     tcase_add_test(tc_core, mscOutOfRangeTest);
     tcase_add_test(tc_core, packetModeEndToEndTest);
     tcase_add_test(tc_core, symbolMaskTest);

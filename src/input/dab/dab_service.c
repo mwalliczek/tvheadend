@@ -156,7 +156,9 @@ const idclass_t dab_service_class =
       .type     = PT_INT,
       .id       = "ASCTy",
       .name     = N_("Audio Service Component Type"),
-      .desc     = N_("The type of the audio service component."),
+      .desc     = N_("The type of the audio service component (FIG 0/2): "
+                     "63 is DAB+ (HE-AAC), any other value classic DAB "
+                     "(MPEG Audio Layer II)."),
       .opts     = PO_RDONLY | PO_ADVANCED,
       .off      = offsetof(dab_service_t, ASCTy),
     },
@@ -240,7 +242,8 @@ void dab_service_set_subchannel(dab_service_t *s, int16_t SubChId)
     st->es_delete_me = 1;
   }
   
-  hts_stream_type = SCT_MP4A;
+  /* DAB+: LATM in SCT_MP4A packets; DAB: MPEG Layer II frames */
+  hts_stream_type = s->ASCTy == DAB_ASCTY_DABPLUS ? SCT_MP4A : SCT_MPEG2AUDIO;
   
   st = elementary_stream_find(set, SubChId);
   if (st == NULL || st->es_type != hts_stream_type) {
@@ -250,6 +253,7 @@ void dab_service_set_subchannel(dab_service_t *s, int16_t SubChId)
   if (st->es_type != hts_stream_type) {
     st->es_type = hts_stream_type;
   }
+  st->es_audio_version = hts_stream_type == SCT_MPEG2AUDIO ? 2 : 0;
 
   st->es_delete_me = 0;
   

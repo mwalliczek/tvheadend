@@ -38,6 +38,14 @@ static void fig_header(fib_t *f, int type, int length) {
     put(f, 5, length);
 }
 
+static void fig0_header_cn(fib_t *f, int length, int cn, int pd, int ext) {
+    fig_header(f, 0, length);
+    put(f, 1, cn);          /* C/N */
+    put(f, 1, 0);           /* OE */
+    put(f, 1, pd);          /* P/D */
+    put(f, 5, ext);
+}
+
 static void fig0_header(fib_t *f, int length, int pd, int ext) {
     fig_header(f, 0, length);
     put(f, 1, 0);           /* C/N */
@@ -356,6 +364,115 @@ START_TEST(epgComponentTest) {
     ck_assert_int_eq(dei->mmi_ensemble->subChannels[3].BitRate, 32);
 } END_TEST
 
+
+/* FIG 0/1 and 0/2 with C/N = 1 announce the next configuration: the
+ * current sub-channel table and service components stay as they are */
+START_TEST(nextConfigurationTest) {
+    fib_t f;
+    dab_service_t *s;
+    subChannel *sc;
+
+    fib_init(&f);
+    fig1_label(&f, 1, 0xD312, "Bayern 3");
+    process(&f);
+    fib_init(&f);
+    fig1_label(&f, 1, 0xD313, "Bayern 4");
+    process(&f);
+
+    fib_init(&f);
+    fig0_header_cn(&f, 1 + 3, 0, 0, 1); /* current: subchannel 5 */
+    put(&f, 6, 5);
+    put(&f, 10, 100);
+    put(&f, 1, 0);
+    put(&f, 1, 0);
+    put(&f, 6, 23);         /* 84 CU, 80 kbit/s */
+    fig0_header_cn(&f, 1 + 3 + 3, 1, 0, 1); /* next: subchannel 5 moves, 6 is new */
+    put(&f, 6, 5);
+    put(&f, 10, 300);
+    put(&f, 1, 0);
+    put(&f, 1, 0);
+    put(&f, 6, 43);
+    put(&f, 6, 6);
+    put(&f, 10, 400);
+    put(&f, 1, 0);
+    put(&f, 1, 0);
+    put(&f, 6, 43);
+    process(&f);
+
+    sc = &dei->mmi_ensemble->subChannels[5];
+    ck_assert_int_eq(sc->inUse, 1);
+    ck_assert_int_eq(sc->StartAddr, 100);
+    ck_assert_int_eq(sc->Length, 84);
+    ck_assert_int_eq(sc->BitRate, 80);
+    ck_assert_int_eq(dei->mmi_ensemble->subChannels[6].inUse, 0);
+
+    fib_init(&f);
+    fig0_header_cn(&f, 1 + 2 + 1 + 2, 1, 0, 2);  /* next: D313 -> subchannel 5 */
+    put(&f, 16, 0xD313);
+    put(&f, 1, 0);
+    put(&f, 3, 0);
+    put(&f, 4, 1);
+    put(&f, 2, 0);
+    put(&f, 6, 63);
+    put(&f, 6, 5);
+    put(&f, 1, 1);
+    put(&f, 1, 0);
+    fig0_header_cn(&f, 1 + 2 + 1 + 2, 0, 0, 2);  /* current: D312 -> subchannel 5 */
+    put(&f, 16, 0xD312);
+    put(&f, 1, 0);
+    put(&f, 3, 0);
+    put(&f, 4, 1);
+    put(&f, 2, 0);
+    put(&f, 6, 63);
+    put(&f, 6, 5);
+    put(&f, 1, 1);
+    put(&f, 1, 0);
+    process(&f);
+
+    s = dab_service_find(dei->mmi_ensemble, 0xD312, 0, NULL);
+    ck_assert_ptr_ne(s, NULL);
+    ck_assert_int_eq(s->s_verified, 1);
+    ck_assert_int_eq(s->subChId, 5);
+    s = dab_service_find(dei->mmi_ensemble, 0xD313, 0, NULL);
+    ck_assert_ptr_ne(s, NULL);
+    ck_assert_int_eq(s->s_verified, 0);
+} END_TEST
+
+/* classic DAB: ASCTy 0 (MPEG Layer II foreground sound) */
+START_TEST(classicDabServiceTest) {
+    fib_t f;
+    dab_service_t *s;
+
+    fib_init(&f);
+    fig1_label(&f, 1, 0xC221, "BBC Radio 4");
+    process(&f);
+
+    fib_init(&f);
+    fig0_header(&f, 1 + 3, 0, 1);
+    put(&f, 6, 3);
+    put(&f, 10, 0);
+    put(&f, 1, 0);
+    put(&f, 1, 0);
+    put(&f, 6, 43);
+    fig0_header(&f, 1 + 2 + 1 + 2, 0, 2);
+    put(&f, 16, 0xC221);
+    put(&f, 1, 0);
+    put(&f, 3, 0);
+    put(&f, 4, 1);
+    put(&f, 2, 0);          /* TMid: MSC stream audio */
+    put(&f, 6, 0);          /* ASCTy: MPEG Layer II */
+    put(&f, 6, 3);
+    put(&f, 1, 1);
+    put(&f, 1, 0);
+    process(&f);
+
+    s = dab_service_find(dei->mmi_ensemble, 0xC221, 0, NULL);
+    ck_assert_ptr_ne(s, NULL);
+    ck_assert_int_eq(s->s_verified, 1);
+    ck_assert_int_eq(s->ASCTy, 0);
+    ck_assert_int_ne(s->ASCTy, DAB_ASCTY_DABPLUS);
+} END_TEST
+
 static Suite *fib_processor_suite(void) {
     Suite *s = suite_create("fib-processor");
     TCase *tc_core = tcase_create("Core");
@@ -370,6 +487,8 @@ static Suite *fib_processor_suite(void) {
     tcase_add_test(tc_core, fecSchemeTest);
     tcase_add_test(tc_core, oversizedFigTest);
     tcase_add_test(tc_core, epgComponentTest);
+    tcase_add_test(tc_core, nextConfigurationTest);
+    tcase_add_test(tc_core, classicDabServiceTest);
     suite_add_tcase(s, tc_core);
     return s;
 }

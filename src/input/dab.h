@@ -153,6 +153,10 @@ struct servicecomponents {
 /* user application signalled with FIG 0/13 (ETSI TS 101 756 table 16) */
 #define DAB_UA_SPI_EPG	0x007
 
+/* audio service component type (FIG 0/2, ASCTy): 63 is DAB+ (HE-AAC v2),
+   the others are MPEG-1/2 Audio Layer II (classic DAB) */
+#define DAB_ASCTY_DABPLUS	077
+
 typedef struct dab_user_application {
    int		inUse;
    uint32_t	SId;

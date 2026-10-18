@@ -21,6 +21,7 @@
 #include "tvheadend.h"
 
 void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context);
+void sdr_dab_service_instance_mp2Callback(const uint8_t* frame, int len, int sampleRate, int channels, void* context);
 
 static sdr_dab_service_instance_t *
 sdr_dab_instance_create(subChannel *subChannel, int subChId)
@@ -67,7 +68,10 @@ sdr_dab_service_instance_create(dab_service_t* service)
     if (res == NULL)
         return NULL;
     res->dai_service = service;
-    res->mp4processor = init_mp4processor(res->subChannel->BitRate, res, sdr_dab_service_instance_dataCallback);
+    if (service->ASCTy == DAB_ASCTY_DABPLUS)
+        res->mp4processor = init_mp4processor(res->subChannel->BitRate, res, sdr_dab_service_instance_dataCallback);
+    else
+        res->mp2processor = init_mp2processor(res->subChannel->BitRate, res, sdr_dab_service_instance_mp2Callback);
     return res;
 }
 
@@ -108,6 +112,7 @@ void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
     protection_destroy(sds->protection);
     if (sds->mp4processor)
         destroy_mp4processor(sds->mp4processor);
+    destroy_mp2processor(sds->mp2processor);
     dab_mot_decoder_destroy(sds->mot);
     free(sds->packetBytes);
     free(sds);
@@ -142,6 +147,17 @@ void sdr_dab_service_instance_stats(sdr_dab_service_instance_t *sds, struct sdr_
         }
         mp4->statAUs = mp4->statAUErrors = 0;
         mp4->statLostBlocks = mp4->statRSUncorrectable = 0;
+    }
+    if (sds->mp2processor) {
+        /* DAB audio: a frame is a block, lost frame sync a transport error */
+        mp2processor_t *mp2 = sds->mp2processor;
+        atomic_add(&mmi->tii_stats.te, mp2->statLostSync);
+        if (mp2->statFrames) {
+            tvh_mutex_lock(&mmi->tii_stats_mutex);
+            mmi->tii_stats.tc_block += mp2->statFrames;
+            tvh_mutex_unlock(&mmi->tii_stats_mutex);
+        }
+        mp2->statFrames = mp2->statLostSync = 0;
     }
     if (sds->mot) {
         /* data (EPG): uncorrectable FEC rows, lost packets */
@@ -178,6 +194,8 @@ void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
 
     if (sds->mp4processor) {
         mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
+    } else if (sds->mp2processor) {
+        mp2Processor_addtoFrame(sds->mp2processor, sds->outV);
     } else if (sds->mot) {
         /* packet mode: one bit per byte to bytes */
         for (i = 0; i < 3 * sds->subChannel->BitRate; i++) {
@@ -222,9 +240,38 @@ static const int aac_sample_rates[16] =
   0
 };
 
+/* hand an audio frame to the subscribers of the service */
+static void
+sdr_dab_service_instance_deliver(sdr_dab_service_instance_t *sds,
+                                 streaming_component_type_t type,
+                                 const uint8_t *data, int len, int duration,
+                                 int channels, int sri, int ext_sri)
+{
+  dab_service_t *t = sds->dai_service;
+
+  tvh_mutex_lock(&t->s_stream_mutex);
+  service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
+  t->s_streaming_live |= TSS_LIVE;
+  if (streaming_pad_probe_type(&t->s_streaming_pad, SMT_PACKET)) {
+    th_pkt_t *pkt = pkt_alloc(type, data, len, sds->dts, sds->dts, sds->dts);
+    pkt->pkt_duration = duration;
+    pkt->a.pkt_keyframe = 1;
+    pkt->a.pkt_channels = channels;
+    pkt->a.pkt_sri = sri;
+    pkt->a.pkt_ext_sri = ext_sri;
+    pkt->pkt_componentindex = 1;
+
+    /* Forward packet */
+    streaming_service_deliver((service_t *)t, streaming_msg_create_pkt(pkt));
+
+    /* Decrease our own reference to the packet */
+    pkt_ref_dec(pkt);
+  }
+  tvh_mutex_unlock(&t->s_stream_mutex);
+}
+
 void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* sp, void* context) {
   sdr_dab_service_instance_t *sds = (sdr_dab_service_instance_t *) context;
-  dab_service_t *t = sds->dai_service;
   int sr = aac_sample_rates[sp->CoreSrIndex];
   /* DAB+ uses the 960 sample transform, so one AU covers 960 core samples */
   int duration = 90000 * 960 / sr;
@@ -247,31 +294,26 @@ void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t result
 
   if (resultLength > 0) {
     tvhtrace(LS_RTLSDR, "mp4 callback len %d (duration %d, sr %d, sri %d, ext_sri %d, channels %d)", resultLength, duration, sr, sp->CoreSrIndex, sp->ExtensionSrIndex, channels);
-
-    tvh_mutex_lock(&t->s_stream_mutex);
-    service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
-    t->s_streaming_live |= TSS_LIVE;
-    if (streaming_pad_probe_type(&t->s_streaming_pad, SMT_PACKET)) {
-      th_pkt_t *pkt = pkt_alloc(SCT_MP4A, result, resultLength, sds->dts, sds->dts, sds->dts);
-      pkt->pkt_duration = duration;
-      pkt->a.pkt_keyframe = 1;
-      pkt->a.pkt_channels = channels;
-      pkt->a.pkt_sri = sp->CoreSrIndex;
-      if (sp->sbrFlag) {
-        /* stored + 1, zero means no SBR (see parser_latm.c) */
-        pkt->a.pkt_ext_sri = sp->ExtensionSrIndex + 1;
-      }
-  //    pkt->pkt_err = st->es_buf_a.sb_err;
-      pkt->pkt_componentindex = 1;
-
-      /* Forward packet */
-      streaming_service_deliver((service_t *)t, streaming_msg_create_pkt(pkt));
-      
-
-      /* Decrease our own reference to the packet */
-      pkt_ref_dec(pkt);
-    }
-    tvh_mutex_unlock(&t->s_stream_mutex);
+    /* stored + 1, zero means no SBR (see parser_latm.c) */
+    sdr_dab_service_instance_deliver(sds, SCT_MP4A, result, resultLength, duration,
+                                     channels, sp->CoreSrIndex,
+                                     sp->sbrFlag ? sp->ExtensionSrIndex + 1 : 0);
   }
+  sds->dts += duration;
+}
+
+/* DAB (MPEG Layer II): a frame of 1152 samples, 24 ms at 48 kHz */
+void sdr_dab_service_instance_mp2Callback(const uint8_t* frame, int len, int sampleRate, int channels, void* context) {
+  sdr_dab_service_instance_t *sds = (sdr_dab_service_instance_t *) context;
+  int duration = 90000 * 1152 / sampleRate;
+  int sri;
+
+  sri = 0;
+  while (sri < 12 && aac_sample_rates[sri] != sampleRate)
+    sri++;
+  tvhtrace(LS_RTLSDR, "mp2 callback len %d (duration %d, sr %d, channels %d)",
+           len, duration, sampleRate, channels);
+  sdr_dab_service_instance_deliver(sds, SCT_MPEG2AUDIO, frame, len, duration,
+                                   channels, sri, 0);
   sds->dts += duration;
 }

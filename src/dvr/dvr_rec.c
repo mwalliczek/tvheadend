@@ -1359,7 +1359,7 @@ dvr_rec_set_state(dvr_entry_t *de, dvr_rs_state_t newstate, int error)
 /*
  * DAB delivers elementary stream packets only, the MPEG-TS pass-through
  * of the pass and raw profiles can not write them: record the audio as
- * it comes (DAB+: LATM, played by ffmpeg / VLC / mpv)
+ * it comes (DAB+: LATM, played by ffmpeg / VLC / mpv; DAB: MPEG Layer II)
  */
 static muxer_t *
 dvr_rec_dab_muxer(dvr_entry_t *de, profile_chain_t *prch,
@@ -1367,13 +1367,18 @@ dvr_rec_dab_muxer(dvr_entry_t *de, profile_chain_t *prch,
 {
   muxer_t *m = prch->prch_muxer;
   muxer_config_t c;
+  int i, type = MC_MP4A;
 
   if (ss->ss_si.si_type != S_DAB || m == NULL ||
       (m->m_config.m_type != MC_PASS && m->m_config.m_type != MC_RAW))
     return m;
 
+  for (i = 0; i < ss->ss_num_components; i++)
+    if (ss->ss_components[i].es_type == SCT_MPEG2AUDIO)
+      type = MC_MPEG2AUDIO;
+
   memset(&c, 0, sizeof(c));
-  c.m_type = MC_MP4A;
+  c.m_type = type;
   c.m_cache = m->m_config.m_cache;
   c.m_file_permissions = m->m_config.m_file_permissions;
   c.m_directory_permissions = m->m_config.m_directory_permissions;

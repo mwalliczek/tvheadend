@@ -36,6 +36,7 @@
 #include "viterbi_768/viterbi-768.h"
 
 #include "../mp4processor.h"
+#include "../mp2processor.h"
 #include "../dab_mot.h"
 
 #define OSC_BLOCK 256
@@ -92,6 +93,7 @@ struct sdr_dab_service_instance
         protection_t*	protection;
         
         mp4processor_t*	mp4processor;   /* DAB+ audio service */
+        mp2processor_t*	mp2processor;   /* DAB (MPEG Layer II) audio service */
 
         dab_mot_decoder_t*	mot;            /* packet mode data (EPG) */
         uint8_t*	packetBytes;

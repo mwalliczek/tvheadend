@@ -123,6 +123,7 @@
    void            FIG0Extension12(const uint8_t *);
    void            FIG0Extension13(dab_ensemble_instance_t *dei, const uint8_t *);
    void            FIG0Extension14(dab_ensemble_instance_t *dei, const uint8_t *);
+   int             fig0_is_mci(uint8_t);
    void            FIG0Extension17(dab_ensemble_instance_t *dei, const uint8_t *);
    void            FIG0Extension18(const uint8_t *);
    void            FIG0Extension19(const uint8_t *);
@@ -196,11 +197,30 @@ const uint8_t	*d		= p;
 	tvh_mutex_unlock(&dei->mmi_ensemble->mm_tables_lock);
 }
 //
+//	the FIG 0 extensions of the multiplex configuration information
+int	fig0_is_mci (uint8_t extension) {
+	switch (extension) {
+	   case 1: case 2: case 3: case 4: case 8: case 14:
+	      return 1;
+	   default:
+	      return 0;
+	}
+}
+
 //	Handle ensemble is all through FIG0
 //
 void	process_FIG0 (dab_ensemble_instance_t *dei, const uint8_t *d) {
 uint8_t	extension	= getBits_5 (d, 8 + 3);
-//uint8_t	CN	= getBits_1 (d, 8 + 0);
+uint8_t	CN	= getBits_1 (d, 8 + 0);
+
+//	EN 300 401 5.2.2.1: in the FIGs of the multiplex configuration
+//	(sub-channels 0/1, service components 0/2, 0/3, 0/4 and 0/8,
+//	FEC 0/14) C/N = 1 announces the next configuration. It must not
+//	replace the current one before the change (FIG 0/0) happens, the
+//	sub-channel table would no longer match the CIFs. In the other
+//	FIGs C/N has another meaning (start or continuation of a list).
+	if (CN && fig0_is_mci (extension))
+	   return;
 
 	switch (extension) {
 	   case 0:
