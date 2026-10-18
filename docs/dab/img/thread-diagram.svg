@@ -47,7 +47,7 @@ svg .b { font-weight: 700; }
     <rect x="380" y="26" width="80" height="44" rx="6" class="f-rf"/><text x="420" y="53" text-anchor="middle" font-size="12">256 kB</text>
     <text x="474" y="44" font-size="12" class="t-m">every 64 ms: cbWrite into the</text>
     <text x="474" y="60" font-size="12" class="t-m">ring buffer, count clipped samples, 1 byte → control pipe</text>
-    <text x="940" y="53" text-anchor="end" class="b t-rf" font-size="14">5.5 %</text>
+    <text x="940" y="53" text-anchor="end" class="b t-rf" font-size="14">7 %</text>
   </g>
   <path d="M420 70 V104" class="arr"/>
   <text x="428" y="92" font-size="11" class="t-m">FIFO (sdr_fifo.c), 4 frames</text>
@@ -63,7 +63,7 @@ svg .b { font-weight: 700; }
     <rect x="606" y="112" width="46" height="50" rx="6" class="f-sync"/><text x="629" y="142" text-anchor="middle" font-size="11.5">75</text>
     <text x="664" y="132" font-size="12" class="t-m">getSamples, phase reference,</text>
     <text x="664" y="148" font-size="12" class="t-m">cyclic prefix correlation</text>
-    <text x="940" y="141" text-anchor="end" class="b t-sync" font-size="14">10 %</text>
+    <text x="940" y="141" text-anchor="end" class="b t-sync" font-size="14">15 %</text>
   </g>
   <!-- handoff arrows -->
   <path d="M311 162 V196" class="arr"/><path d="M375 162 V196" class="arr"/><path d="M427 162 V196" class="arr"/><path d="M479 162 V196" class="arr"/><path d="M531 162 V196" class="arr"/><path d="M629 162 V196" class="arr"/>
@@ -72,9 +72,9 @@ svg .b { font-weight: 700; }
   <g>
     <rect x="290" y="200" width="70" height="50" rx="6" class="f-ofdm"/><text x="325" y="222" text-anchor="middle" font-size="11.5">FFT</text><text x="325" y="238" text-anchor="middle" font-size="11.5">ref.</text>
     <rect x="364" y="200" width="150" height="50" rx="6" class="f-fec"/><text x="439" y="222" text-anchor="middle" font-size="11.5">FIC 1–3</text><text x="439" y="238" text-anchor="middle" font-size="11.5">FFT · demod · Viterbi</text>
-    <rect x="518" y="200" width="134" height="50" rx="6" class="f-ofdm"/><text x="585" y="222" text-anchor="middle" font-size="11.5">MSC 4–75</text><text x="585" y="238" text-anchor="middle" font-size="11.5">FFT · demod · collect</text>
+    <rect x="518" y="200" width="134" height="50" rx="6" class="f-ofdm"/><text x="585" y="222" text-anchor="middle" font-size="11.5">MSC 4–75</text><text x="585" y="238" text-anchor="middle" font-size="11.5">open stations only</text>
     <rect x="656" y="200" width="100" height="50" rx="6" class="f-audio"/><text x="706" y="222" text-anchor="middle" font-size="11.5">per CIF:</text><text x="706" y="238" text-anchor="middle" font-size="11.5">Viterbi, RS, AU</text>
-    <text x="940" y="229" text-anchor="end" class="b t-ofdm" font-size="14">39 %</text>
+    <text x="940" y="229" text-anchor="end" class="b t-ofdm" font-size="14">28 %</text>
   </g>
   <!-- monitor -->
   <g font-size="12">

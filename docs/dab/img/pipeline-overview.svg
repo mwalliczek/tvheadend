@@ -120,8 +120,8 @@ svg .b { font-weight: 700; }
     <text x="318" y="330">4.1 MB/s · bytes I,Q,I,Q…</text>
     <rect x="10" y="342" width="960" height="22" rx="4" class="s-sync" opacity="0.8"/>
     <text x="18" y="358" style="fill:#fff" class="b">16.4 MB/s · complex float after getSamples (the biggest stream, ×4)</text>
-    <rect x="10" y="370" width="281" height="22" rx="4" class="s-ofdm" opacity="0.9"/>
-    <text x="299" y="386">4.8 MB/s soft bits (3072 int16 per symbol, 75 symbols per 96 ms, all stations)</text>
+    <rect x="10" y="370" width="49" height="22" rx="4" class="s-ofdm" opacity="0.9"/>
+    <text x="67" y="386">≈ 0.8 MB/s soft bits (3072 int16 per symbol: the FIC and the symbols of your station)</text>
     <rect x="10" y="398" width="4" height="22" rx="1" class="s-fec"/>
     <text x="22" y="414">72 kB/s · your station only, after Viterbi, still one bit per byte (outV)</text>
     <rect x="10" y="426" width="2" height="22" rx="1" class="s-audio"/>
