@@ -83,7 +83,7 @@ import OnlyMultiSelect from '@/components/OnlyMultiSelect.vue'
 import Select from 'primevue/select'
 import Popover from 'primevue/popover'
 import EpgEventDrawer, { type EpgEventDetail } from './EpgEventDrawer.vue'
-import DvrStateCell from './DvrStateCell.vue'
+import DvrStateCell from '@/components/DvrStateCell.vue'
 import EpgTableOptions from './EpgTableOptions.vue'
 import LiveTvButton from './LiveTvButton.vue'
 import ProgressCell, { type ProgressOptions } from '@/components/ProgressCell.vue'
@@ -94,15 +94,21 @@ import { useEpgGenreOptions } from '@/composables/useEpgGenreOptions'
 import { useEpgViewState, type EpgRow } from '@/composables/useEpgViewState'
 import type { TitleSearchMode } from './epgViewOptions'
 import {
+  autoRecMatchCountParams,
   buildAutoRecConf,
   hasAnyAutoRecFilter,
+  resolveAutoRecChannel,
   type AutoRecConfInput,
   buildClusterFetchFilter,
   buildTitleSearchQueryParams,
+  countActiveGlobalFilters,
   decideFilterDispatch,
   type EpgGroupField,
   serverParamsFromFilters as serverParamsFromFiltersPure,
+  uniqueChannelUuidByName,
+  withGlobalFiltersCleared,
 } from './epgTableFilters'
+import { regexEscape } from '@/utils/regexEscape'
 import { applyInMemorySort } from './epgTableSort'
 import { channelNumberCompare } from '@/utils/channelNumberSort'
 import {
@@ -806,7 +812,12 @@ async function fetchClusterPage(key: string, offset: number): Promise<void> {
      * `buildClusterFetchFilter` so the failure mode is a tagged
      * union instead of a thrown exception. */
     const { filter: globalFilter, params } = serverParamsFromFilters()
-    const built = buildClusterFetchFilter(gf, key, globalFilter)
+    /* Channel clusters are keyed by name; fetch them by the
+     * channel's uuid so the server's exact `channel` param bounds
+     * the cluster (a channelName filter is an unanchored regex). */
+    const clusterChannelUuid =
+      gf === 'channelName' ? uniqueChannelUuidByName(state.channels.value, key) : null
+    const built = buildClusterFetchFilter(gf, key, globalFilter, clusterChannelUuid)
     if (!built.ok) {
       clusterPaging.value = applyError(
         clusterPaging.value,
@@ -823,6 +834,9 @@ async function fetchClusterPage(key: string, offset: number): Promise<void> {
       sort: 'start',
       dir: 'ASC',
       ...params,
+      /* After `params`: the cluster's own channel overrides an
+       * exact channel pick from the global filter state. */
+      ...built.params,
       filter: JSON.stringify(built.filter),
     })
     const entries = resp.entries ?? []
@@ -1077,6 +1091,10 @@ function refetchFromPageZero() {
  * is safe because lazy mode structurally breaks the
  * data→filter→emit pipeline. */
 interface PerColumnFilters {
+  /* Exact channel pick (uuid) from a hand-off. Shown in the
+   * Channel funnel under the channel's name, sent as the server's
+   * exact `channel` param. See `exactChannelLabel`. */
+  channel?: string
   channelName?: string
   title?: string
   episodeOnscreen?: string
@@ -1092,10 +1110,17 @@ interface PerColumnFilters {
  * navigation, no persistence). */
 interface EpgTableFilters {
   perColumn: PerColumnFilters
+  /* Title handed over from a known event (`?title=`). While
+   * `perColumn.title` still equals it, the title is literal text:
+   * the Search Title box shows it as is and the server gets it
+   * regex-escaped (see `effectiveTitle`). Typing a different title
+   * makes it a regex again, as in Classic. */
+  literalTitle: string | null
 }
 
 const filters = ref<EpgTableFilters>({
   perColumn: {},
+  literalTitle: null,
 })
 
 /* URL-param integration with the existing per-column filters.
@@ -1103,21 +1128,30 @@ const filters = ref<EpgTableFilters>({
  * Two query params drive the column funnels from the command
  * palette's "Open in EPG" actions:
  *
- *   ?channelName=<name>   — channel command primary, sets the
- *                           Channel column filter
- *   ?title=<title>        — EPG-event command primary, sets the
- *                           Title column filter
+ *   ?channel=<uuid>   — channel command primary. Exact channel
+ *                       pick: the Channel funnel shows the
+ *                       channel's name, the server gets its uuid.
+ *   ?title=<title>    — EPG-event command primary. Literal title
+ *                       of a known event: the Search Title box
+ *                       shows it as is, the server gets it
+ *                       regex-escaped.
  *
- * Both reuse the same per-column filter the user can edit / clear
- * via the existing Table chrome (column funnel UI), so no
- * separate chip or affordance is invented.
+ * The server compiles channelName and title as caseless,
+ * unanchored regexes, so passing the raw values would list every
+ * channel whose name contains "CT 1", and a title with
+ * parentheses would not match itself. Classic filters by the
+ * channel combo's uuid and escapes a clicked title the same way.
+ *
+ * Both reuse the per-column filters the user can edit / clear via
+ * the existing Table chrome (column funnel UI), so no separate
+ * chip or affordance is invented.
  *
  * On activation, conflicting filters that would intersect to empty
  * are reset:
- *   - The OTHER perColumn filter (channelName vs title) — landing
- *     on /epg/table?title=Foo while a stale ?channelName=Bar
- *     filter was still set would surface no results when the user
- *     wanted to see all Foo airings across channels.
+ *   - The OTHER perColumn filter (channel vs title) — landing
+ *     on /epg/table?title=Foo while a stale channel filter was
+ *     still set would surface no results when the user wanted to
+ *     see all Foo airings across channels.
  *   - viewOptions.tagFilter.tag — a stale tag filter could exclude
  *     all channels carrying the event.
  *
@@ -1130,14 +1164,18 @@ const filters = ref<EpgTableFilters>({
  * stays in a consistent state. */
 const route = useRoute()
 
-function applyColumnFilterFromUrl(
-  column: 'channelName' | 'title',
-  value: string,
-): void {
-  const otherColumn = column === 'channelName' ? 'title' : 'channelName'
-  const nextPerColumn = { ...filters.value.perColumn, [column]: value }
-  delete nextPerColumn[otherColumn]
-  filters.value = { ...filters.value, perColumn: nextPerColumn }
+function applyHandOffFromUrl(kind: 'channel' | 'title', value: string): void {
+  const nextPerColumn: PerColumnFilters = { ...filters.value.perColumn }
+  delete nextPerColumn.channel
+  delete nextPerColumn.channelName
+  delete nextPerColumn.title
+  if (kind === 'channel') nextPerColumn.channel = value
+  else nextPerColumn.title = value
+  filters.value = {
+    ...filters.value,
+    perColumn: nextPerColumn,
+    literalTitle: kind === 'title' ? value : null,
+  }
   if (state.viewOptions.value.tagFilter.tag !== null) {
     state.setViewOptions({
       ...state.viewOptions.value,
@@ -1151,10 +1189,10 @@ function applyColumnFilterFromUrl(
  * non-immediate so the very first paint doesn't fire them during
  * setup — see the onMounted block below for why. */
 watch(
-  () => route.query.channelName,
+  () => route.query.channel,
   (q) => {
     if (typeof q !== 'string' || q.length === 0) return
-    applyColumnFilterFromUrl('channelName', q)
+    applyHandOffFromUrl('channel', q)
   },
 )
 
@@ -1162,7 +1200,7 @@ watch(
   () => route.query.title,
   (q) => {
     if (typeof q !== 'string' || q.length === 0) return
-    applyColumnFilterFromUrl('title', q)
+    applyHandOffFromUrl('title', q)
   },
 )
 
@@ -1185,18 +1223,70 @@ watch(
  * engages on first paint just as it would after a manual column-
  * header Apply. */
 onMounted(() => {
-  const channelName = route.query.channelName
-  if (typeof channelName === 'string' && channelName.length > 0) {
-    applyColumnFilterFromUrl('channelName', channelName)
+  const channel = route.query.channel
+  if (typeof channel === 'string' && channel.length > 0) {
+    applyHandOffFromUrl('channel', channel)
   }
   const title = route.query.title
   if (typeof title === 'string' && title.length > 0) {
-    applyColumnFilterFromUrl('title', title)
+    applyHandOffFromUrl('title', title)
   }
 })
 
+/* Display name of the exact channel pick. `state.channels` loads
+ * asynchronously (and holds enabled channels only), so fall back to
+ * a loaded event of that channel, then to the uuid itself. */
+const exactChannelLabel = computed(() => {
+  const uuid = filters.value.perColumn.channel
+  if (!uuid) return ''
+  const ch = state.channels.value.find((c) => c.uuid === uuid)
+  if (ch?.name) return ch.name
+  const ev = state.events.value.find((e) => e.channelUuid === uuid)
+  return ev?.channelName ?? uuid
+})
+
+/* An exact pick the server does not know, such as a bookmarked link
+ * to a deleted channel. The server ignores an unknown `channel` and
+ * returns every channel, which the exact filter then hid, so the
+ * count and the list disagreed. When the pick is not an enabled
+ * channel, look it up in `channel/list` (disabled channels too) and
+ * drop it if it is not there. A failed lookup keeps the pick. */
+const lookedUpChannelPicks = new Set<string>()
+watch(
+  () => [filters.value.perColumn.channel, state.channelsLoading.value] as const,
+  async ([uuid, channelsLoading]) => {
+    if (!uuid || channelsLoading || lookedUpChannelPicks.has(uuid)) return
+    if (state.channels.value.some((c) => c.uuid === uuid)) return
+    lookedUpChannelPicks.add(uuid)
+    let known: boolean
+    try {
+      const resp = await apiCall<{ entries?: { key?: string }[] }>('channel/list')
+      known = (resp.entries ?? []).some((e) => e.key === uuid)
+    } catch {
+      return
+    }
+    if (known || filters.value.perColumn.channel !== uuid) return
+    const perColumn: PerColumnFilters = { ...filters.value.perColumn }
+    delete perColumn.channel
+    filters.value = { ...filters.value, perColumn }
+  },
+)
+
+/* Title as the server should see it: regex-escaped while it is the
+ * literal title of a hand-off, the user's own regex otherwise. */
+const effectiveTitle = computed(() => {
+  const title = filters.value.perColumn.title ?? ''
+  if (title && title === filters.value.literalTitle) return regexEscape(title)
+  return title
+})
+
 const dtFilters = computed(() => ({
-  channelName: { value: filters.value.perColumn.channelName ?? null, matchMode: 'contains' },
+  channelName: {
+    value:
+      filters.value.perColumn.channelName ??
+      (filters.value.perColumn.channel ? exactChannelLabel.value : null),
+    matchMode: 'contains',
+  },
   title: { value: filters.value.perColumn.title ?? null, matchMode: 'contains' },
   episodeOnscreen: { value: filters.value.perColumn.episodeOnscreen ?? null, matchMode: 'contains' },
   /* Content-type filter lives in viewOptions.genre, not perColumn.
@@ -1217,6 +1307,14 @@ function onFilter(event: { filters: Record<string, unknown> }) {
     if (typeof v === 'string' && v && (field === 'channelName' || field === 'title' || field === 'episodeOnscreen')) {
       next[field] = v
     }
+  }
+  /* The Channel funnel shows an exact pick under its name. Applying
+   * any funnel with that text unchanged keeps the exact pick. Any
+   * other text is a free-text (regex) channel filter. */
+  const exactChannel = filters.value.perColumn.channel
+  if (exactChannel && next.channelName === exactChannelLabel.value) {
+    delete next.channelName
+    next.channel = exactChannel
   }
   filters.value = { ...filters.value, perColumn: next }
 
@@ -1245,9 +1343,22 @@ function onFilter(event: { filters: Record<string, unknown> }) {
  * column metadata. */
 const perColumnFilterLabels = computed<Record<string, string>>(() => ({
   title: t('Title'),
+  channel: t('Channel'),
   channelName: t('Channel'),
   episodeOnscreen: t('Episode'),
 }))
+
+/* Per-column values as the popover shows them: the exact channel
+ * pick by name rather than by uuid. */
+const perColumnFilterDisplay = computed<Record<string, string>>(() => {
+  const { channel, ...rest } = filters.value.perColumn
+  const out: Record<string, string> = {}
+  for (const [field, value] of Object.entries(rest)) {
+    if (typeof value === 'string') out[field] = value
+  }
+  if (channel) out.channel = exactChannelLabel.value
+  return out
+})
 
 /* Clear handler for the popover's `✕` per-axis button. Removes
  * the named field from `filters.perColumn`; the dtFilters
@@ -1282,7 +1393,7 @@ function onClearPerColumnFilter(field: string): void {
  * into `serverParamsFromFilters`, add the reactive read here.
  * No new watch, no risk of forgetting one of the three modes. */
 function dispatchFilterRefresh(): void {
-  const title = filters.value.perColumn.title ?? ''
+  const title = effectiveTitle.value
   const decision = decideFilterDispatch({
     hasTitle: title.length > 0,
     isGrouped: state.viewOptions.value.groupField !== null,
@@ -1478,6 +1589,8 @@ watch(
   () =>
     [
       filters.value.perColumn.title,
+      filters.value.literalTitle,
+      filters.value.perColumn.channel,
       filters.value.perColumn.channelName,
       titleSearchMode.value,
       state.viewOptions.value.timeWindow,
@@ -1619,12 +1732,13 @@ function pickVisibleSource(
 
 /* True if a row should be excluded by the column-`field`
  * filter under the given mode. Stubs pass through every
- * filter EXCEPT channelName (so cluster headers stay visible
- * under narrow text filters, but disappear when the user
- * narrows by channel name). Sentinels pass through every
+ * filter EXCEPT the channel ones (so cluster headers stay
+ * visible under narrow text filters, but disappear when the
+ * user narrows by channel). Sentinels pass through every
  * filter (they carry only the cluster key + load-more flag,
  * and removing them mid-paging would detach the
- * IntersectionObserver). */
+ * IntersectionObserver). An exact channel pick compares the
+ * channel uuid, which stubs carry too. */
 function rowMatchesPerColumnFilter(
   row: EpgRow,
   field: string,
@@ -1632,6 +1746,7 @@ function rowMatchesPerColumnFilter(
 ): boolean {
   const meta = row as unknown as RowMeta
   if (meta.__loadMore) return true
+  if (field === 'channel') return row.channelUuid === needle
   if (meta.__stub && field !== 'channelName') return true
   const v = (row as unknown as Record<string, unknown>)[field]
   return typeof v === 'string' && v.toLowerCase().includes(needle)
@@ -1653,7 +1768,7 @@ function applyPerColumnFilters(
   for (const [field, value] of Object.entries(perColumn)) {
     if (!value) continue
     if (inQueryMode && field === 'title') continue
-    const q = value.toLowerCase()
+    const q = field === 'channel' ? value : value.toLowerCase()
     out = out.filter((r) => rowMatchesPerColumnFilter(r, field, q))
     mutated = true
   }
@@ -1825,7 +1940,27 @@ function onDrawerClose() {
   state.closeDrawer()
 }
 
-const hasActiveColumnFilter = computed(() => Object.keys(filters.value.perColumn).length > 0)
+/* Any filter narrowing the Table: a column funnel or Search Title,
+ * or a GLOBAL axis from the view options (time window, tag, genre,
+ * New only, duration). The GLOBAL axes persist per browser, so an
+ * empty Table must not blame the EPG grabbers while one is set. */
+const hasActiveFilter = computed(
+  () =>
+    Object.keys(filters.value.perColumn).length > 0 ||
+    countActiveGlobalFilters(state.viewOptions.value, state.currentDefaults.value) > 0,
+)
+
+/* Empty state's "Clear filters": drop the column funnels, Search
+ * Title and the GLOBAL axes, keep columns, grouping and display
+ * options (Classic's "Reset All" also clears filters only). */
+function onClearAllFilters(): void {
+  filters.value = { ...filters.value, perColumn: {}, literalTitle: null }
+  const vo = state.viewOptions.value
+  const defaults = state.currentDefaults.value
+  if (countActiveGlobalFilters(vo, defaults) > 0) {
+    state.setViewOptions(withGlobalFiltersCleared(vo, defaults))
+  }
+}
 
 /* Combined loading/error so DataGrid's loading + error UI flips
  * for query-mode fetches too. In browse mode these reduce to the
@@ -1931,9 +2066,9 @@ function onHelpClick() {
  * Mirrors Classic's top-toolbar `Create AutoRec` button at
  * `static/app/epg.js:1317-1322` + `createAutoRec()` at
  * `:1493-1546`. Click opens a confirmation summarising the
- * active filter state plus the predicted match count (the
- * server's current totalCount for that filter), then POSTs to
- * `dvr/autorec/create` with the filter-derived conf.
+ * active filter state plus the predicted match count (a count
+ * query shaped like the rule, see `autoRecMatchCountParams`),
+ * then POSTs to `dvr/autorec/create` with the filter-derived conf.
  *
  * Vue Table's filter surface is narrower than Classic's
  * (channelName + title — no genre / duration / fulltext /
@@ -1951,6 +2086,14 @@ const createAutoRecInflight = ref(false)
 
 const canCreateAutoRec = computed(() => !!access.data?.dvr)
 
+/* Channel the rule gets: an exact pick, or funnel text that is
+ * exactly one channel's name. Other funnel text is a regex the rule
+ * cannot hold — reported in the confirmation, left out of the rule
+ * and of the enable gate. */
+const autoRecChannel = computed(() =>
+  resolveAutoRecChannel(filters.value.perColumn, state.channels.value, exactChannelLabel.value),
+)
+
 /*
  * Single source of truth for the AutoRec rule's input state.
  * Both the disabled-gate computed below AND the click handler
@@ -1964,8 +2107,8 @@ const canCreateAutoRec = computed(() => !!access.data?.dvr)
 function currentAutoRecInput(): AutoRecConfInput {
   const vo = state.viewOptions.value
   return {
-    title: filters.value.perColumn.title ?? '',
-    channelName: filters.value.perColumn.channelName ?? '',
+    title: effectiveTitle.value,
+    channelUuid: autoRecChannel.value.uuid,
     mode: titleSearchMode.value,
     newOnly: vo.newOnly,
     genre: vo.genre,
@@ -2032,6 +2175,9 @@ function describeDuration(
 interface AutoRecSummaryInput {
   title: string
   channelName: string
+  /* True when the Channel funnel holds text that is not exactly
+   * one channel's name — the rule can't carry it. */
+  channelUnsaved: boolean
   mode: TitleSearchMode
   newOnly: boolean
   genreLabel: string | null
@@ -2049,7 +2195,9 @@ interface AutoRecSummaryInput {
    * into the saved rule. Surface the same kind of note the
    * multi-tag path uses. */
   genreMultiActive: boolean
-  matchCount: number
+  /* Events the rule's own query matches now, or null when the
+   * count request failed (the sentence is left out). */
+  matchCount: number | null
 }
 
 /* Confirmation-dialog body. Mirrors Classic's verbose copy at
@@ -2081,22 +2229,42 @@ function buildAutoRecSummary(input: AutoRecSummaryInput): string {
   else if (input.genreMultiActive) {
     genreLine = t("Active filter can't be saved (multi-genre rules not supported by server)")
   }
+  const channelLine = input.channelUnsaved
+    ? t("Active filter can't be saved (not an exact channel name)")
+    : input.channelName || dontCare
+  const countLine =
+    input.matchCount === null
+      ? ''
+      : t('Currently this will match (and record) {0} events.', input.matchCount) + ' '
   return (
     t(
       'This will create an automatic rule that continuously scans the EPG for programs to record that match this query:',
     ) +
     '\n\n' +
     `${t('Title')}: ${input.title || dontCare}${modeLabel}\n` +
-    `${t('Channel')}: ${input.channelName || dontCare}\n` +
+    `${t('Channel')}: ${channelLine}\n` +
     `${t('Content type')}: ${genreLine}\n` +
     `${t('Duration')}: ${describeDuration(input.durationMinMinutes, input.durationMaxMinutes)}\n` +
     `${t('New only')}: ${input.newOnly ? t('Yes') : t('No')}\n` +
     `${t('Channel tag')}: ${tagLine}\n` +
     '\n' +
-    t('Currently this will match (and record) {0} events.', input.matchCount) +
-    ' ' +
+    countLine +
     t('Are you sure?')
   )
+}
+
+/* Count what the rule will match with the rule's own query (exact
+ * channel, no time window). null when the request fails. */
+async function countAutoRecMatches(input: AutoRecConfInput): Promise<number | null> {
+  try {
+    const resp = await apiCall<GridResponse<EpgRow>>(
+      'epg/events/grid',
+      autoRecMatchCountParams(input),
+    )
+    return resp.totalCount ?? resp.total ?? null
+  } catch {
+    return null
+  }
 }
 
 async function onCreateAutoRecClick() {
@@ -2113,9 +2281,9 @@ async function onCreateAutoRecClick() {
    * when these axes are multi. */
   if (autoRecMultiAxisBlocked.value) return
 
-  const title = filters.value.perColumn.title ?? ''
-  const channelName = filters.value.perColumn.channelName ?? ''
-  const mode = titleSearchMode.value
+  /* One input feeds the count, the summary and the saved rule. */
+  const input = currentAutoRecInput()
+  const channel = autoRecChannel.value
   const vo = state.viewOptions.value
   /* Single-genre case carries a resolved label into the rule;
    * multi-genre is surfaced via `genreMultiActive` so the
@@ -2128,23 +2296,32 @@ async function onCreateAutoRecClick() {
   /* Tag is single-positive after the channelTag migration — when
    * set, look up the display name; when null the rule simply omits
    * the tag axis. No "multi-tag can't translate" path remains. */
-  const tagUuid = vo.tagFilter.tag
+  const tagUuid = input.tagUuid
   const tagName = tagUuid === null
     ? null
     : (state.tags.value.find((tag) => tag.uuid === tagUuid)?.name ?? tagUuid)
 
+  createAutoRecInflight.value = true
+  let matchCount: number | null
+  try {
+    matchCount = await countAutoRecMatches(input)
+  } finally {
+    createAutoRecInflight.value = false
+  }
+
   const summary = buildAutoRecSummary({
-    title,
-    channelName,
-    mode,
-    newOnly: vo.newOnly,
+    title: input.title,
+    channelName: channel.label,
+    channelUnsaved: channel.unsaved,
+    mode: input.mode,
+    newOnly: input.newOnly,
     genreLabel,
-    durationMinMinutes: vo.durationMinMinutes,
-    durationMaxMinutes: vo.durationMaxMinutes,
+    durationMinMinutes: input.durationMinMinutes,
+    durationMaxMinutes: input.durationMaxMinutes,
     tagName,
     tagMultiActive: false,
-    genreMultiActive: vo.genre.length >= 2,
-    matchCount: grandTotal.value,
+    genreMultiActive: input.genre.length >= 2,
+    matchCount,
   })
 
   /* Non-destructive confirm — no severity flag (the composable
@@ -2158,17 +2335,7 @@ async function onCreateAutoRecClick() {
 
   createAutoRecInflight.value = true
   try {
-    const conf = buildAutoRecConf({
-      title,
-      channelName,
-      mode,
-      newOnly: vo.newOnly,
-      genre: vo.genre,
-      durationMinMinutes: vo.durationMinMinutes,
-      durationMaxMinutes: vo.durationMaxMinutes,
-      tagUuid: vo.tagFilter.tag,
-      commentSuffix: t('Created from EPG query'),
-    })
+    const conf = buildAutoRecConf(input)
     await apiCall('dvr/autorec/create', { conf: JSON.stringify(conf) })
     toast.success(t('AutoRec rule created'))
   } catch (e) {
@@ -2295,11 +2462,18 @@ async function onCreateAutoRecClick() {
           <template v-if="queryLoading">
             Searching the EPG…
           </template>
-          <template v-else-if="hasActiveColumnFilter">
-            No events match the current filter.
-          </template>
           <template v-else-if="state.loading.value">
             Loading events…
+          </template>
+          <template v-else-if="hasActiveFilter">
+            No events match the current filter.
+            <button
+              type="button"
+              class="epg-table-grid__clear-filters"
+              @click="onClearAllFilters"
+            >
+              {{ t('Clear filters') }}
+            </button>
           </template>
           <template v-else>
             No EPG events available. Make sure your network's EPG grabbers are configured and have
@@ -2434,9 +2608,13 @@ async function onCreateAutoRecClick() {
                 ? t(
                     'Create an automatic recording rule to record all future programs that match the current query.',
                   )
-                : t(
-                    'Set at least one filter (title, channel, genre, duration, tag, or “New only”) to create an AutoRec rule.',
-                  )
+                : autoRecChannel.unsaved
+                  ? t(
+                      'The Channel filter is not an exact channel name, so it can’t be saved as a rule. Enter the full channel name or set another filter to create an AutoRec rule.',
+                    )
+                  : t(
+                      'Set at least one filter (title, channel, genre, duration, tag, or “New only”) to create an AutoRec rule.',
+                    )
           "
           type="button"
           class="epg-table-grid__autorec"
@@ -2458,7 +2636,7 @@ async function onCreateAutoRecClick() {
           :sortable-fields="sortableFields"
           :sort-field="sortField"
           :sort-order="sortOrder"
-          :per-column-filters="filters.perColumn"
+          :per-column-filters="perColumnFilterDisplay"
           :per-column-labels="perColumnFilterLabels"
           :tags="state.tags.value"
           @update:options="state.setViewOptions"
@@ -2557,6 +2735,26 @@ async function onCreateAutoRecClick() {
   color: var(--tvh-text-muted);
   text-align: center;
   padding: var(--tvh-space-6);
+}
+
+/* Empty state's "Clear filters", on its own line under the
+ * message. Same look as the Log's Clear filters button. */
+.epg-table-grid__clear-filters {
+  display: block;
+  margin: var(--tvh-space-3) auto 0;
+  padding: 2px var(--tvh-space-2);
+  font-size: var(--tvh-text-sm);
+  background: none;
+  border: 1px solid var(--tvh-border-strong);
+  border-radius: var(--tvh-radius-sm);
+  color: var(--tvh-text-muted);
+  cursor: pointer;
+  transition: background var(--tvh-transition);
+}
+
+.epg-table-grid__clear-filters:hover {
+  background: color-mix(in srgb, var(--tvh-primary) var(--tvh-hover-strength), transparent);
+  color: var(--tvh-text);
 }
 
 /* Per-column funnel-popover input. */

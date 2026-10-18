@@ -45,15 +45,22 @@
  *
  * The factory returns a Pinia setup-store. Cached at module scope by
  * `endpoint` so the second mount of the same view gets the same store
- * instance and the same Comet listener (Pinia warns about duplicate
- * defineStore() ids — caching avoids that, same pattern useGridStore
- * uses).
+ * instance (Pinia warns about duplicate defineStore() ids — caching
+ * avoids that, same pattern useGridStore uses).
+ *
+ * The store outlives its views, so the Comet listener is ref-counted:
+ * each mounted consumer calls `retain()` and the returned release on
+ * unmount. The first retain subscribes, the last release unsubscribes.
+ * Without that, one visit to Home or a Status page kept refetching
+ * the list on every notification (input_status arrives every second
+ * per active mux) from any page. Consumers fetch on mount, which
+ * covers the notifications missed while nobody was listening.
  */
 
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { apiCall } from '@/api/client'
-import type { IdnodeNotification } from '@/types/comet'
+import type { IdnodeNotification, NotificationMessage } from '@/types/comet'
 import { cometClient } from '@/api/comet'
 
 const COMET_REFETCH_DEBOUNCE_MS = 100
@@ -77,8 +84,18 @@ export interface UseStatusStore<Row extends StatusEntry = StatusEntry> {
    * path passes it so the table doesn't flash the spinner overlay
    * every notification. Default (silent: false) is for initial
    * mount and any user-initiated retry.
+   *
+   * A failed silent fetch keeps the current rows and only sets
+   * `error`, which stays until a fetch succeeds. A failed
+   * non-silent fetch clears the rows.
    */
   fetch: (options?: { silent?: boolean }) => Promise<void>
+  /*
+   * Register a consumer. Holds the Comet listener while at least
+   * one consumer is retained. Returns the matching release, which
+   * is safe to call more than once.
+   */
+  retain: () => () => void
 }
 
 interface StatusResponse<Row> {
@@ -143,8 +160,10 @@ export function useStatusStore<Row extends StatusEntry = StatusEntry>(
 
       async function fetch(options: { silent?: boolean } = {}) {
         const myReqId = ++reqId
-        if (!options.silent) loading.value = true
-        error.value = null
+        if (!options.silent) {
+          loading.value = true
+          error.value = null
+        }
         try {
           const res = await apiCall<StatusResponse<Row>>(endpoint)
           if (myReqId !== reqId) return /* superseded */
@@ -156,10 +175,15 @@ export function useStatusStore<Row extends StatusEntry = StatusEntry>(
            * The cast is safe by construction.
            */
           entries.value = mergeByKey(entries.value as Row[], res.entries ?? [])
+          error.value = null
         } catch (e) {
           if (myReqId !== reqId) return
           error.value = e instanceof Error ? e : new Error(String(e))
-          entries.value = []
+          /* A background refresh that fails once (server busy, a
+           * dropped request) must not blank the grid. Emptying it
+           * drops the selection and the bandwidth chart history,
+           * and they do not come back with the rows. */
+          if (!options.silent) entries.value = []
         } finally {
           if (myReqId === reqId && !options.silent) loading.value = false
         }
@@ -175,7 +199,7 @@ export function useStatusStore<Row extends StatusEntry = StatusEntry>(
        * so this is a permissive check rather than tight type
        * narrowing.
        */
-      cometClient.on(notificationClass, (msg) => {
+      function onNotification(msg: NotificationMessage) {
         const note = msg as IdnodeNotification & {
           reload?: unknown
           updateEntry?: unknown
@@ -195,11 +219,30 @@ export function useStatusStore<Row extends StatusEntry = StatusEntry>(
         refetchTimer = globalThis.setTimeout(() => {
           void fetch({ silent: true })
         }, COMET_REFETCH_DEBOUNCE_MS)
-      })
+      }
+
+      let consumers = 0
+      let unsubscribe: (() => void) | undefined
+
+      function retain(): () => void {
+        consumers++
+        if (consumers === 1) unsubscribe = cometClient.on(notificationClass, onNotification)
+        let released = false
+        return () => {
+          if (released) return
+          released = true
+          consumers--
+          if (consumers > 0) return
+          unsubscribe?.()
+          unsubscribe = undefined
+          clearTimeout(refetchTimer)
+          refetchTimer = undefined
+        }
+      }
 
       const isEmpty = computed(() => !loading.value && entries.value.length === 0)
 
-      return { entries, loading, error, isEmpty, fetch }
+      return { entries, loading, error, isEmpty, fetch, retain }
     })
     storeFactoryCache.set(id, factory)
   }

@@ -448,7 +448,8 @@ tcp_socket_dead(int fd)
   if (recv(fd, NULL, 0, MSG_PEEK | MSG_DONTWAIT) < 0)
     return -errno;
 #else
-  if (recv(fd, NULL, 0, MSG_PEEK | MSG_DONTWAIT) == 0)
+  char c;
+  if (recv(fd, &c, 1, MSG_PEEK | MSG_DONTWAIT) == 0)
     return -EIO;
 #endif
   return 0;
@@ -476,6 +477,31 @@ tcp_get_str_from_ip(const struct sockaddr_storage *sa, char *dst, size_t maxlen)
       return NULL;
   }
 
+  return dst;
+}
+
+/**
+ * Write the address as the host part of a URL. An IPv4-mapped IPv6
+ * address, as -6 gives for IPv4 clients, is written as plain IPv4.
+ * Other IPv6 addresses go in brackets. maxlen should be at least
+ * INET6_ADDRSTRLEN + 2.
+ */
+char *
+tcp_get_url_host_from_ip(const struct sockaddr_storage *sa, char *dst, size_t maxlen)
+{
+  const struct in6_addr *in6;
+  char buf[INET6_ADDRSTRLEN];
+
+  if (sa == NULL || dst == NULL || sa->ss_family != AF_INET6)
+    return tcp_get_str_from_ip(sa, dst, maxlen);
+
+  in6 = &((const struct sockaddr_in6 *)sa)->sin6_addr;
+  if (IN6_IS_ADDR_V4MAPPED(in6)) {
+    inet_ntop(AF_INET, &in6->s6_addr[12], dst, maxlen);
+  } else {
+    inet_ntop(AF_INET6, in6, buf, sizeof(buf));
+    snprintf(dst, maxlen, "[%s]", buf);
+  }
   return dst;
 }
 
@@ -606,7 +632,14 @@ try_again:
   if (res == NULL)
     return NULL;
 
-  if (aa->aa_conn_limit || aa->aa_conn_limit_streaming) {
+  /*
+   * The limits count streaming connections (plus DVR), so only a launch
+   * that is going to stream is checked. A non-streaming connection (e.g. an
+   * HTSP control connection fetching EPG or metadata) is not refused; it
+   * is checked again when it subscribes (htsp_read_loop relaunches with
+   * streaming = 1).
+   */
+  if (streaming && (aa->aa_conn_limit || aa->aa_conn_limit_streaming)) {
     used2 = aa->aa_conn_limit ? dvr_usage_count(aa) : 0;
     /* the rule is: allow if one condition is OK */
     c1 = aa->aa_conn_limit ? sused + used2 >= aa->aa_conn_limit : -1;
@@ -1192,8 +1225,23 @@ pthread_t tcp_server_tid;
 void
 tcp_server_preinit(int opt_ipv6)
 {
-  if(opt_ipv6)
-    tcp_preferred_address_family = AF_INET6;
+  int fd;
+
+  if (!opt_ipv6)
+    return;
+
+  /* A kernel without IPv6 (ipv6.disable=1) cannot open the dual-stack
+   * listening sockets, so stay on IPv4 instead of listening on nothing.
+   * This only checks the socket family. Binding is left to the servers,
+   * and tcp_server_create() logs any bind error. */
+  fd = tvh_socket(AF_INET6, SOCK_STREAM, 0);
+  if (fd < 0) {
+    tvhwarn(LS_TCP, "IPv6 is not available (%s), listening on IPv4 only",
+            strerror(errno));
+    return;
+  }
+  close(fd);
+  tcp_preferred_address_family = AF_INET6;
 }
 
 void

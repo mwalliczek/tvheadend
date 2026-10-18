@@ -16,6 +16,11 @@
  *   3. Silent fetch() doesn't toggle the `loading` ref. PrimeVue
  *      shows a spinner overlay whenever loading is true, so silent
  *      refresh is what keeps Comet-driven updates from flashing.
+ *   4. The Comet listener is ref-counted by retain() / release, so
+ *      a store left behind by an unmounted view stops refetching.
+ *   5. A failed silent refetch keeps the rows (and so the grid
+ *      selection and chart history). Only a non-silent fetch
+ *      clears them.
  *
  * Each test uses a unique endpoint string so the module-level
  * storeFactoryCache doesn't leak state between cases.
@@ -30,12 +35,32 @@ vi.mock('@/api/client', () => ({
   apiCall: (...args: unknown[]) => apiMock(...args),
 }))
 
-/* Comet's `on` is invoked at store creation; stub so it doesn't try
- * to register against the real client. We don't drive Comet events
- * in these tests — store-level fetch / merge is what we're after. */
+/* Map-backed Comet stub: `on` records the listener and returns an
+ * unsubscribe, so the tests can check when the store holds a
+ * listener and drive notifications through it. */
+type Listener = (msg: Record<string, unknown>) => void
+const cometListeners = new Map<string, Set<Listener>>()
 vi.mock('@/api/comet', () => ({
-  cometClient: { on: vi.fn() },
+  cometClient: {
+    on: (klass: string, fn: Listener) => {
+      let set = cometListeners.get(klass)
+      if (!set) {
+        set = new Set()
+        cometListeners.set(klass, set)
+      }
+      set.add(fn)
+      return () => cometListeners.get(klass)?.delete(fn)
+    },
+  },
 }))
+
+function listenerCount(klass: string): number {
+  return cometListeners.get(klass)?.size ?? 0
+}
+
+function fireComet(klass: string, payload: Record<string, unknown>): void {
+  for (const l of cometListeners.get(klass) ?? []) l({ notificationClass: klass, ...payload })
+}
 
 interface Row extends Record<string, unknown> {
   uuid: string
@@ -46,10 +71,12 @@ interface Row extends Record<string, unknown> {
 beforeEach(() => {
   setActivePinia(createPinia())
   apiMock.mockReset()
+  cometListeners.clear()
 })
 
 afterEach(() => {
   apiMock.mockReset()
+  vi.useRealTimers()
 })
 
 describe('useStatusStore', () => {
@@ -168,5 +195,87 @@ describe('useStatusStore', () => {
     resolveFn({ entries: [] })
     await inflight
     expect(store.loading).toBe(false)
+  })
+
+  it('holds no Comet listener until a consumer retains the store', () => {
+    useStatusStore<Row>('status/test-7', 'cls-7', 'uuid')
+    expect(listenerCount('cls-7')).toBe(0)
+  })
+
+  it('ref-counts the Comet listener across consumers', () => {
+    const store = useStatusStore<Row>('status/test-8', 'cls-8', 'uuid')
+    const releaseA = store.retain()
+    const releaseB = store.retain()
+    expect(listenerCount('cls-8')).toBe(1)
+    releaseA()
+    /* A second release of the same handle must not drop B's claim. */
+    releaseA()
+    expect(listenerCount('cls-8')).toBe(1)
+    releaseB()
+    expect(listenerCount('cls-8')).toBe(0)
+    store.retain()
+    expect(listenerCount('cls-8')).toBe(1)
+  })
+
+  it('refetches on a notification only while retained', async () => {
+    vi.useFakeTimers()
+    apiMock.mockResolvedValue({ entries: [] })
+    const store = useStatusStore<Row>('status/test-9', 'cls-9', 'uuid')
+    const release = store.retain()
+    fireComet('cls-9', { reload: 1 })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(apiMock).toHaveBeenCalledTimes(1)
+
+    /* A notification debounced just before the last release must
+     * not fire after it either. */
+    fireComet('cls-9', { reload: 1 })
+    release()
+    await vi.advanceTimersByTimeAsync(200)
+    fireComet('cls-9', { reload: 1 })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(apiMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the rows when a silent refetch fails, and clears the error on the next success', async () => {
+    apiMock.mockResolvedValueOnce({
+      entries: [
+        { uuid: 'a', name: 'Alpha' },
+        { uuid: 'b', name: 'Beta' },
+      ],
+    })
+    const store = useStatusStore<Row>('status/test-10', 'cls', 'uuid')
+    await store.fetch()
+    const originalA = store.entries[0]
+
+    apiMock.mockRejectedValueOnce(new Error('API 502'))
+    await store.fetch({ silent: true })
+    expect(store.entries).toHaveLength(2)
+    expect(store.entries[0]).toBe(originalA)
+    expect(store.error?.message).toBe('API 502')
+
+    /* The error stays up while the next silent refetch is in flight,
+     * so a sustained outage does not blink the banner. */
+    let resolveFn: (v: unknown) => void = () => {}
+    apiMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFn = resolve
+      })
+    )
+    const inflight = store.fetch({ silent: true })
+    expect(store.error?.message).toBe('API 502')
+    resolveFn({ entries: [{ uuid: 'a', name: 'Alpha' }] })
+    await inflight
+    expect(store.error).toBeNull()
+    expect(store.entries).toHaveLength(1)
+  })
+
+  it('clears the rows when a non-silent fetch fails', async () => {
+    apiMock.mockResolvedValueOnce({ entries: [{ uuid: 'a', name: 'Alpha' }] })
+    const store = useStatusStore<Row>('status/test-11', 'cls', 'uuid')
+    await store.fetch()
+    apiMock.mockRejectedValueOnce(new Error('API 403'))
+    await store.fetch()
+    expect(store.entries).toHaveLength(0)
+    expect(store.error?.message).toBe('API 403')
   })
 })

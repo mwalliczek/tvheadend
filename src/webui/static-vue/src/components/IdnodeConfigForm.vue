@@ -38,6 +38,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiCall } from '@/api/client'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import { useAccessStore } from '@/stores/access'
 import { levelMatches, propLevel, type IdnodeProp, type PropertyGroup } from '@/types/idnode'
 import type { UiLevel } from '@/types/access'
@@ -82,7 +83,7 @@ const props = withDefaults(
     /* Field ids whose change forces `globalThis.location.reload()`
      * after a successful save — reserved for fields whose effect
      * cannot be applied in-place (e.g. `language_ui`, which re-bakes
-     * every translated string from /locale.js). Default empty:
+     * every translated string from /locale-vue.js). Default empty:
      * page-specific configs (Image Cache, SAT>IP) don't need it. */
     reloadFields?: readonly string[]
     /* Field ids whose change triggers an `access/whoami` refetch
@@ -171,6 +172,12 @@ const props = withDefaults(
      * CA drawer) is unchanged because they don't pass this
      * prop. */
     alwaysDirty?: boolean
+    /* When true, Save stays disabled and `save()` does nothing,
+     * whatever the dirty state. For trigger forms that can have
+     * nothing to act on — Service Mapper with no service picked,
+     * where the server would accept the POST but start no job.
+     * Default false. */
+    saveDisabled?: boolean
     /* Allowlist of multi-select enum field IDs to render as
      * inline checkboxes instead of the default MultiSelect
      * dropdown. Right for known-small fixed sets (e.g. days of
@@ -232,6 +239,7 @@ const props = withDefaults(
     saveTooltip: undefined,
     preselect: undefined,
     alwaysDirty: false,
+    saveDisabled: false,
     inlineEnumMultiFields: () => [],
     hideToolbar: false,
     mandatoryFields: () => [],
@@ -310,7 +318,13 @@ const currentValues = ref<Record<string, unknown>>({})
 
 const loading = ref(true)
 const saving = ref(false)
+/* Load failure: replaces the form (there is nothing to show) and
+ * offers Retry. */
 const error = ref<string | null>(null)
+/* Save failure: shown above the form, which stays mounted with the
+ * user's edits so they can fix a value and save again. Cleared by
+ * the next save, Undo or load. */
+const saveError = ref<string | null>(null)
 
 /* Class id of the loaded entry — keyed lookup into `CLASS_RULES`
  * for required / cross-field / minLength rules. Server emits it on
@@ -341,6 +355,7 @@ async function load() {
   }
   loading.value = true
   error.value = null
+  saveError.value = null
   try {
     /* uuid mode: idnode/load with uuid + meta. Server returns the
      * same `{ entries: [{ params, meta: { groups } }] }` shape as
@@ -692,7 +707,7 @@ async function save() {
   /* `alwaysDirty` bypasses the dirty-state guard for trigger
    * forms (Service Mapper). Saving in-flight still gates so a
    * user can't double-fire while a previous post is pending. */
-  if ((!isDirty.value && !props.alwaysDirty) || saving.value) return
+  if ((!isDirty.value && !props.alwaysDirty) || saving.value || props.saveDisabled) return
   /* Validation gate. Promote every error to visible so the user
    * sees what's wrong even on fields they haven't touched yet,
    * mirroring IdnodeEditor's submit-attempt behaviour. The Save
@@ -701,7 +716,7 @@ async function save() {
   submitAttempted.value = true
   if (hasErrors.value) return
   saving.value = true
-  error.value = null
+  saveError.value = null
   try {
     /* Snapshot the reload / access-refetch decisions against the
      * PRE-save baseline before the api call mutates anything we're
@@ -728,7 +743,7 @@ async function save() {
           { node: JSON.stringify(currentValues.value) },
         ]
     if (!endpoint) {
-      error.value = t('Configuration form misconfigured (no save endpoint)')
+      saveError.value = t('Configuration form misconfigured (no save endpoint)')
       return
     }
 
@@ -742,7 +757,7 @@ async function save() {
 
     if (needsReload) {
       /* Forced reload — reserved for changes the SPA can't apply
-       * in place (language_ui re-bakes /locale.js strings). The
+       * in place (language_ui re-bakes /locale-vue.js strings). The
        * reconnect's first accessUpdate carries fresh values for
        * the affected user-pref fields. */
       globalThis.location.reload()
@@ -761,7 +776,7 @@ async function save() {
      * sent). */
     await load()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : t('Save failed: {0}', String(e))
+    saveError.value = t('Save failed: {0}', apiErrorMessage(e))
   } finally {
     saving.value = false
   }
@@ -769,6 +784,7 @@ async function save() {
 
 function undo() {
   if (!isDirty.value) return
+  saveError.value = null
   /* Spread the baseline so currentValues becomes a fresh object
    * — triggers reactive updates on every field input. */
   currentValues.value = { ...baseline.value }
@@ -918,6 +934,7 @@ onBeforeUnmount(() => {
           (!isDirty && !alwaysDirty)
             || saving
             || loading
+            || saveDisabled
             || (isDirty && hasErrors)
         "
         @click="save"
@@ -974,9 +991,15 @@ onBeforeUnmount(() => {
       v-else-if="error"
       class="idnode-config-form__status idnode-config-form__status--error"
     >
-      {{ error }}
+      <p class="idnode-config-form__status-text">{{ error }}</p>
+      <button type="button" class="idnode-config-form__btn idnode-config-form__retry" @click="load">
+        {{ t('Retry') }}
+      </button>
     </div>
-    <form v-else class="idnode-config-form__form" @submit.prevent="save">
+    <p v-if="saveError && !loading && !error" class="idnode-config-form__save-error" role="alert">
+      {{ saveError }}
+    </p>
+    <form v-if="!loading && !error" class="idnode-config-form__form" @submit.prevent="save">
       <!-- Optional caller-supplied content rendered above the
            auto-rendered groups but INSIDE the scroll area. Used by
            views that supplement the standard form with custom
@@ -1142,6 +1165,22 @@ onBeforeUnmount(() => {
   border-color: color-mix(in srgb, var(--tvh-primary) 40%, var(--tvh-border));
 }
 
+.idnode-config-form__status-text {
+  margin: 0 0 var(--tvh-space-3);
+}
+
+/* Save failure above the still-mounted form. */
+.idnode-config-form__save-error {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: var(--tvh-space-2) var(--tvh-space-3);
+  background: color-mix(in srgb, var(--tvh-error) 8%, var(--tvh-bg-surface));
+  border: 1px solid var(--tvh-error);
+  border-radius: var(--tvh-radius-sm);
+  color: var(--tvh-text);
+  font-size: var(--tvh-text-md);
+}
+
 .idnode-config-form__form {
   flex: 1 1 auto;
   display: flex;
@@ -1238,6 +1277,13 @@ onBeforeUnmount(() => {
   font-size: var(--tvh-text-sm);
   line-height: 1.4;
   color: var(--tvh-error);
+}
+
+/* Flush left once the rows stack (narrow-form rule in ifld.css). */
+@container (max-width: 399px) {
+  .ifld-row__error {
+    margin-left: 0;
+  }
 }
 
 /* Help button — same 32px icon-button shape IdnodeGrid uses
