@@ -54,6 +54,7 @@ epggrab_module_type(epggrab_module_t *mod)
   case EPGGRAB_OTA: return N_("Over-the-air");
   case EPGGRAB_INT: return N_("Internal");
   case EPGGRAB_EXT: return N_("External");
+  case EPGGRAB_DAB: return N_("Over-the-air (DAB)");
   default:          return N_("Unknown");
   }
 }

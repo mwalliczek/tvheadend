@@ -56,6 +56,9 @@ CFLAGS  += -fms-extensions -funsigned-char
 CFLAGS  += -D_FILE_OFFSET_BITS=64
 CFLAGS  += -D_TIME_BITS=64
 CFLAGS  += -I${BUILDDIR} -I${ROOTDIR}/src -I${ROOTDIR}
+ifeq ($(CONFIG_RTLSDR),yes)
+LDFLAGS += -lfftw3f
+endif
 ifeq ($(CONFIG_ANDROID),yes)
 LDFLAGS += -ldl -lm
 else
@@ -439,6 +442,48 @@ SRCS-LINUXDVB = \
 	src/input/mpegts/linuxdvb/linuxdvb_en50494.c
 SRCS-${CONFIG_LINUXDVB} += $(SRCS-LINUXDVB)
 I18N-C += $(SRCS-LINUXDVB)
+
+# RTLSDR
+SRCS-RTLSDR = \
+    src/api/api_dab.c \
+    src/input/dab.c \
+    src/input/dab/dab_input.c \
+    src/input/dab/dab_ensemble.c \
+    src/input/dab/dab_service.c \
+    src/input/dab/dab_network.c \
+    src/input/dab/dab_network_scan.c \
+    src/input/dab/fib-processor.c \
+    src/input/dab/mp4processor.c \
+    src/input/dab/mp2processor.c \
+    src/input/dab/charsets.c \
+    src/input/dab/dab_mot.c \
+    src/input/dab/dab_epg.c \
+    src/input/dab/dab_scan.c \
+    src/epggrab/module/dab.c \
+    src/input/dab/rtlsdr/sdr_dab_basic_demodulation.c \
+    src/input/dab/rtlsdr/reed-solomon.c \
+    src/input/dab/rtlsdr/firecheck.c \
+    src/input/dab/rtlsdr/phasereference.c \
+    src/input/dab/rtlsdr/input_sdr.c \
+    src/input/dab/rtlsdr/input_sdr_async.c \
+    src/input/dab/rtlsdr/sdr_fifo.c \
+    src/input/dab/rtlsdr/ofdmDecoder.c \
+    src/input/dab/rtlsdr/protTables.c \
+    src/input/dab/rtlsdr/ficHandler.c \
+    src/input/dab/rtlsdr/mscHandler.c \
+    src/input/dab/rtlsdr/protection.c \
+    src/input/dab/rtlsdr/fic_protection.c \
+    src/input/dab/rtlsdr/uep_protection.c \
+    src/input/dab/rtlsdr/eep_protection.c \
+    src/input/dab/rtlsdr/sdr_dab_service_instance.c \
+    src/input/dab/rtlsdr/viterbi_768/viterbi-768.c \
+    src/input/dab/rtlsdr/viterbi_768/spiral-sse.c \
+    src/input/dab/rtlsdr/viterbi_768/spiral-neon.c \
+    src/input/dab/rtlsdr/viterbi_768/spiral-no-sse.c \
+    src/input/dab/rtlsdr/rtlsdr_dab_frontend.c \
+    src/input/dab/rtlsdr/rtlsdr.c
+SRCS-${CONFIG_RTLSDR} += $(SRCS-RTLSDR)
+I18N-C += $(SRCS-RTLSDR)
 
 # SATIP Client
 SRCS-SATIP-CLIENT = \

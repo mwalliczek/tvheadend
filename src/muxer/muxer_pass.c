@@ -41,6 +41,7 @@ typedef struct pass_muxer {
   int   pm_ofd;
   int   pm_seekable;
   int   pm_error;
+  int   pm_no_ts;
   int   pm_spawn_pid;
 
   /* Filename is also used for logging */
@@ -1035,21 +1036,28 @@ pass_muxer_write_ts(muxer_t *m, pktbuf_t *pb)
 static int
 pass_muxer_write_pkt(muxer_t *m, streaming_message_type_t smt, void *data)
 {
-  pktbuf_t *pb = (pktbuf_t*)data;
   pass_muxer_t *pm = (pass_muxer_t*)m;
-
-  assert(smt == SMT_MPEGTS);
 
   switch(smt) {
   case SMT_MPEGTS:
-    pass_muxer_write_ts(m, pb);
+    pass_muxer_write_ts(m, (pktbuf_t*)data);
+    pktbuf_ref_dec((pktbuf_t*)data);
+    break;
+  case SMT_PACKET:
+    /* elementary stream packets (e.g. DAB): there is no transport
+       stream to pass through */
+    if (!pm->pm_no_ts) {
+      tvherror(LS_PASS, "%s: the source delivers no MPEG-TS, "
+               "use a profile with another container",
+               pm->pm_filename ?: "stream");
+      pm->pm_no_ts = 1;
+    }
+    pkt_ref_dec((th_pkt_t*)data);
     break;
   default:
     //TODO: add support for v4l (MPEG-PS)
     break;
   }
-
-  pktbuf_ref_dec(pb);
 
   return pm->pm_error;
 }

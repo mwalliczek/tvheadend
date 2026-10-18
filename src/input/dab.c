@@ -1,0 +1,46 @@
+  /*
+ *  TVheadend
+ *  Copyright (C) 2019 Matthias Walliczek
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "input.h"
+
+struct dab_listener_list dab_listeners;
+
+void dab_init(void) {
+  /* Register classes (avoid API 400 errors due to not yet defined) */
+  idclass_register(&dab_network_class);
+  idclass_register(&dab_ensemble_class);
+  idclass_register(&dab_ensemble_instance_class);
+  idclass_register(&dab_service_class);
+  idclass_register(&dab_service_raw_class);
+
+  dab_network_init();
+
+  rtlsdr_init();
+  
+  dab_network_scan_init();
+}
+
+void dab_done(void) {
+  tvhftrace(LS_MAIN, dab_network_scan_done);
+  /* the adapters first: they write a pending save of their config
+     (the learned frequency correction is saved often) while still
+     linked to the networks; deleting the networks first removes the
+     links and saved the frontends without their network assignment */
+  tvhftrace(LS_MAIN, rtlsdr_done);
+  tvhftrace(LS_MAIN, dab_network_done);
+}

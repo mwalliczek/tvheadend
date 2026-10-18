@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 324" width="1004" height="324" role="img" aria-label="Frame structure">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="324" rx="12" class="bgcard"/>
+
+  <text x="10" y="20" font-size="13" class="b">T<tspan baseline-shift="sub" font-size="10">F</tspan> = 196 608 samples = 96 ms · drawn to scale</text>
+  <!-- to scale: 960 px = 196608 samples; null 2656 -> 12.97; symbol 2552 -> 12.46 -->
+  <g transform="translate(10,32)">
+    <rect x="0" y="0" width="12.9" height="44" class="soft" stroke="var(--muted)" stroke-dasharray="2 2"/>
+    <rect x="12.9" y="0" width="12.4" height="44" class="f-sync"/>
+    <rect x="25.4" y="0" width="37.3" height="44" class="f-fec"/>
+    <rect x="62.8" y="0" width="224.3" height="44" class="f-ofdm"/>
+    <rect x="287.1" y="0" width="224.3" height="44" class="f-ofdm" opacity="0.8"/>
+    <rect x="511.4" y="0" width="224.3" height="44" class="f-ofdm"/>
+    <rect x="735.7" y="0" width="224.3" height="44" class="f-ofdm" opacity="0.8"/>
+    <text x="175" y="27" text-anchor="middle" font-size="13">CIF 0 · 18 symbols</text>
+    <text x="399" y="27" text-anchor="middle" font-size="13">CIF 1</text>
+    <text x="623" y="27" text-anchor="middle" font-size="13">CIF 2</text>
+    <text x="848" y="27" text-anchor="middle" font-size="13">CIF 3</text>
+    <!-- zoom lines -->
+    <path d="M0 44 L0 90 M62.8 44 L460 90" class="ln" stroke-dasharray="3 3"/>
+  </g>
+  <!-- zoom -->
+  <g transform="translate(10,122)">
+    <rect x="0" y="0" width="104" height="54" class="soft" stroke="var(--muted)" stroke-dasharray="3 3"/>
+    <text x="52" y="24" text-anchor="middle" font-size="12" class="b">null</text>
+    <text x="52" y="42" text-anchor="middle" font-size="11" class="t-m">2656 · 1.30 ms</text>
+    <rect x="104" y="0" width="100" height="54" class="f-sync"/>
+    <text x="154" y="24" text-anchor="middle" font-size="12" class="b">PRS</text>
+    <text x="154" y="42" text-anchor="middle" font-size="11" class="t-m">symbol 0</text>
+    <rect x="204" y="0" width="100" height="54" class="f-fec"/><text x="254" y="32" text-anchor="middle" font-size="12">FIC 1</text>
+    <rect x="304" y="0" width="100" height="54" class="f-fec"/><text x="354" y="32" text-anchor="middle" font-size="12">FIC 2</text>
+    <rect x="404" y="0" width="100" height="54" class="f-fec"/><text x="454" y="32" text-anchor="middle" font-size="12">FIC 3</text>
+    <rect x="504" y="0" width="100" height="54" class="f-ofdm"/><text x="554" y="32" text-anchor="middle" font-size="12">MSC 4</text>
+    <text x="620" y="32" font-size="16" class="t-m">…</text>
+  </g>
+  <!-- one symbol with CP -->
+  <g transform="translate(10,206)">
+    <text x="0" y="0" font-size="13" class="b">One OFDM symbol: T<tspan baseline-shift="sub" font-size="10">s</tspan> = 2552 samples = 1.246 ms</text>
+    <rect x="0" y="12" width="190" height="44" class="f-out"/>
+    <text x="95" y="32" text-anchor="middle" font-size="12" class="b">guard (cyclic prefix)</text>
+    <text x="95" y="48" text-anchor="middle" font-size="11" class="t-m">T<tspan baseline-shift="sub" font-size="9">g</tspan> = 504 · 246 µs</text>
+    <rect x="190" y="12" width="770" height="44" class="f-ofdm"/>
+    <text x="575" y="32" text-anchor="middle" font-size="12" class="b">useful part, FFT window</text>
+    <text x="575" y="48" text-anchor="middle" font-size="11" class="t-m">T<tspan baseline-shift="sub" font-size="9">u</tspan> = 2048 samples · 1 ms → 1 kHz carrier spacing</text>
+    <rect x="770" y="12" width="190" height="44" fill="none" stroke="var(--c-out)" stroke-width="2" stroke-dasharray="5 3"/>
+    <path d="M865 62 C 865 90, 95 90, 95 62" class="st-out" stroke-width="1.6" marker-end="url(#ah)"/>
+    <text x="480" y="92" text-anchor="middle" font-size="11.5" class="t-m">the last 504 samples are sent again in front: echoes up to 246 µs (≈ 74 km path difference) fall into the prefix</text>
+  </g>
+
+</svg>

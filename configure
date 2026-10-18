@@ -25,6 +25,8 @@ OPTIONS=(
   "capmt:yes"
   "constcw:yes"
   "linuxdvb:yes"
+  "rtlsdr:auto"
+  "neon:auto"
   "satip_server:yes"
   "satip_client:yes"
   "hdhomerun_client:no"
@@ -483,6 +485,47 @@ if enabled linuxdvb; then
   fi
 else
   disable ddci
+fi
+
+#
+# RTL SDR
+#
+# DAB+ reception, built when librtlsdr and fftw3 are available
+#
+if enabled_or_auto rtlsdr; then
+  check_cc_header 'rtl-sdr' rtlsdr_h
+  check_cc_header 'fftw3' fftw3_h
+  if enabled rtlsdr_h && enabled fftw3_h; then
+    enable rtlsdr
+    LDFLAGS="$LDFLAGS -lrtlsdr"
+  elif enabled rtlsdr; then
+    die "rtl-sdr.h or fftw3.h not found (install librtlsdr and fftw3 development files or use --disable-rtlsdr)"
+  else
+    disable rtlsdr
+  fi
+fi
+
+#
+# NEON for the DAB viterbi decoder: 64 bit ARM always has it, 32 bit ARM
+# needs -mfpu=neon, which is only added with --enable-neon (the viterbi code
+# selects SSE2 / NEON / C itself)
+#
+if enabled_or_auto neon; then
+  printf 'int main(void) { return 0; }\n' > /tmp/tvh-neon.c
+  if echo | $CC -dM -E - 2>/dev/null | grep -q '__ARM_NEON'; then
+    enable neon
+    echo "  checking whether NEON is available ... Yes." | tee -a configure.log
+  elif enabled neon && $CC $CFLAGS -mfpu=neon -c /tmp/tvh-neon.c -o /dev/null 2>/dev/null; then
+    # only on request: the binary would not run on ARM CPUs without NEON
+    # (e.g. Raspberry Pi 1 / Zero), a Raspberry Pi 2 or newer is required
+    enable neon
+    CFLAGS="$CFLAGS -mfpu=neon"
+    echo "  checking whether -mfpu=neon is available ... Yes." | tee -a configure.log
+  else
+    disable neon
+    echo "  checking whether NEON is available ... No." | tee -a configure.log
+  fi
+  rm -f /tmp/tvh-neon.c
 fi
 
 #

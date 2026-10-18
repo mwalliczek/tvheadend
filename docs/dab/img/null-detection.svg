@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 254" width="1004" height="254" role="img" aria-label="Null detection">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="254" rx="12" class="bgcard"/>
+
+  <path d="M40 190 H960" class="ax"/><path d="M40 20 V190" class="ax"/>
+  <text x="46" y="18" font-size="11" class="t-m">envelope, sum over 50 samples (cLevel / 50)</text>
+  <!-- thresholds -->
+  <path d="M40 110 H960" stroke="var(--c-out)" stroke-dasharray="6 4" fill="none"/>
+  <text x="956" y="104" text-anchor="end" font-size="11" class="t-out">0.50 · sLevel → null begins</text>
+  <path d="M40 80 H960" stroke="var(--c-audio)" stroke-dasharray="6 4" fill="none"/>
+  <text x="956" y="74" text-anchor="end" font-size="11" class="t-audio">0.75 · sLevel → null ends</text>
+  <!-- signal -->
+  <path d="M40 58 L60 52 L80 61 L100 49 L120 57 L140 47 L160 60 L180 54 L200 50 L220 58 L240 53 L260 59 L280 48 L300 55 L320 60 L340 150 L350 170 L380 176 L410 172 L440 178 L470 171 L500 175 L520 173 L540 168 L555 90 L570 55 L590 48 L610 58 L630 52 L650 57 L670 49 L690 60 L710 53 L730 50 L750 59 L770 54 L790 47 L810 58 L830 51 L850 56 L870 49 L890 59 L910 52 L930 57 L950 50" class="st-sync" stroke-width="2.2"/>
+  <rect x="338" y="196" width="214" height="10" rx="3" class="s-sync" opacity="0.4"/>
+  <text x="445" y="222" text-anchor="middle" font-size="12">T_null = 2656 samples, the transmitter is silent</text>
+  <text x="200" y="222" text-anchor="middle" font-size="12" class="t-m">end of the last frame</text>
+  <text x="760" y="222" text-anchor="middle" font-size="12" class="t-m">phase reference symbol →</text>
+
+</svg>

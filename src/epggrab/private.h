@@ -229,6 +229,10 @@ void xmltv_load  ( void );
 
 /* PSIP module */
 void psip_init  ( void );
+
+/* DAB EPG (SPI) */
+void dab_epggrab_init ( void );
+void dab_epggrab_done ( void );
 void psip_done  ( void );
 void psip_load  ( void );
 

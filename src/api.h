@@ -69,6 +69,7 @@ void api_channel_init       ( void );
 void api_bouquet_init       ( void );
 void api_ratinglabel_init   ( void );
 void api_mpegts_init        ( void );
+void api_dab_init        ( void );
 void api_epg_init           ( void );
 void api_epggrab_init       ( void );
 void api_status_init        ( void );

@@ -162,6 +162,7 @@ struct epggrab_module
     EPGGRAB_OTA,
     EPGGRAB_INT,
     EPGGRAB_EXT,
+    EPGGRAB_DAB,
   }                            type;      ///< Grabber type
   const char                   *id;       ///< Module identifier
   int                          subsys;    ///< Module log subsystem

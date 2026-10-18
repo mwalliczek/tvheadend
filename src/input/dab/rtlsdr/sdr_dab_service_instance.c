@@ -1,0 +1,319 @@
+/*
+ *  Tvheadend - RTL SDR Input System
+ *
+ *  Copyright (C) 2019 Matthias Walliczek
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "dab.h"
+#include "tvheadend.h"
+
+void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* stream_parms, void* context);
+void sdr_dab_service_instance_mp2Callback(const uint8_t* frame, int len, int sampleRate, int channels, void* context);
+
+static sdr_dab_service_instance_t *
+sdr_dab_instance_create(subChannel *subChannel, int subChId)
+{
+    int i;
+    sdr_dab_service_instance_t* res;
+
+    if (subChannel->BitRate <= 0 || subChannel->Length <= 0) {
+        tvherror(LS_RTLSDR, "invalid subchannel %d (bitrate %d, length %d)",
+            subChId, subChannel->BitRate, subChannel->Length);
+        return NULL;
+    }
+    res = calloc(1, sizeof(sdr_dab_service_instance_t));
+    res->subChannel = subChannel;
+    res->outV = calloc(24 * res->subChannel->BitRate, sizeof(uint8_t));
+
+    res->fragmentSize = res->subChannel->Length * CUSize;
+
+    for (i = 0; i < 16; i++)
+        res->interleaveData[i] = calloc(res->fragmentSize, sizeof(int16_t));
+
+    res->interleaverIndex = 0;
+    res->countforInterleaver = 0;
+
+    if (res->subChannel->shortForm)
+        res->protection = uep_protection_init(res->subChannel->BitRate,
+            res->subChannel->protLevel);
+    else
+        res->protection = eep_protection_init(res->subChannel->BitRate,
+            res->subChannel->protLevel);
+
+    res->tempX = calloc(res->fragmentSize, sizeof(int16_t));
+
+    tvhdebug(LS_RTLSDR, "created sdr_dab_service_instance_t %p", res);
+
+    return res;
+}
+
+sdr_dab_service_instance_t * 
+sdr_dab_service_instance_create(dab_service_t* service)
+{
+    sdr_dab_service_instance_t* res = sdr_dab_instance_create(
+        &service->s_dab_ensemble->subChannels[service->subChId], service->subChId);
+    if (res == NULL)
+        return NULL;
+    res->dai_service = service;
+    if (service->ASCTy == DAB_ASCTY_DABPLUS)
+        res->mp4processor = init_mp4processor(res->subChannel->BitRate, res, sdr_dab_service_instance_dataCallback);
+    else
+        res->mp2processor = init_mp2processor(res->subChannel->BitRate, res, sdr_dab_service_instance_mp2Callback);
+    return res;
+}
+
+sdr_dab_service_instance_t *
+sdr_dab_data_instance_create(dab_ensemble_t *mm, int subChId, int packetAddress,
+                             dab_mot_object_cb_t cb, void *opaque)
+{
+    sdr_dab_service_instance_t* res = sdr_dab_instance_create(&mm->subChannels[subChId], subChId);
+    subChannel *sc;
+    char prot[16];
+
+    if (res == NULL)
+        return NULL;
+    sc = res->subChannel;
+    res->mot = dab_mot_decoder_create(packetAddress, cb, opaque);
+    dab_mot_decoder_set_fec(res->mot, sc->FEC_scheme == 1);
+    res->packetBytes = calloc(3 * sc->BitRate, sizeof(uint8_t));
+    if (sc->shortForm)
+        snprintf(prot, sizeof(prot), "UEP %d", sc->protLevel);
+    else
+        snprintf(prot, sizeof(prot), "EEP %d-%c", (sc->protLevel & 3) + 1,
+                 (sc->protLevel & 4) ? 'B' : 'A');
+    tvhinfo(LS_DABEPG, "decoding packet address %d in subchannel %d "
+            "(%d kbit/s, %s, %d CUs, FEC scheme %d)", packetAddress, subChId,
+            sc->BitRate, prot, sc->Length, sc->FEC_scheme);
+    return res;
+}
+
+void sdr_dab_service_instance_destroy(sdr_dab_service_instance_t* sds) {
+    int i;
+
+    tvhdebug(LS_RTLSDR, "destroy sdr_dab_service_instance_t %p", sds);
+
+    free(sds->tempX);
+    free(sds->outV);
+    for (i = 0; i < 16; i++)
+        free(sds->interleaveData[i]);
+    protection_destroy(sds->protection);
+    if (sds->mp4processor)
+        destroy_mp4processor(sds->mp4processor);
+    destroy_mp2processor(sds->mp2processor);
+    dab_mot_decoder_destroy(sds->mot);
+    free(sds->packetBytes);
+    free(sds);
+}
+
+/*
+ * Demodulator thread: report the counters of the sub-channel to the
+ * status of the ensemble (bandwidth, BER, PER, uncorrected blocks,
+ * transport and continuity errors).
+ */
+void sdr_dab_service_instance_stats(sdr_dab_service_instance_t *sds, struct sdr_state_t *sdr) {
+    dab_ensemble_instance_t *mmi = sdr->mmi;
+    mp4processor_t *mp4 = sds->mp4processor;
+
+    atomic_add(&sdr->berBits, sds->protection->bits);
+    atomic_add(&sdr->berErrors, sds->protection->bitErrors);
+    sds->protection->bits = sds->protection->bitErrors = 0;
+    if (mmi == NULL)
+        return;
+    atomic_add(&mmi->tii_stats.bps, sds->decodedBytes);
+    sds->decodedBytes = 0;
+
+    if (mp4) {
+        /* audio: an AU is a block, lost superframe sync a transport error */
+        atomic_add(&mmi->tii_stats.unc, mp4->statRSUncorrectable);
+        atomic_add(&mmi->tii_stats.te, mp4->statLostBlocks);
+        if (mp4->statAUs) {
+            tvh_mutex_lock(&mmi->tii_stats_mutex);
+            mmi->tii_stats.tc_block += mp4->statAUs;
+            mmi->tii_stats.ec_block += mp4->statAUErrors;
+            tvh_mutex_unlock(&mmi->tii_stats_mutex);
+        }
+        mp4->statAUs = mp4->statAUErrors = 0;
+        mp4->statLostBlocks = mp4->statRSUncorrectable = 0;
+    }
+    if (sds->mp2processor) {
+        /* DAB audio: a frame is a block, lost frame sync a transport error */
+        mp2processor_t *mp2 = sds->mp2processor;
+        atomic_add(&mmi->tii_stats.te, mp2->statLostSync);
+        if (mp2->statFrames) {
+            tvh_mutex_lock(&mmi->tii_stats_mutex);
+            mmi->tii_stats.tc_block += mp2->statFrames;
+            tvh_mutex_unlock(&mmi->tii_stats_mutex);
+        }
+        mp2->statFrames = mp2->statLostSync = 0;
+    }
+    if (sds->mot) {
+        /* data (EPG): uncorrectable FEC rows, lost packets */
+        const dab_mot_stats_t *st = dab_mot_decoder_stats(sds->mot);
+        atomic_add(&mmi->tii_stats.unc, st->fec_rows_failed - sds->motStats.fec_rows_failed);
+        atomic_add(&mmi->tii_stats.cc, st->continuity_errors - sds->motStats.continuity_errors);
+        sds->motStats = *st;
+    }
+}
+
+const	int16_t interleaveMap[] = { 0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15 };
+
+void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data);
+
+void    processSegment(sdr_dab_service_instance_t *sds, const int16_t *Data) {
+    int16_t i;
+
+    for (i = 0; i < sds->fragmentSize; i++) {
+        sds->tempX[i] = sds->interleaveData[(sds->interleaverIndex +
+            interleaveMap[i & 017]) & 017][i];
+        sds->interleaveData[sds->interleaverIndex][i] = Data[i];
+    }
+
+    sds->interleaverIndex = (sds->interleaverIndex + 1) & 0x0F;
+
+    //  only continue when de-interleaver is filled
+    if (sds->countforInterleaver <= 15) {
+        sds->countforInterleaver++;
+        return;
+    }
+
+    protection_deconvolve(sds->protection, sds->tempX, sds->outV);
+    sds->decodedBytes += 3 * sds->subChannel->BitRate;
+
+    if (sds->mp4processor) {
+        mp4Processor_addtoFrame(sds->mp4processor, sds->outV);
+    } else if (sds->mp2processor) {
+        mp2Processor_addtoFrame(sds->mp2processor, sds->outV);
+    } else if (sds->mot) {
+        /* packet mode: one bit per byte to bytes */
+        for (i = 0; i < 3 * sds->subChannel->BitRate; i++) {
+            const uint8_t *b = &sds->outV[i * 8];
+            sds->packetBytes[i] = (b[0] << 7) | (b[1] << 6) | (b[2] << 5) | (b[3] << 4) |
+                                  (b[4] << 3) | (b[5] << 2) | (b[6] << 1) | b[7];
+        }
+        /* FIG 0/14 may arrive after the decoder was started */
+        dab_mot_decoder_set_fec(sds->mot, sds->subChannel->FEC_scheme == 1);
+        dab_mot_decoder_feed_packets(sds->mot, sds->packetBytes, 3 * sds->subChannel->BitRate);
+    }
+}
+
+void
+sdr_dab_service_instance_process_data(sdr_dab_service_instance_t *sds, const int16_t *v) {
+    if (sds->subChannel->Length * CUSize != sds->fragmentSize) {
+        /* the subchannel was reorganized, sizes do not fit anymore */
+        tvhtrace(LS_RTLSDR, "subchannel size changed (%d != %d)",
+            sds->subChannel->Length * CUSize, sds->fragmentSize);
+        return;
+    }
+    processSegment(sds, v);
+}
+
+static const int aac_sample_rates[16] =
+{
+  96000,
+  88200,
+  64000,
+  48000,
+  44100,
+  32000,
+  24000,
+  22050,
+  16000,
+  12000,
+  11025,
+  8000,
+  7350,
+  0,
+  0,
+  0
+};
+
+/* hand an audio frame to the subscribers of the service */
+static void
+sdr_dab_service_instance_deliver(sdr_dab_service_instance_t *sds,
+                                 streaming_component_type_t type,
+                                 const uint8_t *data, int len, int duration,
+                                 int channels, int sri, int ext_sri)
+{
+  dab_service_t *t = sds->dai_service;
+
+  tvh_mutex_lock(&t->s_stream_mutex);
+  service_set_streaming_status_flags((service_t *)t, TSS_PACKETS);
+  t->s_streaming_live |= TSS_LIVE;
+  if (streaming_pad_probe_type(&t->s_streaming_pad, SMT_PACKET)) {
+    th_pkt_t *pkt = pkt_alloc(type, data, len, sds->dts, sds->dts, sds->dts);
+    pkt->pkt_duration = duration;
+    pkt->a.pkt_keyframe = 1;
+    pkt->a.pkt_channels = channels;
+    pkt->a.pkt_sri = sri;
+    pkt->a.pkt_ext_sri = ext_sri;
+    pkt->pkt_componentindex = 1;
+
+    /* Forward packet */
+    streaming_service_deliver((service_t *)t, streaming_msg_create_pkt(pkt));
+
+    /* Decrease our own reference to the packet */
+    pkt_ref_dec(pkt);
+  }
+  tvh_mutex_unlock(&t->s_stream_mutex);
+}
+
+void sdr_dab_service_instance_dataCallback(const uint8_t* result, int16_t resultLength, const stream_parms* sp, void* context) {
+  sdr_dab_service_instance_t *sds = (sdr_dab_service_instance_t *) context;
+  int sr = aac_sample_rates[sp->CoreSrIndex];
+  /* DAB+ uses the 960 sample transform, so one AU covers 960 core samples */
+  int duration = 90000 * 960 / sr;
+  int channels;
+  switch (sp->mpegSurround) {
+  default:
+      tvhtrace(LS_RTLSDR, "Unrecognized mpeg_surround_config ignored");
+      //      not nice, but deliberate: fall through
+  case 0:
+      if (sp->sbrFlag && !sp->aacChannelMode && sp->psFlag)
+          channels = 2; /* Parametric stereo */
+      else
+          channels = 1 << sp->aacChannelMode;
+      break;
+
+  case 1:
+      channels = 6;
+      break;
+  }
+
+  if (resultLength > 0) {
+    tvhtrace(LS_RTLSDR, "mp4 callback len %d (duration %d, sr %d, sri %d, ext_sri %d, channels %d)", resultLength, duration, sr, sp->CoreSrIndex, sp->ExtensionSrIndex, channels);
+    /* stored + 1, zero means no SBR (see parser_latm.c) */
+    sdr_dab_service_instance_deliver(sds, SCT_MP4A, result, resultLength, duration,
+                                     channels, sp->CoreSrIndex,
+                                     sp->sbrFlag ? sp->ExtensionSrIndex + 1 : 0);
+  }
+  sds->dts += duration;
+}
+
+/* DAB (MPEG Layer II): a frame of 1152 samples, 24 ms at 48 kHz */
+void sdr_dab_service_instance_mp2Callback(const uint8_t* frame, int len, int sampleRate, int channels, void* context) {
+  sdr_dab_service_instance_t *sds = (sdr_dab_service_instance_t *) context;
+  int duration = 90000 * 1152 / sampleRate;
+  int sri;
+
+  sri = 0;
+  while (sri < 12 && aac_sample_rates[sri] != sampleRate)
+    sri++;
+  tvhtrace(LS_RTLSDR, "mp2 callback len %d (duration %d, sr %d, channels %d)",
+           len, duration, sampleRate, channels);
+  sdr_dab_service_instance_deliver(sds, SCT_MPEG2AUDIO, frame, len, duration,
+                                   channels, sri, 0);
+  sds->dts += duration;
+}

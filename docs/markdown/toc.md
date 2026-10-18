@@ -16,6 +16,7 @@ Web Interface Guide
   - [General](class/config)
   - [Users](class/access)
   - [DVB Inputs](dvbinputs)
+  - [DAB Inputs](dabinputs)
   - [Channel / EPG](class/channel)
   - [Stream](class/profile)
   - [Recording (Profiles/Timeshift)](class/dvrconfig)

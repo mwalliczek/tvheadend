@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 1004 264" width="1004" height="264" role="img" aria-label="getSamples block diagram">
+<style>
+svg { --bg: #fbfaf7; --fg: #1d1f24; --muted: #5d6270; --card: #ffffff; --line: #d9dbe1; --soft: #f1f2f5; --c-rf: #2f6fd6; --c-sync: #0f9488; --c-ofdm: #7c4dcc; --c-fec: #d9771a; --c-audio: #2e9a46; --c-out: #c23b5a; --c-rf-s: #e3edfb; --c-sync-s: #ddf3f0; --c-ofdm-s: #eee6fa; --c-fec-s: #fbeedd; --c-audio-s: #e2f4e6; --c-out-s: #f8e1e7; --code-bg: #f1f2f5; }
+@media (prefers-color-scheme: dark) { svg { --bg: #15171c; --fg: #e7e8ec; --muted: #a0a5b2; --card: #1d2027; --line: #343844; --soft: #252932; --c-rf: #6fa3ff; --c-sync: #3cc7b9; --c-ofdm: #b18cff; --c-fec: #ffa24d; --c-audio: #5fd17a; --c-out: #ff7d9a; --c-rf-s: #1c2a44; --c-sync-s: #143633; --c-ofdm-s: #2a2142; --c-fec-s: #3a2a17; --c-audio-s: #183320; --c-out-s: #3b1d26; --code-bg: #262a33; } }
+.bgcard { fill: var(--card); stroke: var(--line); }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; fill: var(--fg); }
+svg .t-m { fill: var(--muted); }
+svg .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+svg .ln { stroke: var(--line); fill: none; }
+svg .ax { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+svg .card { fill: var(--card); stroke: var(--line); }
+svg .soft { fill: var(--soft); }
+svg .f-rf { fill: var(--c-rf-s); stroke: var(--c-rf); } svg .f-sync { fill: var(--c-sync-s); stroke: var(--c-sync); }
+svg .f-ofdm { fill: var(--c-ofdm-s); stroke: var(--c-ofdm); } svg .f-fec { fill: var(--c-fec-s); stroke: var(--c-fec); }
+svg .f-audio { fill: var(--c-audio-s); stroke: var(--c-audio); } svg .f-out { fill: var(--c-out-s); stroke: var(--c-out); }
+svg .s-rf { fill: var(--c-rf); } svg .s-sync { fill: var(--c-sync); } svg .s-ofdm { fill: var(--c-ofdm); }
+svg .s-fec { fill: var(--c-fec); } svg .s-audio { fill: var(--c-audio); } svg .s-out { fill: var(--c-out); }
+svg .st-rf { stroke: var(--c-rf); fill: none; } svg .st-sync { stroke: var(--c-sync); fill: none; } svg .st-ofdm { stroke: var(--c-ofdm); fill: none; }
+svg .st-fec { stroke: var(--c-fec); fill: none; } svg .st-audio { stroke: var(--c-audio); fill: none; } svg .st-out { stroke: var(--c-out); fill: none; }
+svg .t-rf { fill: var(--c-rf); } svg .t-sync { fill: var(--c-sync); } svg .t-ofdm { fill: var(--c-ofdm); }
+svg .t-fec { fill: var(--c-fec); } svg .t-audio { fill: var(--c-audio); } svg .t-out { fill: var(--c-out); }
+svg .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg .b { font-weight: 700; }
+</style>
+<defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+    </marker>
+  </defs>
+<rect x="-12" y="-12" width="1004" height="264" rx="12" class="bgcard"/>
+
+  <g font-size="12">
+    <rect x="10" y="70" width="110" height="60" rx="8" class="f-rf"/><text x="65" y="96" text-anchor="middle" class="b">FIFO</text><text x="65" y="114" text-anchor="middle" class="t-m">uint8 I,Q</text>
+    <path d="M120 100 H160" class="arr"/>
+    <rect x="164" y="70" width="130" height="60" rx="8" class="f-sync"/><text x="229" y="96" text-anchor="middle" class="b">convTable[b]</text><text x="229" y="114" text-anchor="middle" class="t-m">(b−128)/128</text>
+    <path d="M294 100 H344" class="arr"/>
+    <circle cx="368" cy="100" r="22" class="f-sync"/><text x="368" y="106" text-anchor="middle" font-size="20" class="b">×</text>
+    <path d="M390 100 H440" class="arr"/>
+    <rect x="444" y="70" width="140" height="60" rx="8" class="f-sync"/><text x="514" y="96" text-anchor="middle" class="b">float _Complex v[]</text><text x="514" y="114" text-anchor="middle" class="t-m">to the demodulator</text>
+    <path d="M514 130 V170" class="arr"/>
+    <rect x="444" y="174" width="140" height="48" rx="8" class="card"/><text x="514" y="194" text-anchor="middle">level: Σ |re|+|im|</text><text x="514" y="210" text-anchor="middle" class="t-m">per block → sLevel</text>
+    <!-- oscillator -->
+    <rect x="290" y="160" width="156" height="66" rx="8" class="card"/>
+    <text x="368" y="180" text-anchor="middle" class="b">oscillator</text>
+    <text x="368" y="198" text-anchor="middle" class="mono t-m">e^(−j2π·f·n/2.048M)</text>
+    <text x="368" y="216" text-anchor="middle" class="t-m">f = coarse + fine</text>
+    <path d="M368 160 V124" class="arr"/>
+  </g>
+  <!-- optimization box -->
+  <g font-size="12">
+    <rect x="640" y="20" width="330" height="206" rx="10" class="f-audio"/>
+    <text x="656" y="44" class="b t-audio">Blocked oscillator (OSC_BLOCK = 256)</text>
+    <text x="656" y="68">The samples are mixed in blocks of 256:</text>
+    <text x="656" y="84">the phasor of each sample is the block start</text>
+    <text x="656" y="100">times a table of the step powers (oscTab).</text>
+    <text x="656" y="124">No sample depends on the one before it,</text>
+    <text x="656" y="140">so the FPU pipeline stays busy. The level</text>
+    <text x="656" y="156">is summed per block, the phasor is</text>
+    <text x="656" y="172">renormalized once per block.</text>
+
+    <rect x="656" y="194" width="100" height="12" rx="3" class="s-audio"/><text x="762" y="204" font-size="11">1.73 ns per sample (x86)</text>
+  </g>
+  <!-- tiny phasor drawing -->
+  <g transform="translate(70,30)">
+
+  </g>
+
+</svg>
