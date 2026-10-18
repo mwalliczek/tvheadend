@@ -8,7 +8,7 @@ Contents                                                    | Description
 [Networks](class/dab_network)                               | Where you configure DAB networks
 [Ensembles](class/dab_ensemble)                             | Where you manage the ensembles (DAB multiplexes)
 [Services](class/dab_service)                               | Discovered radio service(s) management
-[Getting started](#getting-started)                         | How to receive DAB+ radio
+[Getting started](#getting-started)                         | How to receive DAB/DAB+ radio
 [Fast tuning](#fast-tuning)                                 | Cached reception parameters
 [Program guide (EPG)](#program-guide-epg-)                  | DAB service and programme information (SPI)
 [Stream status](#stream-status)                             | Meaning of the status columns for DAB
@@ -18,7 +18,7 @@ Contents                                                    | Description
 
 ## Overview
 
-This tab is where you configure/manage DAB+ (Digital Audio Broadcasting)
+This tab is where you configure/manage DAB and DAB+ (Digital Audio Broadcasting)
 radio reception: tuners, networks, ensembles and services. It is only
 shown when Tvheadend was built with RTL-SDR support.
 

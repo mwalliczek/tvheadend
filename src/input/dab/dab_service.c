@@ -156,7 +156,9 @@ const idclass_t dab_service_class =
       .type     = PT_INT,
       .id       = "ASCTy",
       .name     = N_("Audio Service Component Type"),
-      .desc     = N_("The type of the audio service component."),
+      .desc     = N_("The type of the audio service component (FIG 0/2): "
+                     "63 is DAB+ (HE-AAC), any other value classic DAB "
+                     "(MPEG Audio Layer II)."),
       .opts     = PO_RDONLY | PO_ADVANCED,
       .off      = offsetof(dab_service_t, ASCTy),
     },

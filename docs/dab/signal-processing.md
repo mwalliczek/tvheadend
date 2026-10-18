@@ -334,12 +334,12 @@ The Viterbi output is a sub‑channel bit stream: 24 × bitrate bits per CIF (17
 
 **Code:**
 
-- [`sdr_dab_service_instance.c`](../../src/input/dab/rtlsdr/sdr_dab_service_instance.c): `sdr_dab_service_instance_dataCallback · aac_sample_rates`
+- [`sdr_dab_service_instance.c`](../../src/input/dab/rtlsdr/sdr_dab_service_instance.c): `sdr_dab_service_instance_dataCallback (DAB+) · sdr_dab_service_instance_mp2Callback (DAB) · sdr_dab_service_instance_deliver · aac_sample_rates`
 - [`htsp_server.c`](../../src/htsp_server.c): `htsp_client_wants_ffmpeg_names`
-- [`dvr_rec.c`](../../src/dvr/dvr_rec.c): `dvr_rec_dab_muxer`
+- [`dvr_rec.c`](../../src/dvr/dvr_rec.c): `dvr_rec_dab_muxer` (records `.mp4a` (LATM) for DAB+, `.mp2` for DAB)
 - [`muxer_pass.c`](../../src/muxer/muxer_pass.c): `drops SMT_PACKET`
 
-**⏱ tvheadend: negligible (25–50 packets/s)** **the AAC decoding runs in the client**
+**⏱ tvheadend: negligible (25–50 packets/s)** **the AAC or MP2 decoding runs in the client**
 
 ## 12 · Where the time goes
 
