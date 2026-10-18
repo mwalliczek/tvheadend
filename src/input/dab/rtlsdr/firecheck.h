@@ -1,6 +1,13 @@
 #
 /* -*- c++ -*- */
 /*
+ * Copyright 2004,2010 Free Software Foundation, Inc. (GNU Radio)
+ * GNU General Public License version 3 or later, see firecheck.c.
+ *
+ * Taken in the form of dab-cmdline (Jan van Katwijk), https://github.com/JvanKatwijk/dab-cmdline
+ * (library/includes/backend/firecode-checker.h)
+ */
+/*
  * Copyright 2004,2010 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio

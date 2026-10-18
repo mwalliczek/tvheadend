@@ -4,6 +4,9 @@
  *    Jan van Katwijk (J.vanKatwijk@gmail.com)
  *    Lazy Chair Computing
  *
+ *    Derived from dab-cmdline, https://github.com/JvanKatwijk/dab-cmdline
+ *    (library/src/support/viterbi-spiral/viterbi-spiral.cpp)
+ *
  *    This file is part of the Qt-DAB
  *    Qt-DAB is free software; you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by

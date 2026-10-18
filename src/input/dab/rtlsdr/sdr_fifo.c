@@ -1,3 +1,10 @@
+/*
+ * Circular buffer of the sample FIFO.
+ *
+ * Derived from rtl-dab (src/dab_helper/dab_fifo.c) by David May,
+ * https://github.com/maydavid/rtl-dab
+ * GNU General Public License version 3 or later.
+ */
 #include "tvheadend.h"
 #include "sdr_fifo.h"
 

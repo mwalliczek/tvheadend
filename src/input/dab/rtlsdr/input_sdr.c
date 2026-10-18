@@ -1,5 +1,5 @@
 /*
-This file is part of rtl-dab
+This file is part of rtl-dab, https://github.com/maydavid/rtl-dab
 trl-dab is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -16,6 +16,14 @@ along with rtl-dab.  If not, see <http://www.gnu.org/licenses/>.
 
 david may 2012
 david.may.muc@googlemail.com
+
+The sample reader (getSamples, getSample: frequency correction of the
+samples and the long term signal level sLevel) follows the sample reader
+of dab-cmdline; the oscillator is rewritten (recursive, in blocks).
+dab-cmdline: Copyright (C) 2013 .. 2017 Jan van Katwijk (J.vanKatwijk@gmail.com),
+GNU General Public License version 2 or later,
+https://github.com/JvanKatwijk/dab-cmdline
+(library/src/ofdm/sample-reader.cpp)
 
 */
 

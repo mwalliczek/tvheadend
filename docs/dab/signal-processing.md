@@ -377,4 +377,6 @@ A second 72 kbit/s station on the same mux adds only its own symbols and its MSC
 
 ---
 
+Credits: most of the signal processing described here is derived from [dab-cmdline](https://github.com/JvanKatwijk/dab-cmdline) by Jan van Katwijk (GNU GPL version 2 or later), ported to C and adapted to tvheadend; the USB input started from [rtl-dab](https://github.com/maydavid/rtl-dab) by David May. See [DAB Inputs](../markdown/dabinputs.md#credits).
+
 Sources: `src/input/dab/` and `src/input/dab/rtlsdr/` of mwalliczek/tvheadend, master at `810edf950`. Pi figures measured with `top -H` and `perf` on a Raspberry Pi 3 (armv7l). x86 figures from a stand‑alone benchmark of the same sources (gcc ‑O2, Xeon 2.8 GHz VM). DAB parameters per ETSI EN 300 401 (mode I) and ETSI TS 102 563 (DAB+).

@@ -18,6 +18,9 @@
  * along with GNU Radio; see the file COPYING.  If not, write to
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
+ *
+ * Taken in the form of dab-cmdline (Jan van Katwijk), https://github.com/JvanKatwijk/dab-cmdline
+ * (library/src/backend/firecode-checker.cpp)
  */
 //
 //	This is a (partial) rewrite of the GNU radio code, for use
