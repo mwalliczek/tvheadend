@@ -3,6 +3,11 @@
 #define	__VITERBI_768__
 /*
  * 	Viterbi.h according to the SPIRAL project
+ *
+ *	Copyright (C) 2013 .. 2017 Jan van Katwijk (J.vanKatwijk@gmail.com),
+ *	GNU General Public License version 2 or later.
+ *	Derived from dab-cmdline, https://github.com/JvanKatwijk/dab-cmdline
+ *	(library/includes/support/viterbi-spiral/viterbi-spiral.h)
  */
  #include 	"tvheadend.h"
 #include	"viterbi-simd.h"

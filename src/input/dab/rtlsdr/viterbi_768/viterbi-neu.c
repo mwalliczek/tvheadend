@@ -4,6 +4,9 @@
  *    Jan van Katwijk (J.vanKatwijk@gmail.com)
  *    Lazy Chair Computing
  *
+ *    Derived from dab-cmdline, https://github.com/JvanKatwijk/dab-cmdline
+ *    (library/src/support/viterbi-handler.cpp)
+ *
  *    This file is part of DAB server
  *
  *    DAB server is free software; you can redistribute it and/or modify

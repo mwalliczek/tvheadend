@@ -4,6 +4,9 @@
  *    Jan van Katwijk (J.vanKatwijk@gmail.com)
  *    Lazy Chair Programming
  *
+ *    Derived from dab-cmdline, https://github.com/JvanKatwijk/dab-cmdline
+ *    (library/src/support/charsets.cpp)
+ *
  *    This file is part of the DAB-library
  *    DAB-library is free software; you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by

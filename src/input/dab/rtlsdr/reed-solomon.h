@@ -2,6 +2,9 @@
  *
  * Copyright 2002, Phil Karn, KA9Q
  * May be used under the terms of the GNU General Public License (GPL)
+ *
+ * Taken in the form of dab-cmdline (Jan van Katwijk), https://github.com/JvanKatwijk/dab-cmdline
+ * (library/includes/backend/reed-solomon.h, galois.h)
  */
 
 #ifndef	__REED_SOLOMON

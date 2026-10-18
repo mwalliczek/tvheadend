@@ -13,6 +13,7 @@ Contents                                                    | Description
 [Program guide (EPG)](#program-guide-epg-)                  | DAB service and programme information (SPI)
 [Stream status](#stream-status)                             | Meaning of the status columns for DAB
 [Debugging](#debugging)                                     | Trace subsystems
+[Credits](#credits)                                         | Origin of the signal processing code
 
 ---
 
@@ -137,3 +138,22 @@ audio frames get lost.
 
 The trace subsystems `rtlsdr` (reception) and `dabepg` (program guide)
 can be enabled in *Configuration -> Debugging*.
+
+---
+
+## Credits
+
+Most of the DAB signal processing is derived from
+[dab-cmdline](https://github.com/JvanKatwijk/dab-cmdline) by Jan van Katwijk
+(Lazy Chair Computing, GNU GPL version 2 or later), ported from C++ to C and
+adapted to tvheadend: frame synchronisation, phase reference, OFDM decoder,
+FIC handler and FIB processor, MSC handler, EEP/UEP depuncturing, the
+Viterbi decoders (with the SPIRAL kernels of Carnegie Mellon University),
+the DAB+ superframe handling (fire code and Reed-Solomon decoder, based on
+GNU Radio and Phil Karn's code) and the DAB character sets.
+
+The USB input and the sample FIFO started from
+[rtl-dab](https://github.com/maydavid/rtl-dab) by David May (GNU GPL
+version 3 or later).
+
+The source files name their origin in the copyright header.
