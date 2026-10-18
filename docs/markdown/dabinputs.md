@@ -23,9 +23,11 @@ radio reception: tuners, networks, ensembles and services. It is only
 shown when Tvheadend was built with RTL-SDR support.
 
 DAB is not transported in MPEG-TS, so DAB has its own set of networks,
-ensembles (the DAB equivalent of a mux) and services. The audio services
-are delivered as AAC (LATM) streams and can be mapped to channels like
-any other service.
+ensembles (the DAB equivalent of a mux) and services. DAB+ services are
+delivered as AAC (LATM) streams, classic DAB services as MPEG-1 Audio
+Layer II (MP2) streams; both can be mapped to channels like any other
+service. A streaming or recording profile that is limited to one audio
+type passes only services of that type.
 
 ---
 
@@ -121,9 +123,9 @@ Column                 | Meaning for DAB
 -----------------------|--------------------------------------------------
 Bandwidth (kb/s)       | Data rate of the decoded sub-channels (audio and EPG).
 BER                    | Channel bit error rate before the Viterbi decoder (FIC and sub-channels), measured since the last status update.
-PER                    | Share of DAB+ audio frames (AUs) with CRC error, i.e. lost audio.
+PER                    | Share of DAB+ audio frames (AUs) with CRC error, i.e. lost audio. Classic DAB (MP2) frames are counted, but not checked.
 Uncorrected Blocks     | Reed-Solomon code words that could not be corrected (DAB+ superframes, EPG packet FEC).
-Transport Errors       | Logical frames (24 ms) without DAB+ superframe sync.
+Transport Errors       | Logical frames (24 ms) without DAB+ superframe sync; for classic DAB (MP2), lost frame sync.
 Continuity Errors      | Lost EPG packets (continuity index).
 
 The counters (all but bandwidth and BER) add up until they are cleared.

@@ -324,6 +324,10 @@ The Viterbi output is a sub‑channel bit stream: 24 × bitrate bits per CIF (17
 
 **⏱ x86: whole stage 43 µs per CIF (bit packing, fire code, 9 RS code words, AU CRCs, LATM) → 0.17 ms per frame** **RS one code word ≈ 10 µs · fire code 19 ns**
 
+> **Classic DAB (MP2).** A service whose FIG 0/2 component type (ASCTy) is not 63 carries MPEG‑1 Audio Layer II (48 kHz) or MPEG‑2 LSF (24 kHz) frames back to back, with no superframe and no RS. `mp2Processor_addtoFrame` packs the bits into bytes, finds the frame headers (a header is trusted once the next frame starts right behind it) and hands out whole 1152‑sample frames as `SCT_MPEG2AUDIO`; the client decodes them. At 48 kHz one frame is exactly one CIF (3 × bitrate bytes).
+>
+> **Code:** [`mp2processor.c`](../../src/input/dab/mp2processor.c): `init_mp2processor · mp2Processor_addtoFrame · mp2_frame_length`
+
 ## 11 · Stage 8 · Into tvheadend, over HTSP, out of the speaker
 
 ![Output path](img/output-path.svg)
