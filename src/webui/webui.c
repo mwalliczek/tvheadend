@@ -2092,7 +2092,7 @@ hdhomerun_server_discover(http_connection_t *hc, const char *remain, void *opaqu
   const char *server_name = hdhomerun_get_server_name();
   const uint32_t deviceid = hdhomerun_get_deviceid();
 
-  tcp_get_str_from_ip(hc->hc_self, http_ip, sizeof(http_ip));
+  tcp_get_url_host_from_ip(hc->hc_self, http_ip, sizeof(http_ip));
 
   // The contents below for the discovery message are based on jkaberg/tvhProxy 
   htsmsg_t *msg = htsmsg_create_map();
@@ -2153,7 +2153,7 @@ hdhomerun_server_lineup(http_connection_t *hc, const char *remain, void *opaque)
     (config.chname_src ? CHANNEL_ENAME_SOURCES : 0);
   int is_first = 1;
 
-  tcp_get_str_from_ip(hc->hc_self, http_ip, sizeof(http_ip));
+  tcp_get_url_host_from_ip(hc->hc_self, http_ip, sizeof(http_ip));
   blank = tvh_gettext_lang(perm->aa_lang_ui, channel_blank_name);
   htsbuf_append_str(hq, "[");
   tvh_mutex_lock(&global_lock);
@@ -2249,7 +2249,7 @@ hdhomerun_server_device_xml(http_connection_t *hc, const char *remain, void *opa
   html_escape(model_name_escaped, model_name, sizeof(model_name_escaped));
 
   // The contents below for the discovery message are based on jkaberg/tvhProxy 
-  tcp_get_str_from_ip(hc->hc_self, http_ip, sizeof(http_ip));
+  tcp_get_url_host_from_ip(hc->hc_self, http_ip, sizeof(http_ip));
   htsbuf_qprintf(hq, "<root xmlns=\"urn:schemas-upnp-org:device-1-0\">"
                  "<specVersion>"
                  "<major>1</major>"
@@ -2486,7 +2486,7 @@ http_serve_file(http_connection_t *hc, const char *fname,
   ret = 0;
   if(!hc->hc_no_output) {
     while(content_len > 0) {
-      chunk = MIN(1024 * ((stats ? 128 : 1024) * 1024), content_len);
+      chunk = MIN(1024 * ((stats ? 1 : 1024) * 1024), content_len);
 #if defined(PLATFORM_LINUX)
       r = sendfile(hc->hc_fd, fd, NULL, chunk);
       if (r < 0) {
@@ -2775,14 +2775,40 @@ http_theme_css(http_connection_t *hc, const char *prefix,
 }
 
 /**
+ * Redirect to the translation catalog of a web UI in the user's
+ * language, or send an empty catalog when there is none
+ */
+static int
+http_redir_locale(http_connection_t *hc, const char *name)
+{
+  const char *lang;
+  char buf[256];
+
+  lang = tvh_gettext_get_lang(hc->hc_access->aa_lang_ui);
+  if (lang) {
+    snprintf(buf, sizeof(buf), "src/webui/static/intl/%s.%s.js.gz", name, lang);
+    if (!http_file_test(buf)) {
+      snprintf(buf, sizeof(buf), "/static/intl/%s.%s.js.gz", name, lang);
+      http_redirect(hc, buf, NULL, 0);
+      return 0;
+    }
+  }
+  snprintf(buf, sizeof(buf), "tvh_locale={};tvh_locale_lang='';");
+  http_send_begin(hc);
+  http_send_header(hc, 200, "text/javascript; charset=UTF-8", strlen(buf), 0, NULL, 10, 0, NULL, NULL);
+  tvh_write(hc->hc_fd, buf, strlen(buf));
+  http_send_end(hc);
+  return 0;
+}
+
+/**
  *
  */
 static int
 http_redir(http_connection_t *hc, const char *remain, void *opaque)
 {
-  const char *lang, *theme;
+  const char *theme;
   char *components[3];
-  char buf[256];
   int nc;
 
   if (!remain)
@@ -2792,23 +2818,10 @@ http_redir(http_connection_t *hc, const char *remain, void *opaque)
     return HTTP_STATUS_BAD_REQUEST;
 
   if (nc == 1) {
-    if (!strcmp(components[0], "locale.js")) {
-      lang = tvh_gettext_get_lang(hc->hc_access->aa_lang_ui);
-      if (lang) {
-        snprintf(buf, sizeof(buf), "src/webui/static/intl/tvh.%s.js.gz", lang);
-        if (!http_file_test(buf)) {
-          snprintf(buf, sizeof(buf), "/static/intl/tvh.%s.js.gz", lang);
-          http_redirect(hc, buf, NULL, 0);
-          return 0;
-        }
-      }
-      snprintf(buf, sizeof(buf), "tvh_locale={};tvh_locale_lang='';");
-      http_send_begin(hc);
-      http_send_header(hc, 200, "text/javascript; charset=UTF-8", strlen(buf), 0, NULL, 10, 0, NULL, NULL);
-      tvh_write(hc->hc_fd, buf, strlen(buf));
-      http_send_end(hc);
-      return 0;
-    }
+    if (!strcmp(components[0], "locale.js"))
+      return http_redir_locale(hc, "tvh");
+    if (!strcmp(components[0], "locale-vue.js"))
+      return http_redir_locale(hc, "tvh-vue");
     if (!strcmp(components[0], "theme.css")) {
       theme = access_get_theme(hc->hc_access);
       return http_theme_css(hc, "static/tvh.", ".css.gz", theme);

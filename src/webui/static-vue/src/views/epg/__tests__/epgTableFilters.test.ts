@@ -22,20 +22,26 @@ process.env.TZ = 'Europe/Berlin'
 
 import { describe, expect, it } from 'vitest'
 import {
+  autoRecMatchCountParams,
   buildAutoRecConf,
   buildClusterFetchFilter,
   buildClusterFilterByChannel,
   buildClusterFilterByDate,
   buildTitleSearchQueryParams,
   clusterKeyOf,
+  countActiveGlobalFilters,
   decideFilterDispatch,
   hasAnyAutoRecFilter,
   isTagFilterActive,
+  resolveAutoRecChannel,
   serverParamsFromFilters,
   timeWindowFilters,
+  uniqueChannelUuidByName,
+  withGlobalFiltersCleared,
   type BuildFiltersInput,
 } from '../epgTableFilters'
 import type { FilterDef } from '@/types/grid'
+import { buildDefaults } from '../epgViewOptions'
 
 /* Fixed reference times for deterministic tests.
  *   NOW = 2026-05-17 12:00:00 UTC = 1779364800
@@ -68,7 +74,7 @@ function inputDefaults(): BuildFiltersInput {
 function autoRecConfInputDefaults() {
   return {
     title: '',
-    channelName: '',
+    channelUuid: null as string | null,
     mode: 'title' as const,
     newOnly: false,
     genre: [] as number[],
@@ -169,6 +175,28 @@ describe('serverParamsFromFilters — empty / single-axis', () => {
       { field: 'channelName', type: 'string', value: 'bbc' },
     ])
     expect(out.params).toEqual({})
+  })
+
+  it('exact channel pick → exact `channel` param, no channelName regex', () => {
+    /* A channelName filter is a caseless, unanchored regex on the
+     * server: "CT 1" would also match "CT 1 HD". The exact pick
+     * must go out as the uuid, and wins over leftover funnel text. */
+    const out = serverParamsFromFilters({
+      ...inputDefaults(),
+      perColumn: { channel: 'uuid-ct1', channelName: 'CT 1' },
+    })
+    expect(out.filter).toEqual([])
+    expect(out.params).toEqual({ channel: 'uuid-ct1' })
+  })
+
+  it('exact channel pick composes with a tag and other axes', () => {
+    const out = serverParamsFromFilters({
+      ...inputDefaults(),
+      perColumn: { channel: 'uuid-ct1' },
+      newOnly: true,
+      tagFilter: { tag: 'tag-1' },
+    })
+    expect(out.params).toEqual({ channel: 'uuid-ct1', new: 1, channelTag: 'tag-1' })
   })
 
   it('per-column title is NOT included (routes through query mode)', () => {
@@ -374,13 +402,54 @@ describe('serverParamsFromFilters — combined axes', () => {
   })
 })
 
-describe('buildClusterFilterByChannel', () => {
-  it('appends cluster channelName to an empty global filter', () => {
-    const out = buildClusterFilterByChannel([], 'BBC One')
-    expect(out).toEqual([{ field: 'channelName', type: 'string', value: 'BBC One' }])
+describe('uniqueChannelUuidByName', () => {
+  const channels = [
+    { uuid: 'u-ct1', name: 'CT 1' },
+    { uuid: 'u-ct1hd', name: 'CT 1 HD' },
+    { uuid: 'u-dup-a', name: 'Dup' },
+    { uuid: 'u-dup-b', name: 'Dup' },
+    { uuid: 'u-noname' },
+  ]
+
+  it('returns the uuid of the one channel with exactly that name', () => {
+    expect(uniqueChannelUuidByName(channels, 'CT 1')).toBe('u-ct1')
   })
 
-  it('strips per-column channelName from global filter, appends cluster name', () => {
+  it('does not match on a substring or a different case', () => {
+    expect(uniqueChannelUuidByName(channels, 'CT')).toBeNull()
+    expect(uniqueChannelUuidByName(channels, 'ct 1')).toBeNull()
+  })
+
+  it('returns null when several channels share the name', () => {
+    expect(uniqueChannelUuidByName(channels, 'Dup')).toBeNull()
+  })
+
+  it('returns null for an unknown name or an empty list', () => {
+    expect(uniqueChannelUuidByName(channels, 'Nope')).toBeNull()
+    expect(uniqueChannelUuidByName([], 'CT 1')).toBeNull()
+  })
+})
+
+describe('buildClusterFilterByChannel', () => {
+  it('with a uuid: exact `channel` param, no channelName entry', () => {
+    const out = buildClusterFilterByChannel([], 'CT 1', 'u-ct1')
+    expect(out).toEqual({ filter: [], params: { channel: 'u-ct1' } })
+  })
+
+  it('without a uuid: the name escaped and anchored, never the raw regex', () => {
+    /* Raw "CT 1" would also match "CT 1 HD" on the server, and the
+     * cluster chip would show that inflated total. */
+    const out = buildClusterFilterByChannel([], 'A+B (Live)')
+    expect(out).toEqual({
+      filter: [{ field: 'channelName', type: 'string', value: String.raw`^A\+B \(Live\)$` }],
+      params: {},
+    })
+    const re = new RegExp(out.filter[0].value as string, 'i')
+    expect(re.test('A+B (Live)')).toBe(true)
+    expect(re.test('A+B (Live) HD')).toBe(false)
+  })
+
+  it('strips per-column channelName from global filter (cluster bound wins)', () => {
     /* Cluster bound wins over the per-column regex — the user
      * clicked a specific channel-cluster header, that channel
      * is the authoritative scope. */
@@ -388,11 +457,11 @@ describe('buildClusterFilterByChannel', () => {
       { field: 'channelName', type: 'string' as const, value: 'bbc' },
       { field: 'start', type: 'numeric' as const, value: String(NOW), comparison: 'lt' as const },
     ]
-    const out = buildClusterFilterByChannel(global, 'BBC One')
-    expect(out).toEqual([
+    const out = buildClusterFilterByChannel(global, 'BBC One', 'u-bbc1')
+    expect(out.filter).toEqual([
       { field: 'start', type: 'numeric', value: String(NOW), comparison: 'lt' },
-      { field: 'channelName', type: 'string', value: 'BBC One' },
     ])
+    expect(out.params).toEqual({ channel: 'u-bbc1' })
   })
 
   it('preserves time-window entries (start / stop) in the cluster filter', () => {
@@ -403,11 +472,10 @@ describe('buildClusterFilterByChannel', () => {
       { field: 'start', type: 'numeric' as const, value: String(NOW), comparison: 'lt' as const },
       { field: 'stop', type: 'numeric' as const, value: String(NOW), comparison: 'gt' as const },
     ]
-    const out = buildClusterFilterByChannel(global, 'BBC One')
-    expect(out).toEqual([
+    const out = buildClusterFilterByChannel(global, 'BBC One', 'u-bbc1')
+    expect(out.filter).toEqual([
       { field: 'start', type: 'numeric', value: String(NOW), comparison: 'lt' },
       { field: 'stop', type: 'numeric', value: String(NOW), comparison: 'gt' },
-      { field: 'channelName', type: 'string', value: 'BBC One' },
     ])
   })
 
@@ -416,9 +484,9 @@ describe('buildClusterFilterByChannel', () => {
       { field: 'duration', type: 'numeric' as const, value: '1800', comparison: 'gt' as const },
     ]
     const out = buildClusterFilterByChannel(global, 'BBC One')
-    expect(out).toEqual([
+    expect(out.filter).toEqual([
       { field: 'duration', type: 'numeric', value: '1800', comparison: 'gt' },
-      { field: 'channelName', type: 'string', value: 'BBC One' },
+      { field: 'channelName', type: 'string', value: '^BBC One$' },
     ])
   })
 
@@ -633,9 +701,14 @@ describe('buildAutoRecConf', () => {
     expect(conf.comment).toBe('News - Created from EPG query')
   })
 
-  it('channelName present → channel field', () => {
-    const conf = buildAutoRecConf({ ...confInputDefaults(), channelName: 'BBC One' })
-    expect(conf.channel).toBe('BBC One')
+  it('channelUuid present → channel field', () => {
+    const conf = buildAutoRecConf({ ...confInputDefaults(), channelUuid: 'u-bbc1' })
+    expect(conf.channel).toBe('u-bbc1')
+  })
+
+  it('channelUuid null → no channel field', () => {
+    const conf = buildAutoRecConf({ ...confInputDefaults(), channelUuid: null })
+    expect(conf.channel).toBeUndefined()
   })
 
   it('fulltext mode WITH title → fulltext flag set', () => {
@@ -722,7 +795,7 @@ describe('buildAutoRecConf', () => {
   it('every axis populated → comprehensive conf', () => {
     const conf = buildAutoRecConf({
       title: 'News',
-      channelName: 'BBC One',
+      channelUuid: 'u-bbc1',
       mode: 'mergetext',
       newOnly: true,
       genre: [12],
@@ -735,7 +808,7 @@ describe('buildAutoRecConf', () => {
       enabled: 1,
       comment: 'News - Created from EPG query',
       title: 'News',
-      channel: 'BBC One',
+      channel: 'u-bbc1',
       mergetext: 1,
       btype: 3,
       content_type: 12,
@@ -988,8 +1061,8 @@ describe('hasAnyAutoRecFilter', () => {
     expect(hasAnyAutoRecFilter({ ...defaults(), title: 'News' })).toBe(true)
   })
 
-  it('returns true when channelName alone is set', () => {
-    expect(hasAnyAutoRecFilter({ ...defaults(), channelName: 'BBC One' })).toBe(true)
+  it('returns true when channelUuid alone is set', () => {
+    expect(hasAnyAutoRecFilter({ ...defaults(), channelUuid: 'u-bbc1' })).toBe(true)
   })
 
   it('returns true when newOnly alone is set', () => {
@@ -1052,7 +1125,7 @@ describe('hasAnyAutoRecFilter', () => {
     const cases = [
       { ...defaults() },
       { ...defaults(), title: 'News' },
-      { ...defaults(), channelName: 'BBC One' },
+      { ...defaults(), channelUuid: 'u-bbc1' },
       { ...defaults(), newOnly: true },
       { ...defaults(), genre: [0x10] },
       { ...defaults(), genre: [0x10, 0x40] },
@@ -1137,16 +1210,24 @@ describe('buildClusterFetchFilter', () => {
       { field: 'channelName', type: 'string', value: 'old-regex' }, /* stripped */
       { field: 'genre', type: 'numeric', value: '5', comparison: 'eq' }, /* kept */
     ]
-    const out = buildClusterFetchFilter('channelName', 'BBC One', global)
+    const out = buildClusterFetchFilter('channelName', 'BBC One', global, 'u-bbc1')
     expect(out.ok).toBe(true)
     if (!out.ok) return
     /* Same shape as buildClusterFilterByChannel — pre-existing
-     * channelName stripped, cluster's bound appended, other
-     * fields preserved. */
+     * channelName stripped, cluster bound by the exact `channel`
+     * param, other fields preserved. */
     expect(out.filter).toEqual([
       { field: 'genre', type: 'numeric', value: '5', comparison: 'eq' },
-      { field: 'channelName', type: 'string', value: 'BBC One' },
     ])
+    expect(out.params).toEqual({ channel: 'u-bbc1' })
+  })
+
+  it('channelName mode without a uuid: anchored, escaped name', () => {
+    const out = buildClusterFetchFilter('channelName', 'CT 1', [])
+    expect(out.ok).toBe(true)
+    if (!out.ok) return
+    expect(out.filter).toEqual([{ field: 'channelName', type: 'string', value: '^CT 1$' }])
+    expect(out.params).toEqual({})
   })
 
   it('start mode: parses YYYY-MM-DD into day-bound numeric filters', () => {
@@ -1161,6 +1242,7 @@ describe('buildClusterFetchFilter', () => {
       { field: 'start', type: 'numeric', value: String(dayStart), comparison: 'gt' },
       { field: 'start', type: 'numeric', value: String(dayEnd), comparison: 'lt' },
     ])
+    expect(out.params).toEqual({})
   })
 
   it('start mode: preserves non-time global entries', () => {
@@ -1213,5 +1295,164 @@ describe('buildClusterFetchFilter', () => {
      * bounds. */
     const out = buildClusterFetchFilter('start', '2026-XX-15', [])
     expect(out.ok).toBe(false)
+  })
+})
+
+describe('resolveAutoRecChannel', () => {
+  const channels = [
+    { uuid: 'u-ct1', name: 'CT 1' },
+    { uuid: 'u-ct1hd', name: 'CT 1 HD' },
+  ]
+
+  it('no channel filter → any channel, nothing unsaved', () => {
+    expect(resolveAutoRecChannel({}, channels, '')).toEqual({
+      uuid: null,
+      label: '',
+      unsaved: false,
+    })
+  })
+
+  it('exact pick → its uuid, labelled by name', () => {
+    expect(resolveAutoRecChannel({ channel: 'u-ct1' }, channels, 'CT 1')).toEqual({
+      uuid: 'u-ct1',
+      label: 'CT 1',
+      unsaved: false,
+    })
+  })
+
+  it('funnel text that is exactly one channel name → that uuid', () => {
+    expect(resolveAutoRecChannel({ channelName: 'CT 1' }, channels, '')).toEqual({
+      uuid: 'u-ct1',
+      label: 'CT 1',
+      unsaved: false,
+    })
+  })
+
+  it('funnel text that is a partial name or regex → unsaved, no channel', () => {
+    /* The Table lists every channel matching "CT" but the rule can
+     * hold only one. The server would try the text as a name, fail,
+     * clear the channel and record on every channel. */
+    for (const text of ['CT', 'ct 1', 'CT 1.*']) {
+      const out = resolveAutoRecChannel({ channelName: text }, channels, '')
+      expect(out).toEqual({ uuid: null, label: text, unsaved: true })
+      expect(
+        hasAnyAutoRecFilter({ ...autoRecConfInputDefaults(), channelUuid: out.uuid }),
+      ).toBe(false)
+    }
+  })
+})
+
+describe('autoRecMatchCountParams', () => {
+  it('counts with the rule channel and no time window', () => {
+    const out = autoRecMatchCountParams({
+      ...autoRecConfInputDefaults(),
+      title: String.raw`News \(Late\)`,
+      channelUuid: 'u-ct1',
+    })
+    expect(out).toEqual({
+      start: 0,
+      limit: 0,
+      channel: 'u-ct1',
+      title: String.raw`News \(Late\)`,
+    })
+  })
+
+  it('carries every rule axis the server can count', () => {
+    const out = autoRecMatchCountParams({
+      ...autoRecConfInputDefaults(),
+      title: 'News',
+      mode: 'fulltext',
+      newOnly: true,
+      genre: [0x10],
+      durationMinMinutes: 30,
+      durationMaxMinutes: 120,
+      tagUuid: 'tag-1',
+    })
+    expect(out).toMatchObject({
+      start: 0,
+      limit: 0,
+      title: 'News',
+      fulltext: 1,
+      new: 1,
+      channelTag: 'tag-1',
+    })
+    expect(out.channel).toBeUndefined()
+    expect(JSON.parse(out.filter as string)).toEqual([
+      { field: 'duration', type: 'numeric', value: '1800', comparison: 'gt' },
+      { field: 'duration', type: 'numeric', value: '7200', comparison: 'lt' },
+      { field: 'genre', type: 'numeric', value: '16', comparison: 'eq' },
+    ])
+  })
+
+  it('leaves out a multi-genre selection the rule cannot hold', () => {
+    const out = autoRecMatchCountParams({ ...autoRecConfInputDefaults(), genre: [0x10, 0x20] })
+    expect(out.filter).toBeUndefined()
+  })
+
+  it('scope flags only ride with a title', () => {
+    const out = autoRecMatchCountParams({ ...autoRecConfInputDefaults(), mode: 'mergetext' })
+    expect(out).toEqual({ start: 0, limit: 0 })
+  })
+})
+
+describe('countActiveGlobalFilters', () => {
+  const defaults = buildDefaults(false, false)
+
+  it('is 0 at the defaults', () => {
+    expect(countActiveGlobalFilters(defaults, defaults)).toBe(0)
+  })
+
+  it('counts each narrowing axis once', () => {
+    const cases: Partial<typeof defaults>[] = [
+      { timeWindow: 'today' },
+      { genre: [0x10, 0x20] },
+      { newOnly: true },
+      { durationMinMinutes: 30 },
+      { durationMaxMinutes: 90 },
+      { tagFilter: { tag: 'tag-1' } },
+    ]
+    for (const c of cases) {
+      expect(countActiveGlobalFilters({ ...defaults, ...c }, defaults)).toBe(1)
+    }
+    expect(
+      countActiveGlobalFilters(Object.assign({}, defaults, ...cases), defaults),
+    ).toBe(cases.length)
+  })
+
+  it('ignores display options and grouping', () => {
+    const options = {
+      ...defaults,
+      groupField: 'channelName' as const,
+      progressDisplay: 'off' as const,
+      titleSearchMode: 'fulltext' as const,
+    }
+    expect(countActiveGlobalFilters(options, defaults)).toBe(0)
+  })
+})
+
+describe('withGlobalFiltersCleared', () => {
+  const defaults = buildDefaults(false, false)
+
+  it('resets every filter axis and keeps the rest', () => {
+    const options = {
+      ...defaults,
+      timeWindow: 'now' as const,
+      genre: [0x10],
+      newOnly: true,
+      durationMinMinutes: 30,
+      durationMaxMinutes: 90,
+      tagFilter: { tag: 'tag-1' },
+      groupField: 'start' as const,
+      columnVisibility: { summary: false },
+      titleSearchMode: 'mergetext' as const,
+    }
+    const out = withGlobalFiltersCleared(options, defaults)
+    expect(countActiveGlobalFilters(out, defaults)).toBe(0)
+    expect(out.groupField).toBe('start')
+    expect(out.columnVisibility).toEqual({ summary: false })
+    expect(out.titleSearchMode).toBe('mergetext')
+    /* No shared references with the defaults object. */
+    expect(out.genre).not.toBe(defaults.genre)
+    expect(out.tagFilter).not.toBe(defaults.tagFilter)
   })
 })

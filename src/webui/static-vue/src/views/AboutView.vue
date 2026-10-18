@@ -27,7 +27,7 @@
  * (`/static/img/...`) — same source the ExtJS About page
  * uses, so we share assets without re-vendoring.
  */
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { apiCall } from '@/api/client'
 import { useI18n } from '@/composables/useI18n'
 import { serverUrl } from '@/utils/base'
@@ -60,6 +60,54 @@ onMounted(async () => {
  * `build_timestamp` which freezes at compile time; the dynamic
  * version is closer to user expectation. */
 const currentYear = new Date().getFullYear()
+
+/* Readable names for the server's capability ids
+ * (`tvheadend_capabilities` in src/main.c). The raw id stays in the
+ * title. An id missing here shows as is, so a new capability is
+ * never hidden. */
+const CAPABILITY_LABELS: Record<string, string> = {
+  caclient: 'Conditional access clients',
+  libav: 'Transcoding (libav)',
+  satip_client: 'SAT>IP Client',
+  satip_server: 'SAT>IP Server',
+  timeshift: 'Timeshift',
+  trace: 'Trace logging',
+  tvadapters: 'TV adapters',
+}
+
+/* `caclient_advanced` mirrors a UI setting (config.caclient_ui), it
+ * is not something the build or the server can do. */
+const HIDDEN_CAPABILITIES = new Set(['caclient_advanced'])
+
+const capabilities = computed(() =>
+  (info.value?.capabilities ?? [])
+    .filter((id) => !HIDDEN_CAPABILITIES.has(id))
+    .map((id) => ({ id, label: CAPABILITY_LABELS[id] ? t(CAPABILITY_LABELS[id]) : id }))
+    .sort((a, b) => a.label.localeCompare(b.label)),
+)
+
+/* The TMDb and TheTVDB marks are dark artwork that disappears on the
+ * dark palettes. Use the white variants there, as the classic Access
+ * theme does (xtheme-access.css). `data-theme` always names a
+ * concrete palette, Auto is resolved before it is written. */
+const theme = ref(document.documentElement.dataset.theme ?? '')
+let themeObserver: MutationObserver | null = null
+onMounted(() => {
+  themeObserver = new MutationObserver(() => {
+    theme.value = document.documentElement.dataset.theme ?? ''
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+})
+onBeforeUnmount(() => themeObserver?.disconnect())
+
+const logoSuffix = computed(() =>
+  theme.value === 'dark' || theme.value === 'access' ? '_white' : '',
+)
+const tmdbLogo = computed(() => serverUrl(`static/img/tmdb${logoSuffix.value}.png`))
+const tvdbLogo = computed(() => serverUrl(`static/img/tvdb${logoSuffix.value}.png`))
 </script>
 
 <template>
@@ -84,16 +132,17 @@ const currentYear = new Date().getFullYear()
           <dt>{{ t('Version') }}</dt>
           <dd>{{ t('Tvheadend {0}', info.sw_version) }}</dd>
         </template>
-        <template v-if="info.capabilities && info.capabilities.length > 0">
+        <template v-if="capabilities.length > 0">
           <dt>{{ t('Capabilities') }}</dt>
           <dd>
-            <span
-              v-for="cap in [...info.capabilities].sort()"
-              :key="cap"
-              class="about__cap"
-            >
-              {{ cap }}
-            </span>
+            <!-- A real list: copied text comes out one item per line.
+                 role="list" keeps the semantics that list-style: none
+                 drops in Safari. -->
+            <ul class="about__caps" role="list">
+              <li v-for="cap in capabilities" :key="cap.id" class="about__cap" :title="cap.id">
+                {{ cap.label }}
+              </li>
+            </ul>
           </dd>
         </template>
       </dl>
@@ -118,33 +167,16 @@ const currentYear = new Date().getFullYear()
         <a href="https://lucide.dev" target="_blank" rel="noopener noreferrer">Lucide</a>
         {{ t('icons.') }}
       </p>
-      <!-- Classic UI stack — still in use during the dual-UI
-           coexistence period; some pages (About on the C
-           server, status views, etc.) still render via this
-           stack until the new UI fully replaces it. "Classic"
-           is the standing project term for the legacy ExtJS
-           interface. -->
+      <!-- The help pages embed FamFamFam Silk icons (static/icons
+           links into vendor/famfamsilk). The classic UI credits its
+           own stack on its about.html page. -->
       <p>
-        {{ t('Classic UI built with') }}
-        <a href="https://www.extjs.com/" target="_blank" rel="noopener noreferrer">ExtJS</a>.
-        {{ t('Icons from') }}
+        {{ t('Help page icons from') }}
         <a
           href="https://www.famfamfam.com/lab/icons/silk/"
           target="_blank"
           rel="noopener noreferrer"
-          >FamFamFam</a
-        >,
-        <a
-          href="https://www.google.com/get/noto/help/emoji/"
-          target="_blank"
-          rel="noopener noreferrer"
-          >Google Noto Color Emoji </a
-        >
-        <a
-          href="https://raw.githubusercontent.com/googlei18n/noto-emoji/master/LICENSE"
-          target="_blank"
-          rel="noopener noreferrer"
-          >{{ t('(Apache Licence v2.0)') }}</a
+          >FamFamFam Silk</a
         >.
       </p>
       <p>
@@ -156,10 +188,10 @@ const currentYear = new Date().getFullYear()
         -->
         {{ t('Tvheadend uses APIs from (but is not endorsed or certified by)') }}
         <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer">TMDb</a>
-        <img class="about__inline-logo" :src="serverUrl('static/img/tmdb.png')" alt="" />
+        <img class="about__inline-logo" :src="tmdbLogo" alt="" />
         {{ t('and') }}
         <a href="https://thetvdb.com" target="_blank" rel="noopener noreferrer">TheTVDB.com</a>
-        <img class="about__inline-logo" :src="serverUrl('static/img/tvdb.png')" alt="" />.
+        <img class="about__inline-logo" :src="tvdbLogo" alt="" />.
       </p>
     </section>
 
@@ -244,9 +276,16 @@ const currentYear = new Date().getFullYear()
   color: var(--tvh-text);
 }
 
+.about__caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .about__cap {
-  display: inline-block;
-  margin: 0 4px 4px 0;
   padding: 2px 8px;
   font-size: var(--tvh-text-sm);
   background: var(--tvh-bg-page);

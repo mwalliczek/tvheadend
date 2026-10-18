@@ -2235,10 +2235,18 @@ onBeforeUnmount(() => {
 }
 
 .ifld-row__counter--warn {
-  color: var(--tvh-warning, var(--tvh-error));
+  color: var(--tvh-warning-text);
 }
 
 @media (max-width: 767px) {
+  .ifld-row__error,
+  .ifld-row__counter {
+    margin-left: 0;
+  }
+}
+
+/* Same once the rows stack in a narrow form (ifld.css). */
+@container (max-width: 399px) {
   .ifld-row__error,
   .ifld-row__counter {
     margin-left: 0;

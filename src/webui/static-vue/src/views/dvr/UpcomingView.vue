@@ -16,11 +16,21 @@
  *                    `title` field carries).
  *   - `channelname`  flat string. `channel` is a UUID reference.
  *   - `start`/`stop` Unix epoch seconds — formatted client-side.
- *                    (ExtJS sorts on `start_real`, which differs from
- *                    `start` by `start_extra` padding; the plain
+ *                    The grid sorts on `start`. (ExtJS shows and
+ *                    sorts on `start_real`, which differs from
+ *                    `start` by the `start_extra` padding; the plain
  *                    start time is close enough for sorting purposes
- *                    and is what the grid endpoint returns directly.)
- *   - `sched_status` "scheduled" / "recording" / etc. Plain string.
+ *                    and it is the column the user can see.) The
+ *                    padded `start_real` / `stop_real` pair is
+ *                    hidden by default, one start/stop pair is
+ *                    enough on a list of scheduled entries.
+ *   - `sched_status` state token ("scheduled", "recording",
+ *                    "recordingError", …, `dvr_db.c:704-735`), not
+ *                    display text. Drawn as the leading state icon
+ *                    (DvrStateCell).
+ *   - `status`       the server's localized text for the entry
+ *                    ("Waiting for stream", no free adapter, …).
+ *                    Its own column, and the state icon's label.
  *
  * Dedup-skipped reruns: hidden by default (`duplicates=0`, mirroring
  * the ExtJS grid at `dvr.js:508` — the server includes them unless
@@ -53,6 +63,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import IdnodeGrid from '@/components/IdnodeGrid.vue'
+import { useIdnodeClassStore } from '@/stores/idnodeClass'
 import ActionMenu from '@/components/ActionMenu.vue'
 import IdnodeEditor from '@/components/IdnodeEditor.vue'
 import EpgRelatedDialog from '@/components/EpgRelatedDialog.vue'
@@ -63,7 +74,7 @@ import type { BaseRow, GlobalFilterSpec } from '@/types/grid'
 import type { ActionDef } from '@/types/action'
 import { useBulkAction } from '@/composables/useBulkAction'
 import { useEditorMode } from '@/composables/useEditorMode'
-import { DVR_FIELDS, DVR_GROUPABLE_FIELDS } from './dvrFieldDefs'
+import { DVR_FIELDS, DVR_GROUPABLE_FIELDS, withServerPriEnum } from './dvrFieldDefs'
 import { adminAwareEditList, buildAddEditDeleteActions } from './dvrToolbarHelpers'
 import { useI18n } from '@/composables/useI18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
@@ -139,6 +150,13 @@ function rowClassFor(row: BaseRow): string | undefined {
   return isSkipped(row) ? 'upcoming__row--skipped' : undefined
 }
 
+/* A skipped rerun's server status still says "Scheduled for
+ * recording" — name it honestly (classic msgid, translations ride
+ * along) when the toggle reveals such rows. Empty for other rows. */
+function skippedLabel(row: BaseRow): string {
+  return isSkipped(row) ? t('Will be skipped') : ''
+}
+
 /*
  * Column set roughly matches the ExtJS Upcoming view's `list` (see
  * `src/webui/static/app/dvr.js` `tvheadend.dvr_upcoming`). Server
@@ -153,9 +171,16 @@ function rowClassFor(row: BaseRow): string | undefined {
  * `minVisible: 'desktop'` default here — these fields are
  * diagnostic-only on Upcoming since the recording hasn't
  * happened yet. They're more meaningful on Finished, where
- * they reflect the actual recording extents.
+ * they reflect the actual recording extents. start_real and
+ * stop_real are also hidden by default (the server does not
+ * flag them hidden), so the grid does not show two start/stop
+ * pairs side by side. The column picker brings them back.
  */
 const cols: ColumnDef[] = [
+  /* Leading recording-state icon (see DVR_FIELDS.sched_status).
+   * `format` names a skipped rerun; other rows fall through to
+   * their `status` text as the icon's label. */
+  { field: 'sched_status', ...DVR_FIELDS.sched_status, format: (_v, row) => skippedLabel(row) },
   /* Basic */
   { field: 'enabled', ...DVR_FIELDS.enabled, editable: true },
   { field: 'disp_title', ...DVR_FIELDS.disp_title, format: kodiFmt, editable: true },
@@ -175,25 +200,20 @@ const cols: ColumnDef[] = [
   { field: 'start', ...DVR_FIELDS.start, phoneFullWidth: true },
   { field: 'stop', ...DVR_FIELDS.stop },
   { field: 'duration', ...DVR_FIELDS.duration },
-  /* `sched_status` stays desktop-only — it's server-flagged
-   * advanced and phone-mode pins the level to basic, so a
-   * phone-promotion would silently drop via the level filter
-   * anyway. Phone cards intentionally surface basic-level
-   * fields only. */
+  /* Localized status text. Says why an entry is not recording
+   * yet (waiting for stream, no free adapter, no access), which
+   * Classic's Upcoming grid leaves to the icon's details dialog. */
   {
-    field: 'sched_status',
-    ...DVR_FIELDS.sched_status,
-    /* A skipped rerun's server status still says "Scheduled for
-     * recording" — override with the honest label (classic msgid,
-     * translations ride along) when the toggle reveals such rows. */
-    format: (v, row) => (isSkipped(row) ? t('Will be skipped') : String(v ?? '')),
+    field: 'status',
+    ...DVR_FIELDS.status,
+    format: (v, row) => skippedLabel(row) || String(v ?? ''),
   },
   { field: 'comment', ...DVR_FIELDS.comment, editable: true },
 
   /* Advanced — server's PO_ADVANCED flag will gate visibility on basic users */
   { field: 'pri', ...DVR_FIELDS.pri, editable: true },
-  { field: 'start_real', ...DVR_FIELDS.start_real, minVisible: 'desktop' },
-  { field: 'stop_real', ...DVR_FIELDS.stop_real, minVisible: 'desktop' },
+  { field: 'start_real', ...DVR_FIELDS.start_real, minVisible: 'desktop', hiddenByDefault: true },
+  { field: 'stop_real', ...DVR_FIELDS.stop_real, minVisible: 'desktop', hiddenByDefault: true },
   { field: 'filesize', ...DVR_FIELDS.filesize, minVisible: 'desktop' },
   /* `config_name` (DVR Profile) is server-side writable for
    * editable entries (`dvr_entry_class_config_name_opts` —
@@ -220,6 +240,11 @@ const cols: ColumnDef[] = [
   { field: 'data_errors', ...DVR_FIELDS.data_errors },
   { field: 'copyright_year', ...DVR_FIELDS.copyright_year },
 ]
+
+/* Priority filter options from the class metadata, which the server
+ * localizes. See withServerPriEnum in dvrFieldDefs.ts. */
+const idnodeClass = useIdnodeClassStore()
+const gridCols = computed(() => withServerPriEnum(cols, idnodeClass.get('dvrentry')))
 
 /*
  * Each toolbar verb gets its own `useBulkAction` handle (one per
@@ -498,7 +523,7 @@ function buildActions(selection: BaseRow[], clearSelection: () => void): ActionD
     {
       id: 'prevrec',
       label: prevrec.inflight.value ? t('Toggling…') : t('Previously recorded'),
-      tooltip: t('Toggle the previously recorded state'),
+      tooltip: t('Toggle the previously recorded state.'),
       disabled: selection.length === 0 || prevrec.inflight.value || hasRecording(selection),
       onClick: () => prevrec.run(selection, clearSelection),
     },
@@ -525,11 +550,11 @@ function buildActions(selection: BaseRow[], clearSelection: () => void): ActionD
     ref="gridRef"
     endpoint="dvr/entry/grid_upcoming"
     help-page="class/dvrentry"
-    :columns="cols"
+    :columns="gridCols"
     store-key="dvr-upcoming"
     :filters="gridFilters"
     :row-class="rowClassFor"
-    :default-sort="{ key: 'start_real', dir: 'ASC' }"
+    :default-sort="{ key: 'start', dir: 'ASC' }"
     :virtual-scroller-options="{ itemSize: 36, lazy: false }"
     count-label="recordings"
     :groupable-fields="DVR_GROUPABLE_FIELDS"
@@ -554,7 +579,7 @@ function buildActions(selection: BaseRow[], clearSelection: () => void): ActionD
     :create-base="creatingBase"
     :level="editorLevel"
     :list="editorList"
-    :title="editingUuid ? t('Edit Recording') : t('Add Recording')"
+    :title="creatingBase ? t('Add Recording') : t('Edit Recording')"
     @close="closeEditor"
     @created="flipToEdit"
   />

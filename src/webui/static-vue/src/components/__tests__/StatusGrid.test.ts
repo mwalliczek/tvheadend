@@ -50,7 +50,10 @@ interface MockStore {
   error: Error | null
   isEmpty: boolean
   fetch: ReturnType<typeof vi.fn>
+  retain: ReturnType<typeof vi.fn>
 }
+
+const releaseSpy = vi.fn()
 
 let mockStore: MockStore
 
@@ -71,6 +74,7 @@ function makeStore(overrides: Partial<MockStore> = {}): MockStore {
     error: null,
     isEmpty: true,
     fetch: vi.fn(),
+    retain: vi.fn(() => releaseSpy),
     ...overrides,
   }
 }
@@ -123,6 +127,14 @@ describe('StatusGrid', () => {
   it('calls store.fetch on mount', () => {
     mountGrid()
     expect(mockStore.fetch).toHaveBeenCalledOnce()
+  })
+
+  it('holds the store Comet listener only while mounted', () => {
+    const wrapper = mountGrid()
+    expect(mockStore.retain).toHaveBeenCalledTimes(1)
+    expect(releaseSpy).not.toHaveBeenCalled()
+    wrapper.unmount()
+    expect(releaseSpy).toHaveBeenCalledTimes(1)
   })
 
   it('renders the error banner when the store has an error', () => {
@@ -318,5 +330,22 @@ describe('StatusGrid', () => {
     /* Toggling again removes it. */
     exposed.toggleSelect(a)
     expect(exposed.selection.map((r) => r.uuid)).not.toContain('a')
+  })
+
+  it('says the kept rows are from the last update when a refresh fails', () => {
+    mockStore = makeStore({
+      entries: [{ uuid: 'a', input: 'IPTV #1', bps: 1 }],
+      isEmpty: false,
+      error: new Error('API 500 Internal Server Error'),
+    })
+    const banner = mountGrid().find('.data-grid__error')
+    expect(banner.text()).toContain('Refresh failed: API 500 Internal Server Error.')
+    expect(banner.text()).toContain('The rows below are from the last successful update.')
+  })
+
+  it('keeps the plain load failure when there are no rows', () => {
+    mockStore = makeStore({ error: new Error('API 500 Internal Server Error') })
+    const banner = mountGrid().find('.data-grid__error')
+    expect(banner.text()).toBe('Failed to load: API 500 Internal Server Error')
   })
 })

@@ -29,8 +29,10 @@
  */
 import type { ColumnDef } from '@/types/column'
 import type { GroupableFieldDef } from '@/types/grid'
+import type { IdnodeClassMeta } from '@/types/idnode'
 import BooleanCell from '@/components/BooleanCell.vue'
 import DrillDownCell from '@/components/DrillDownCell.vue'
+import DvrStateCell from '@/components/DvrStateCell.vue'
 import EnumNameCell from '@/components/EnumNameCell.vue'
 import { getResolvedDeferredEnum } from '@/components/idnode-fields/deferredEnum'
 import { fmtDate, fmtGroupDate } from '@/utils/formatTime'
@@ -100,13 +102,18 @@ const CONTENT_TYPE_ENUM = {
 
 /* Inline option list for the DVR Priority enum (`pri` field).
  * Mirrors the server's `dvr_entry_class_pri_list` callback at
- * `src/dvr/dvr_db.c:3733-3742` — same order, same key→label
+ * `src/dvr/dvr_db.c:3768-3779` — same order, same key→label
  * pairing. Inline (not deferred) because the set is small,
  * bounded, and stable across the session.
  *
+ * These labels have no msgid in the web UI catalog, so they stay
+ * English. They are only the fallback until the class metadata
+ * arrives — see `withServerPriEnum` below, which swaps in the
+ * server's localized list.
+ *
  * `5 = DVR_PRIO_NOTSET` is intentionally absent: the server's
  * list callback hides it and any value of 5 is coerced to 6
- * (Default) on set (`dvr_db.c:3727-3728`). */
+ * (Default) on set (`dvr_db.c:3762-3763`). */
 const DVR_PRI_ENUM = [
   { key: 6, val: t('Default') },
   { key: 0, val: t('Important') },
@@ -115,6 +122,24 @@ const DVR_PRI_ENUM = [
   { key: 3, val: t('Low') },
   { key: 4, val: t('Unimportant') },
 ]
+
+/* Swap the inline priority options of a `pri` column for the
+ * class metadata's `pri` enum once that has loaded. The server
+ * localizes those labels (`dvr_entry_class_pri_list` builds them
+ * with `strtab2htsmsg(tab, 1, lang)`), which is what the cells
+ * already show through IdnodeGrid's metadata enum lookup. The
+ * header filter, its tooltip and the active-filter chip read
+ * `enumSource`, so without the swap they stayed English.
+ * dvrentry, dvrautorec and dvrtimerec all use the same list
+ * callback. Returns `cols` unchanged while metadata is missing. */
+export function withServerPriEnum(
+  cols: ColumnDef[],
+  meta: IdnodeClassMeta | null | undefined,
+): ColumnDef[] {
+  const serverEnum = meta?.props.find((p) => p.id === 'pri')?.enum
+  if (!Array.isArray(serverEnum) || serverEnum.length === 0) return cols
+  return cols.map((c) => (c.field === 'pri' ? { ...c, enumSource: serverEnum } : c))
+}
 
 /* ---- Formatters ---- */
 
@@ -135,11 +160,11 @@ const fmtSize = (v: unknown) => {
 /* Weekdays renderer for autorec / timerec. The C-side `weekdays`
  * field is PT_U32 with `islist: 1`, so it arrives as an array of
  * day numbers (1=Mon … 7=Sun, ISO 8601). All seven → "Every day";
- * empty/missing → empty string. English-only for now; vue-i18n via
- * the existing /locale.js infrastructure (ADR 0007) will swap the
- * day names for localised ones when wired. ExtJS uses
+ * empty/missing → empty string. The day names go through t(), so
+ * they come from the Vue UI catalog at /redir/locale-vue.js like
+ * every other string. ExtJS uses
  * `tvheadend.weekdaysRenderer(st)` against the enum store; we
- * hard-code the names here and revisit when i18n lands. */
+ * hard-code the English names here as the msgids. */
 const fmtWeekdays = (v: unknown) => {
   if (!Array.isArray(v) || v.length === 0) return ''
   if (v.length === 7) return t('Every day')
@@ -278,18 +303,25 @@ export const DVR_FIELDS = {
   stop_real: { sortable: true, format: fmtDate, minVisible: 'desktop', width: 170 },
   duration: { sortable: true, format: fmtDuration, minVisible: 'desktop', phoneOrder: 4, width: 100 },
 
-  /* Schedule and operational status. `phoneOrder: 99` parks
-   * `sched_status` and the failure-reason `status` at the very
-   * end of the secondary list so consumers that promote either
-   * to phone-visible (UpcomingView for sched_status, FailedView
-   * for status) get them as the trailing odd-positioned secondary
-   * — i.e. a full-width row at the bottom of the card. */
+  /* Recording state icon (DvrStateCell), the leading column of
+   * the four dvr_entry list views, like Classic's per-row
+   * `sched_status` icon (`dvr.js` dvrRowActions). The value is a
+   * raw token (`dvr_db.c:704-735`), so the cell draws an icon
+   * named by the row's localized `status` text. The server flags
+   * the property PO_HIDDEN, which the grid would honour, hence
+   * `hiddenByDefault: false`; the column picker can still hide it.
+   * Icon-only header: the picker and the header tooltip use the
+   * server caption. Not sortable or filterable on raw tokens.
+   * Desktop-only, like the EPG Table's state column: an icon-only
+   * phone-card field would pair with the promoted `status` text
+   * on Failed and halve it. */
   sched_status: {
-    sortable: true,
-    filterType: 'string',
+    hideHeaderLabel: true,
+    sortable: false,
     minVisible: 'desktop',
-    phoneOrder: 99,
-    width: 130,
+    hiddenByDefault: false,
+    width: 44,
+    cellComponent: DvrStateCell,
   },
   pri: {
     sortable: true,
@@ -331,10 +363,12 @@ export const DVR_FIELDS = {
   errors: { sortable: true, filterType: 'numeric', minVisible: 'desktop', width: 100 },
   data_errors: { sortable: true, filterType: 'numeric', minVisible: 'desktop', width: 100 },
 
-  /* Failure reason text — shown on the Failed tab. `phoneOrder:
-   * 99` parks it at the end of any phone-visible secondary set
-   * so it lands as the full-width trailer when FailedView
-   * promotes it to `minVisible: 'phone'`. */
+  /* Status text (localized by the server, PO_LOCALE) — the
+   * failure reason on Failed / Removed, and on Upcoming the
+   * current state ("Waiting for stream", no free adapter, …).
+   * `phoneOrder: 99` parks it at the end of any phone-visible
+   * secondary set so it lands as the full-width trailer when
+   * FailedView promotes it to `minVisible: 'phone'`. */
   status: {
     sortable: true,
     filterType: 'string',

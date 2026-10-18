@@ -46,12 +46,13 @@ import { useBulkAction } from '@/composables/useBulkAction'
 import { useI18n } from '@/composables/useI18n'
 import PlayCell from '@/components/PlayCell.vue'
 import { buildAddEditDeleteActions } from '../dvr/dvrToolbarHelpers'
+import { formatMuxFrequency } from './muxFrequency'
 
 const { t } = useI18n()
 
 /* "Hide" filter — three-option dropdown surfaced in the
  * GridSettingsMenu (above View level). Mirrors the legacy ExtJS
- * picklist (`idnode.js:1992-2020`) and feeds the server's
+ * picklist (`idnode.js:1998-2026`) and feeds the server's
  * `hidemode` param (`api/api_mpegts.c:236-252`). The keys + the
  * mapping rules are hardcoded both in ExtJS and the server's
  * `if (!strcmp(s, "all"))` branches; if a future tvheadend release
@@ -66,7 +67,13 @@ const { t } = useI18n()
  *     themselves disabled, even when their network is enabled.
  *     Strictest filter.
  *   - 'none'    (server `hide=0`): show everything regardless of
- *     network or mux enabled state. Useful for debugging. */
+ *     network or mux enabled state. Useful for debugging.
+ *
+ * Classic labels the default "Inactive services" on both grids.
+ * Muxes are not services, so the default reads "Disabled
+ * networks" here, which is what it hides. The default already
+ * hides rows, so `inactiveValue` makes the Filters summary say so
+ * instead of "None". */
 const hideMode = ref<'default' | 'all' | 'none'>('default')
 
 const filters = computed<GlobalFilterSpec[]>(() => [
@@ -75,11 +82,12 @@ const filters = computed<GlobalFilterSpec[]>(() => [
     key: 'hidemode',
     label: t('Hide'),
     options: [
-      { value: 'default', label: t('Parent disabled') },
+      { value: 'default', label: t('Disabled networks') },
       { value: 'all', label: t('All') },
       { value: 'none', label: t('None') },
     ],
     current: hideMode.value,
+    inactiveValue: 'none',
   },
 ])
 
@@ -102,9 +110,16 @@ function onFilterChange(key: string, value: string) {
  * `mpegts_mux_class`'s prop table. Server's `network` field
  * already resolves to the network NAME (the parent's
  * `network_name` getter); the raw UUID is on `network_uuid` for
- * any future cross-reference. Per-subclass fields like
- * polarisation only render meaningfully on the relevant mux
- * subclass; rows from other subclasses leave the cell empty. */
+ * any future cross-reference.
+ *
+ * The tuning columns (frequency, symbolrate, constellation,
+ * modulation, polarisation) exist only on the mux subclasses
+ * (`src/input/mpegts/mpegts_mux_dvb.c`), so the `mpegts_mux`
+ * metadata has no caption for them and the view labels them.
+ * Each is empty on rows of a subclass without the field:
+ * cable and terrestrial muxes carry constellation, DVB-S and
+ * ATSC-T muxes carry modulation, only DVB-S carries
+ * polarisation, and IPTV muxes carry none of them. */
 /* Polymorphic class — `mpegts_mux` is abstract; subclasses
  * (DVB-T/C/S/ATSC/IPTV mux classes) carry the
  * subclass-specific fields like satellite parameters or IPTV
@@ -119,8 +134,9 @@ function onFilterChange(key: string, value: string) {
 /* Phone-card: mux name as bold headline; enabled + network as
  * the 2-up identifier; scan_state as full-width trailer (the
  * "is this mux being scanned right now" cue). Tuning specifics
- * (frequency / modulation / polarisation) + svc/chn counts stay
- * desktop-only — diagnostic detail behind a tap. */
+ * (frequency / symbol rate / modulation / polarisation) +
+ * svc/chn counts stay desktop-only — diagnostic detail behind
+ * a tap. */
 const cols: ColumnDef[] = [
   /* Per-row Play icon. Synthetic column — matches Classic's
    * leftmost Play column on Muxes (`mpegts.js:118-131`).
@@ -181,9 +197,48 @@ const cols: ColumnDef[] = [
     phoneRole: 'primary',
     editable: true,
   },
-  { field: 'frequency', sortable: true, filterType: 'numeric', width: 130, editable: true },
-  { field: 'modulation', sortable: true, filterType: 'string', width: 120, editable: true },
-  { field: 'polarisation', sortable: true, filterType: 'string', width: 110, editable: true },
+  /* Hz or kHz depending on the subclass, see muxFrequency.ts. */
+  {
+    field: 'frequency',
+    label: t('Frequency'),
+    sortable: true,
+    filterType: 'numeric',
+    width: 150,
+    format: formatMuxFrequency,
+    editable: true,
+  },
+  {
+    field: 'symbolrate',
+    label: t('Symbol rate (Sym/s)'),
+    sortable: true,
+    filterType: 'numeric',
+    width: 180,
+    editable: true,
+  },
+  {
+    field: 'constellation',
+    label: t('Constellation'),
+    sortable: true,
+    filterType: 'string',
+    width: 150,
+    editable: true,
+  },
+  {
+    field: 'modulation',
+    label: t('Modulation'),
+    sortable: true,
+    filterType: 'string',
+    width: 120,
+    editable: true,
+  },
+  {
+    field: 'polarisation',
+    label: t('Polarization'),
+    sortable: true,
+    filterType: 'string',
+    width: 130,
+    editable: true,
+  },
   {
     field: 'scan_state',
     sortable: true,
@@ -302,7 +357,7 @@ function buildActions(selection: BaseRow[], clearSelection: () => void): ActionD
     :parent-scoped="creatingParentScope"
     :level="editorLevel"
     :list="editorList"
-    :title="editingUuid ? t('Edit Mux') : t('Add Mux')"
+    :title="creatingBase ? t('Add Mux') : t('Edit Mux')"
     @close="closeEditor"
     @created="flipToEdit"
   />

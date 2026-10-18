@@ -25,6 +25,7 @@ import BandwidthChartView from '@/components/BandwidthChartView.vue'
 import { ChartLine } from 'lucide-vue-next'
 import type { ColumnDef } from '@/types/column'
 import { fmtDate } from '@/utils/formatTime'
+import { toBitsPerSecond } from '@/utils/formatBitrate'
 import { ref, watch } from 'vue'
 import { useI18n } from '@/composables/useI18n'
 
@@ -35,13 +36,18 @@ const fmtHexId = (v: unknown) => {
   return ('0000000' + v.toString(16).toUpperCase()).slice(-8)
 }
 
+/* `in` / `out` are bytes per second (ths_bytes_in_avg /
+ * ths_bytes_out_avg at subscriptions.c:1094-1095). Convert to kbit/s
+ * with the same *8 the bandwidth chart applies to these rows
+ * (units="bytes") so the column and the chart agree — ExtJS divides
+ * by 125 for the same unit (status.js:75). */
 const fmtKbps = (v: unknown) =>
-  typeof v === 'number' ? Math.round(v / 1024).toString() : ''
+  typeof v === 'number' ? Math.round(toBitsPerSecond(v, 'bytes') / 1000).toString() : ''
 
 const fmtPids = (v: unknown) => {
   if (!Array.isArray(v) || v.length === 0) return ''
   const sorted = [...(v as number[])].sort((a, b) => a - b)
-  if (sorted[sorted.length - 1] === 65535) return 'all'
+  if (sorted[sorted.length - 1] === 65535) return t('all')
   /* ", " (comma + space) so long lists have wrap points — see the
    * matching comment in StreamView.vue for why ExtJS's no-space form
    * doesn't translate cleanly to our DataTable. */
@@ -63,7 +69,7 @@ const fmtPids = (v: unknown) => {
  * desktop-only — diagnostics rather than headline information.
  */
 const cols: ColumnDef[] = [
-  { field: 'id', label: t('Id'), sortable: true, minVisible: 'desktop', format: fmtHexId },
+  { field: 'id', label: t('ID'), sortable: true, minVisible: 'desktop', format: fmtHexId },
   { field: 'hostname', label: t('Hostname'), sortable: true, minVisible: 'desktop' },
   { field: 'username', label: t('Username'), sortable: true, minVisible: 'desktop' },
   {

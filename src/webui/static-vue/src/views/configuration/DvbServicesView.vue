@@ -15,7 +15,7 @@
  * Services are auto-discovered by the SI/SDT scanner — there is no
  * Add path. The editor handles edit (a small set of editable fields:
  * `enabled`, `auto`, channel mapping, `priority`, plus expert
- * overrides like `dvb_ignore_eit`, `charset`, `prefcapid_lock`,
+ * overrides like `dvb_eit_processing`, `charset`, `prefcapid_lock`,
  * etc.) and Delete is bulk-style.
  *
  * Toolbar actions: Edit, Map services (mode-by-selection label),
@@ -67,15 +67,19 @@ function openInfoDialog(row: BaseRow): void {
 
 /* "Hide" filter — three-option dropdown surfaced in the
  * GridSettingsMenu (above View level). Mirrors the legacy ExtJS
- * picklist (`idnode.js:1992-2020`) and feeds the server's
- * `hidemode` param (`api/api_mpegts.c:265-272`). For Services:
- *   - 'default' (server `hide=1`): hides unverified services +
- *     services on disabled networks. Sensible default — admins
- *     usually want only the validated, network-active rows.
+ * picklist (`idnode.js:1998-2026`), including its "Inactive
+ * services" label, and feeds the server's `hidemode` param
+ * (`api/api_mpegts.c:258-285`). For Services:
+ *   - 'default' (server `hide=1`): hides services on disabled
+ *     networks or disabled muxes, and unverified services.
+ *     Sensible default — admins usually want only the validated,
+ *     active rows.
  *   - 'all'     (server `hide=2`): also hides services that are
  *     themselves disabled. Strictest filter.
  *   - 'none'    (server `hide=0`): show everything. Useful when
- *     debugging discovery issues. */
+ *     debugging discovery issues.
+ * The default already hides rows, so `inactiveValue` makes the
+ * Filters summary say so instead of "None". */
 const hideMode = ref<'default' | 'all' | 'none'>('default')
 
 const filters = computed<GlobalFilterSpec[]>(() => [
@@ -84,11 +88,12 @@ const filters = computed<GlobalFilterSpec[]>(() => [
     key: 'hidemode',
     label: t('Hide'),
     options: [
-      { value: 'default', label: t('Parent disabled') },
+      { value: 'default', label: t('Inactive services') },
       { value: 'all', label: t('All') },
       { value: 'none', label: t('None') },
     ],
     current: hideMode.value,
+    inactiveValue: 'none',
   },
 ])
 
@@ -108,6 +113,7 @@ function onFilterChange(key: string, value: string) {
  *   - `service_class_auto_list`           (`service.c:131-140`)
  *   - `service_type_auto_list`            (`service.c:142-156`)
  *   - `mpegts_service_subtitle_procesing` (`mpegts_service.c:85-95`)
+ *   - `mpegts_service_eit_processing_list` (`mpegts_service.c:97-109`)
  *   - `mpegts_service_pref_capid_lock_list` (`mpegts_service.c:74-83`)
  */
 const AUTO_OPTIONS = [
@@ -129,6 +135,14 @@ const SUBTITLE_PROCESSING_OPTIONS = [
   { key: 1, val: t('Save in Description') },
   { key: 2, val: t('Append to Description') },
   { key: 3, val: t('Prepend to Description') },
+]
+const EIT_PROCESSING_OPTIONS = [
+  { key: 0, val: t('Default (use global setting)') },
+  { key: 1, val: t('None') },
+  { key: 2, val: t('Actual transport stream only') },
+  { key: 3, val: t('Other transport stream only') },
+  { key: 4, val: t('Either') },
+  { key: 5, val: t('Adaptive') },
 ]
 const PREFCAPID_LOCK_OPTIONS = [
   { key: 0, val: t('Off') },
@@ -316,11 +330,12 @@ const cols: ColumnDef[] = [
   { field: 'cridauth', sortable: true, filterType: 'string', width: 180, editable: true },
   { field: 'dvb_servicetype', sortable: true, filterType: 'numeric', width: 110, editable: true },
   {
-    field: 'dvb_ignore_eit',
+    field: 'dvb_eit_processing',
     sortable: true,
-    filterType: 'boolean',
-    width: 130,
-    cellComponent: BooleanCell,
+    filterType: 'enum',
+    width: 200,
+    cellComponent: EnumNameCell,
+    enumSource: EIT_PROCESSING_OPTIONS,
     editable: true,
   },
   {
@@ -391,19 +406,21 @@ const toast = useToastNotify()
 
 /* Service Mapper modal state. Opened with selection-based
  * preselect when one or more services are highlighted in the
- * grid; opened with no preselect when nothing is selected (the
- * dialog's services field falls through to whatever the server
- * has saved, usually empty). Mirrors Classic's
+ * grid; opened with every service preselected when nothing is
+ * selected (the server never loads a saved pick back, so an
+ * empty preselect would leave nothing to map). Mirrors Classic's
  * `mpegts.js:295-297` `mapall: service_mapper_all,
  * mapsel: service_mapper_sel`. */
 const mapperOpen = ref(false)
 const mapperPreselect = ref<Record<string, unknown> | null>(null)
+const mapperAll = ref(false)
 
 function onMapServices(selection: BaseRow[]) {
   const uuids = selection
     .map((r) => r.uuid)
     .filter((u): u is string => typeof u === 'string' && !!u)
   mapperPreselect.value = uuids.length > 0 ? { services: uuids } : null
+  mapperAll.value = uuids.length === 0
   mapperOpen.value = true
 }
 
@@ -443,7 +460,7 @@ async function runRemoveUnseen(type: 'pat' | 'all'): Promise<void> {
 }
 
 function mapServicesLabel(n: number): string {
-  if (n === 0) return t('Map services')
+  if (n === 0) return t('Map all services')
   return n === 1 ? t('Map 1 service') : t('Map {0} services', n)
 }
 
@@ -488,7 +505,7 @@ function buildActions(selection: BaseRow[], clearSelection: () => void): ActionD
       tooltip:
         selection.length > 0
           ? t('Open the Service Mapper preselected with the chosen services')
-          : t('Open the Service Mapper to start a new mapping job'),
+          : t('Open the Service Mapper preselected with every service'),
       onClick: () => onMapServices(selection),
     },
     /* Maintenance — nested submenu mirroring Classic's
@@ -559,6 +576,7 @@ function buildActions(selection: BaseRow[], clearSelection: () => void): ActionD
   <ServiceMapperDialog
     v-model:visible="mapperOpen"
     :preselect="mapperPreselect"
+    :map-all="mapperAll"
     @started="onMappingStarted"
   />
   <ServiceStreamsDialog

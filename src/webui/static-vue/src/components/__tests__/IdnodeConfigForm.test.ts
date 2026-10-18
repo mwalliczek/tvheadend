@@ -16,6 +16,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h } from 'vue'
 import IdnodeConfigForm from '../IdnodeConfigForm.vue'
 import { useAccessStore } from '@/stores/access'
+import { ApiError } from '@/api/errors'
 import { setupApiMockReset } from './__helpers__/idnodeEditorTestUtils'
 
 /* PrimeVue Select can't mount bare in happy-dom without the
@@ -104,6 +105,7 @@ async function mountWithParams(
     saveTooltip: string
     preselect: Record<string, unknown>
     alwaysDirty: boolean
+    saveDisabled: boolean
     mandatoryFields: ReadonlyArray<string>
   }> = {},
   meta?: { groups?: ReadonlyArray<Record<string, unknown>> }
@@ -797,6 +799,41 @@ describe('IdnodeConfigForm — alwaysDirty (trigger forms)', () => {
   })
 })
 
+describe('IdnodeConfigForm — saveDisabled', () => {
+  /* A trigger form can still have nothing to act on (Service
+   * Mapper with no service picked). `saveDisabled` lets the host
+   * hold Save back even with alwaysDirty. */
+  it('keeps Save disabled with alwaysDirty on', async () => {
+    const access = useAccessStore()
+    access.data = { admin: true, dvr: true, uilevel: 'basic' }
+
+    const wrapper = await mountWithParams(
+      [{ id: 'name', type: 'str', caption: 'Name', value: 'unchanged' }],
+      { alwaysDirty: true, saveDisabled: true },
+    )
+
+    const saveBtn = wrapper.find('.idnode-config-form__btn--save')
+    expect(saveBtn.attributes('disabled')).toBeDefined()
+  })
+
+  it('save() posts nothing while saveDisabled is set', async () => {
+    const access = useAccessStore()
+    access.data = { admin: true, dvr: true, uilevel: 'basic' }
+
+    const wrapper = await mountWithParams(
+      [{ id: 'name', type: 'str', caption: 'Name', value: 'unchanged' }],
+      { alwaysDirty: true, saveDisabled: true },
+    )
+
+    await (wrapper.vm as unknown as { save: () => Promise<void> }).save()
+    await flushPromises()
+
+    /* Only the initial load went out. */
+    expect(apiMock.mock.calls.length).toBe(1)
+    expect(wrapper.emitted('saved')).toBeFalsy()
+  })
+})
+
 describe('IdnodeConfigForm — saved emit', () => {
   /* Symmetric with `IdnodeEditor.vue`'s `saved` emit. Lets parent
    * views react to a successful save without sniffing a comet
@@ -838,6 +875,69 @@ describe('IdnodeConfigForm — saved emit', () => {
     await flushPromises()
 
     expect(wrapper.emitted('saved')).toBeFalsy()
+  })
+})
+
+describe('IdnodeConfigForm — save and load errors', () => {
+  const NAME_FIELD = [{ id: 'name', type: 'str', caption: 'Name', value: 'old' }]
+
+  async function failSave(wrapper: Awaited<ReturnType<typeof mountWithParams>>) {
+    await wrapper.find('input[type="text"]').setValue('new')
+    apiMock.mockRejectedValueOnce(
+      new ApiError(400, 'Bad Request', '{"error":"Invalid name"}'),
+    )
+    await wrapper.find('.idnode-config-form__btn--save').trigger('click')
+    await flushPromises()
+  }
+
+  it('keeps the form and the edit on screen when Save fails', async () => {
+    const access = useAccessStore()
+    access.data = { admin: true, dvr: true, uilevel: 'basic' }
+    const wrapper = await mountWithParams(NAME_FIELD)
+
+    await failSave(wrapper)
+
+    const input = wrapper.find('input[type="text"]')
+    expect(input.exists()).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe('new')
+    const banner = wrapper.find('.idnode-config-form__save-error')
+    expect(banner.exists()).toBe(true)
+    expect(banner.attributes('role')).toBe('alert')
+    expect(banner.text()).toContain('Invalid name')
+    /* The edit is still there, so Save stays available for a retry. */
+    expect(wrapper.find('.idnode-config-form__btn--save').attributes('disabled')).toBeUndefined()
+  })
+
+  it('Undo clears the save error and restores the loaded value', async () => {
+    const access = useAccessStore()
+    access.data = { admin: true, dvr: true, uilevel: 'basic' }
+    const wrapper = await mountWithParams(NAME_FIELD)
+
+    await failSave(wrapper)
+    const undo = wrapper.findAll('.idnode-config-form__btn').find((b) => b.text() === 'Undo')
+    await undo!.trigger('click')
+
+    expect(wrapper.find('.idnode-config-form__save-error').exists()).toBe(false)
+    expect((wrapper.find('input[type="text"]').element as HTMLInputElement).value).toBe('old')
+  })
+
+  it('offers Retry after a failed load and renders the form once it succeeds', async () => {
+    const access = useAccessStore()
+    access.data = { admin: true, dvr: true, uilevel: 'basic' }
+    apiMock.mockRejectedValueOnce(new Error('network down'))
+    const wrapper = mount(IdnodeConfigForm, {
+      props: { loadEndpoint: 'config/load', saveEndpoint: 'config/save' },
+      global: { stubs: { Select: SELECT_STUB } },
+    })
+    await flushPromises()
+    expect(wrapper.find('input[type="text"]').exists()).toBe(false)
+
+    apiMock.mockResolvedValueOnce({ entries: [{ params: NAME_FIELD }] })
+    await wrapper.find('.idnode-config-form__retry').trigger('click')
+    await flushPromises()
+
+    expect(apiMock).toHaveBeenLastCalledWith('config/load', { meta: 1 })
+    expect(wrapper.find('input[type="text"]').exists()).toBe(true)
   })
 })
 
