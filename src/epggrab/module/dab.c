@@ -78,7 +78,9 @@ int dab_epggrab_enabled(void)
 
 #define SCHED_SUBSCRIPTION  "epggrab"
 #define SCHED_TICK          5         /* s */
-#define SCHED_NO_EPG        30        /* s in sync without EPG component */
+#define SCHED_NO_EPG        120       /* s in sync without EPG component */
+#define SCHED_RECHECK       (7*86400) /* s: an ensemble without EPG is checked again */
+#define SCHED_RECONFIG      60        /* s after the last next configuration FIG */
 #define SCHED_NO_SIGNAL     60        /* s without FIC sync */
 #define SCHED_IDLE          120       /* s without a new object: complete */
 #define SCHED_WAIT_TUNER    3600      /* s to wait for a free tuner */
@@ -136,39 +138,59 @@ static void dab_epggrab_sched_stop(const char *reason)
   mtimer_disarm(&sched.tick);
 }
 
-/* queue all enabled ensembles which carry an EPG or were not checked yet */
+/* queue all enabled ensembles which carry an EPG, were not checked yet,
+   or were found without EPG more than SCHED_RECHECK ago */
 static void dab_epggrab_sched_start(const char *why)
 {
   dab_network_t *mn;
   dab_ensemble_t *mm;
-  int n = 0;
+  int n = 0, no_epg = 0, recheck = 0, disabled = 0;
+  time_t now = gclk();
 
   lock_assert(&global_lock);
-  if (!dab_epggrab_enabled() || dab_epggrab_sched_running())
+  if (!dab_epggrab_enabled()) {
+    tvhdebug(LS_DABEPG, "EPG grab (%s) not started: grabber disabled", why);
+    return;
+  }
+  if (dab_epggrab_sched_running())
     return;
   LIST_FOREACH(mn, &dab_network_all, mn_global_link)
     LIST_FOREACH(mm, &mn->mn_ensembles, mm_network_link)
       n++;
-  if (n == 0)
+  if (n == 0) {
+    tvhinfo(LS_DABEPG, "EPG grab (%s) not started: no DAB ensembles", why);
     return;
+  }
   sched.queue = calloc(n, sizeof(*sched.queue));
   sched.queue_len = 0;
   LIST_FOREACH(mn, &dab_network_all, mn_global_link) {
-    if (!mn->mn_enabled)
-      continue;
-    LIST_FOREACH(mm, &mn->mn_ensembles, mm_network_link)
-      if (mm->mm_is_enabled(mm) && mm->mm_epg != DAB_EPG_NO)
-        idnode_uuid_as_str(&mm->mm_id, sched.queue[sched.queue_len++]);
+    LIST_FOREACH(mm, &mn->mn_ensembles, mm_network_link) {
+      if (!mn->mn_enabled || !mm->mm_is_enabled(mm)) {
+        disabled++;
+        continue;
+      }
+      if (mm->mm_epg == DAB_EPG_NO) {
+        if (now - mm->mm_epg_checked < SCHED_RECHECK) {
+          no_epg++;
+          continue;
+        }
+        recheck++;
+      }
+      idnode_uuid_as_str(&mm->mm_id, sched.queue[sched.queue_len++]);
+    }
   }
   if (sched.queue_len == 0) {
     free(sched.queue);
     sched.queue = NULL;
+    tvhinfo(LS_DABEPG, "EPG grab (%s) not started: no ensemble to check "
+            "(%d without EPG, %d disabled)", why, no_epg, disabled);
     return;
   }
   sched.queue_pos = 0;
   sched.cur[0] = '\0';
   sched.run_start = mclk();
-  tvhinfo(LS_DABEPG, "EPG grab started (%s), %d ensembles", why, sched.queue_len);
+  tvhinfo(LS_DABEPG, "EPG grab started (%s), %d ensembles (%d checked again), "
+          "%d skipped without EPG", why, sched.queue_len, recheck, no_epg);
   mtimer_arm_rel(&sched.tick, dab_epggrab_sched_tick, NULL, sec2mono(1));
 }
 
@@ -263,8 +285,14 @@ static void dab_epggrab_sched_tick(void *aux)
   timeout = (dab_epggrab_mod->sched_timeout ?: 15) * 60;
   if (!has_epg) {
     if (sched.synced && now - sched.synced > sec2mono(SCHED_NO_EPG)) {
-      dab_ensemble_set_epg(mm, DAB_EPG_NO);
-      dab_epggrab_sched_done(mm, "skipped (no EPG)");
+      /* during an announced reconfiguration the service components may
+         be signalled for the next configuration only */
+      if (now - atomic_get_s64(&mm->mm_next_config) < sec2mono(SCHED_RECONFIG)) {
+        dab_epggrab_sched_done(mm, "skipped (reconfiguration announced)");
+      } else {
+        dab_ensemble_set_epg(mm, DAB_EPG_NO);
+        dab_epggrab_sched_done(mm, "skipped (no EPG)");
+      }
     } else if (!sched.synced && now - sched.start > sec2mono(SCHED_NO_SIGNAL)) {
       dab_epggrab_sched_done(mm, "skipped (no reception)");
     }
@@ -290,8 +318,11 @@ static void dab_epggrab_sched_cron_arm(void)
   time_t next;
 
   gtimer_disarm(&sched.cron_timer);
-  if (sched.cron == NULL)
+  if (sched.cron == NULL) {
+    tvhinfo(LS_DABEPG, "no EPG grab time configured: the EPG is received "
+            "only while a DAB service is used");
     return;
+  }
   if (cron_multi_next(sched.cron, gclk(), &next)) {
     tvhwarn(LS_DABEPG, "EPG grab cron config invalid");
     return;

@@ -112,7 +112,15 @@ subscription, so playing and recording always take precedence. The
 grabber stays on an ensemble until no new EPG data arrived for two
 minutes (the data carousel is complete) or the time limit is reached.
 Ensembles without an EPG are recognized and skipped later on, see the
-*EPG* column of the ensembles (*Advanced* view).
+*EPG* column of the ensembles (*Advanced* view): an ensemble is marked
+*No* when no EPG component was signalled for two minutes of reception
+(not while a reconfiguration of the ensemble is announced). Ensembles
+marked *No* are checked again after a week; set the column to *Unknown*
+to have the next EPG grab check the ensemble again.
+
+Each EPG grab logs (subsystem `dabepg`) how many ensembles it tunes,
+or why it did not start (no ensemble to check, grabber disabled, no
+grab time configured).
 
 ---
 

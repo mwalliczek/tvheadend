@@ -217,8 +217,12 @@ uint8_t	CN	= getBits_1 (d, 8 + 0);
 //	replace the current one before the change (FIG 0/0) happens, the
 //	sub-channel table would no longer match the CIFs. In the other
 //	FIGs C/N has another meaning (start or continuation of a list).
-	if (CN && fig0_is_mci (extension))
+	if (CN && fig0_is_mci (extension)) {
+	   /* a reconfiguration is announced: the EPG grabber must not take
+	      a missing EPG component for no EPG */
+	   atomic_set_s64 (&dei->mmi_ensemble->mm_next_config, mclk ());
 	   return;
+	}
 
 	switch (extension) {
 	   case 0:

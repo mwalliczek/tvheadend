@@ -203,8 +203,9 @@ void
 dab_ensemble_set_epg ( dab_ensemble_t *mm, int epg )
 {
   lock_assert(&global_lock);
-  if (mm->mm_epg != epg) {
+  if (mm->mm_epg != epg || epg == DAB_EPG_NO) {
     mm->mm_epg = epg;
+    mm->mm_epg_checked = gclk();
     idnode_changed(&mm->mm_id);
   }
 }
@@ -433,10 +434,21 @@ const idclass_t dab_ensemble_class =
       .name     = N_("EPG"),
       .desc     = N_("The ensemble carries an electronic programme "
                      "guide (SPI). Learned while receiving, used by "
-                     "the DAB EPG grabber to select the ensembles."),
+                     "the DAB EPG grabber to select the ensembles: "
+                     "ensembles with \"No\" are checked again after a "
+                     "week. Set it to \"Unknown\" to have the next EPG "
+                     "grab check the ensemble again."),
       .off      = offsetof(dab_ensemble_t, mm_epg),
-      .opts     = PO_ADVANCED | PO_RDONLY,
+      .opts     = PO_ADVANCED,
       .list     = dab_ensemble_class_epg_enum,
+    },
+    {
+      .type     = PT_TIME,
+      .id       = "epg_checked",
+      .name     = N_("EPG checked"),
+      .desc     = N_("When the EPG flag was learned."),
+      .off      = offsetof(dab_ensemble_t, mm_epg_checked),
+      .opts     = PO_ADVANCED | PO_RDONLY,
     },
     {
       .type     = PT_TIME,
