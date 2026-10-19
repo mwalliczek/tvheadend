@@ -45,7 +45,6 @@ void dab_network_scan_ensemble_done    ( dab_ensemble_t *mm );
 void dab_network_scan_ensemble_partial ( dab_ensemble_t *mm );
 void dab_network_scan_ensemble_cancel  ( dab_ensemble_t *mm, int reinsert );
 void dab_network_scan_ensemble_active  ( dab_ensemble_t *mm );
-void dab_network_scan_ensemble_reactivate ( dab_ensemble_t *mm );
 
 /*
  * Init / Teardown

@@ -185,32 +185,6 @@ uint8_t getbit (uint8_t v, int32_t o) {
         return  (v & maskTable [o]) ? 1 : 0;
 }
 
-//static
-//uint8_t getbit (uint8_t v, int32_t o) {
-//uint8_t	mask	= 1 << (7 - o);
-//	return  (v & mask) ? 1 : 0;
-//}
-	
-// depends: POLYS, RATE, COMPUTETYPE
-// 	encode was only used for testing purposes
-//void encode (/*const*/ unsigned char *bytes, COMPUTETYPE *symbols, int nbits) {
-//int	i, k;
-//int	polys [RATE] = POLYS;
-//int	sr = 0;
-//
-//// FIXME: this is slowish
-//// -- remember about the padding!
-//	for (i = 0; i < nbits + (VITERBI_K - 1); i++) {
-//	   int b = bytes[i/8];
-//	   int j = i % 8;
-//	   int bit = (b >> (7-j)) & 1;
-//
-//	   sr = (sr << 1) | bit;
-//	   for (k = 0; k < RATE; k++)
-//	      *(symbols++) = parity(sr & polys[k]);
-//	}
-//}
-
 //	Note that our DAB environment maps the softbits to -127 .. 127
 //	we have to map that onto 0 .. 255
 

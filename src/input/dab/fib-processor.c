@@ -99,9 +99,7 @@
                                    {280,3,384},
                                    {416,1,384}};
 
-   void		*userData;
    serviceComponent *find_packetComponent(dab_ensemble_instance_t *dei, int16_t);
-//   serviceComponent *find_serviceComponent(dab_ensemble_instance_t *dei, int32_t SId, int16_t SCId);
    void            bind_audioService(dab_ensemble_instance_t *dei, int8_t,
 	   uint32_t, int16_t,
 	   int16_t, int16_t, int16_t);
@@ -534,7 +532,6 @@ uint16_t CAOrg;
 
 serviceComponent *packetComp = find_packetComponent (dei, SCId);
 dab_ensemble_t *mm = dei->mmi_ensemble;
-//serviceId	 *service;
 
 	if (CAOrgflag == 1) {
 	   CAOrg = getBits (d, used * 8 + 40, 16);
@@ -563,10 +560,6 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
         if (DSCTy == 0)
            return used;
 
-/*	service = packetComp -> service;
-        char * serviceName = service -> serviceLabel. label;
-        if (packetComp -> componentNr == 0)     // otherwise sub component
-           addtoEnsemble (mm, serviceName, service);*/
 
         packetComp      -> is_madePublic = 1;
         packetComp      -> subchannelId = SubChId;
@@ -1107,23 +1100,6 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
         return NULL;
 }
 
-/*serviceComponent *find_serviceComponent (dab_ensemble_instance_t *dei, int32_t SId,
-	                                                int16_t SCIdS) {
-int16_t i;
-dab_ensemble_t *mm = dei->mmi_ensemble;
-
-	for (i = 0; i < 64; i ++) {
-	   if (!mm->ServiceComps [i]. inUse)
-	      continue;
-
-	   if ( (dab_ensemble_find_service(mm, SId) == mm->ServiceComps [i]. service)) {
-	      return &mm->ServiceComps [i];
-	   }
-	}
-
-	return NULL;
-}*/
-
 //	bind_audioService is the main processor for - what the name suggests -
 //	connecting the description of audioservices to a SID
 void	bind_audioService (dab_ensemble_instance_t *dei, int8_t TMid,
@@ -1202,22 +1178,6 @@ int16_t	firstFree	= -1;
 	mm->ServiceComps [firstFree]. is_madePublic = 0;
 	mm->ServiceComps [firstFree]. SId    = SId;
 	mm->ServiceComps [firstFree]. SCIdS  = ps_flag ? 0 : -1;	// the primary component has SCIdS 0
-}
-
-void	setupforNewFrame (dab_ensemble_instance_t *dei) {
-int16_t	i;
-dab_ensemble_t *mm = dei->mmi_ensemble;
-	tvhinfo(LS_RTLSDR, "FIC out of sync");
-	for (i = 0; i < 64; i ++)
-	   mm->ServiceComps [i]. inUse = 0;
-	
-}
-
-void	clearEnsemble (dab_ensemble_instance_t *dei) {
-dab_ensemble_t *mm = dei->mmi_ensemble;
-	setupforNewFrame (dei);
-	memset (mm->ServiceComps, 0, sizeof (mm->ServiceComps));
-	memset (mm->subChannels, 0, sizeof (mm->subChannels));
 }
 
 void	nameofEnsemble  (dab_ensemble_instance_t *dei, int id, const char *s) {

@@ -39,7 +39,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define PRECISIONSHIFT 0
 #define RENORMALIZE_THRESHOLD 2000000000
 
-void init_FULL_SPIRAL(void);
 void FULL_SPIRAL_neon(int amount, int32_t  *Y, int32_t  *X, int32_t  *syms, unsigned char  *dec, int32_t  *Branchtab);
 
 #endif

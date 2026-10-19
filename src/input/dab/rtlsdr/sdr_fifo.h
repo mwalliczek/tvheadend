@@ -44,7 +44,6 @@ void cbFree(CircularBuffer *cb);
 int cbIsFull(CircularBuffer *cb);
 int cbIsEmpty(CircularBuffer *cb);
 void cbWrite(CircularBuffer *cb, uint8_t *elem, uint32_t size);
-uint8_t * cbReadDouble(CircularBuffer *cb);
 
 static inline uint32_t cbCount(CircularBuffer *cb) {
   return __atomic_load_n(&cb->count, __ATOMIC_ACQUIRE);

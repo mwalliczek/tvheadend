@@ -1144,17 +1144,6 @@ dab_ensemble_set_network_name ( dab_ensemble_t *mm, const char *name )
   return 0;
 }
 
-int
-dab_ensemble_set_onid ( dab_ensemble_t *mm, uint32_t onid )
-{
-  if (onid == mm->mm_onid)
-    return 0;
-  mm->mm_onid = onid;
-  tvhtrace(LS_RTLSDR, "%s - set onid %04X (%d)", mm->mm_nicename, onid, onid);
-  idnode_changed(&mm->mm_id);
-  return 1;
-}
-
 void
 dab_ensemble_nice_name( dab_ensemble_t *mm, char *buf, size_t len )
 {

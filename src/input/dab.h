@@ -447,8 +447,6 @@ void dab_input_close_service ( dab_input_t *mi, dab_service_t *s );
 
 void dab_input_status_timer ( void *p );
 
-int dab_input_grace ( dab_input_t * mi, dab_ensemble_t * mm );
-
 int
 dab_input_get_weight(dab_input_t *mi, dab_ensemble_t *mm, int flags, int weight );
 
@@ -536,7 +534,6 @@ void dab_network_class_delete ( const idclass_t *idc, int delconf );
 
 void dab_network_delete ( dab_network_t *mn, int delconf );
 
-int dab_network_set_network_name ( dab_network_t *mn, const char *name );
 void dab_network_scan ( dab_network_t *mn );
 void dab_network_get_type_str( dab_network_t *mn, char *buf, size_t buflen );
 
@@ -596,11 +593,7 @@ static inline int dab_ensemble_release ( dab_ensemble_t *mm )
   return 0;
 }
 
-int dab_ensemble_set_onid ( dab_ensemble_t *mm, uint32_t onid );
-
 void dab_ensemble_save ( dab_ensemble_t *mm, htsmsg_t *c, int refs );
-
-void dab_ensemble_tuning_error( const char *ensemble_uuid, dab_ensemble_instance_t *mmi_match );
 
 dab_ensemble_instance_t *dab_ensemble_instance_create0
   ( dab_ensemble_instance_t *mmi, const idclass_t *class, const char *uuid,
