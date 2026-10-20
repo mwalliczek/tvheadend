@@ -29,6 +29,8 @@ It supports the following inputs:
   * IPTV
     * UDP
     * HTTP
+  * RTL SDR
+    * DAB(+)
   * SAT>IP
   * Unix Pipe
 
