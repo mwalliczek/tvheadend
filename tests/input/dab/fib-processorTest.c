@@ -372,6 +372,9 @@ START_TEST(nextConfigurationTest) {
     dab_service_t *s;
     subChannel *sc;
 
+    ck_assert(dei->mmi_ensemble->mm_next_config == 0);
+    __mdispatch_clock = sec2mono(1000);     /* the time of the FIGs */
+
     fib_init(&f);
     fig1_label(&f, 1, 0xD312, "Bayern 3");
     process(&f);
@@ -402,6 +405,9 @@ START_TEST(nextConfigurationTest) {
     sc = &dei->mmi_ensemble->subChannels[5];
     ck_assert_int_eq(sc->inUse, 1);
     ck_assert_int_eq(sc->StartAddr, 100);
+    /* the EPG grabber learns that a reconfiguration is announced */
+    ck_assert(dei->mmi_ensemble->mm_next_config == sec2mono(1000));
+    __mdispatch_clock = 0;
     ck_assert_int_eq(sc->Length, 84);
     ck_assert_int_eq(sc->BitRate, 80);
     ck_assert_int_eq(dei->mmi_ensemble->subChannels[6].inUse, 0);

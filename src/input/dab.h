@@ -222,6 +222,8 @@ struct dab_ensemble
         int                      mm_freq_corr_known;
         int                      mm_fic_changed;     ///< FIC organisation changed, save
         int                      mm_epg;             ///< EPG component: DAB_EPG_UNKNOWN/YES/NO
+        time_t                   mm_epg_checked;     ///< when mm_epg was learned
+        volatile int64_t         mm_next_config;     ///< mclk of the last FIG with the next configuration
         mtimer_t                 mm_scan_timeout; ///< Timer to handle timeout
         TAILQ_ENTRY(dab_ensemble)  mm_scan_link;    ///< Link to Queue
         mpegts_mux_scan_state_t  mm_scan_state;   ///< Scanning state
