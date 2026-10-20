@@ -413,7 +413,7 @@ static void dab_epggrab_programme(const dab_epg_programme_t *p, void *opaque)
   uint8_t g;
   int save;
 
-  if (!p->on_air || p->service.sid > 0xFFFF)
+  if (p->service.sid > 0xFFFF)
     return;
   if ((mm = dab_epggrab_find_ensemble(ctx->mm, &p->service)) == NULL)
     return;
@@ -495,9 +495,11 @@ static void dab_epggrab_process_data(void *m, void *data, uint32_t len)
                       &scope, dab_epggrab_programme, &ctx);
     if (r < 0)
       tvhwarn(LS_DABEPG, "%s: invalid programme information", ctx.mm->mm_nicename);
-    else
+    else {
+      dab_ensemble_set_epg(ctx.mm, DAB_EPG_YES);
       tvhdebug(LS_DABEPG, "%s: %d programmes, %d broadcasts updated",
                ctx.mm->mm_nicename, r, ctx.broadcasts);
+    }
     if (ctx.save)
       epg_updated();
   }
