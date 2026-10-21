@@ -546,30 +546,13 @@ dab_ensemble_t *mm = dei->mmi_ensemble;
         if (packetComp == NULL)		// no serviceComponent yet
            return used;
 
-//      We want to have the subchannel OK
-	if (!mm->subChannels [SubChId]. inUse)
-	   return used;
-
-//      If the component exists, we first look whether is
-//      was already handled
-        if (packetComp -> is_madePublic)
-           return used;
-//
-//      We want to have the subchannel OK
-        if (!mm->subChannels [SubChId]. inUse)
-           return used;
-
-//      if the  Data Service Component Type == 0, we do not deal
-//      with it
-        if (DSCTy == 0)
-           return used;
-
-
-        packetComp      -> is_madePublic = 1;
+        packetComp      -> is_madePublic = 0;
         packetComp      -> subchannelId = SubChId;
         packetComp      -> DSCTy        = DSCTy;
 	packetComp	-> DGflag	= DGflag;
         packetComp      -> packetAddress        = packetAddress;
+        if (DSCTy != 0 && mm->subChannels[SubChId].inUse)
+           packetComp -> is_madePublic = 1;
         return used;
 }
 //
@@ -1158,9 +1141,19 @@ int16_t	firstFree	= -1;
 //           return;
 
 	for (i = 0; i < 64; i ++) {
-	   if ((mm->ServiceComps [i]. inUse) &&
-	                      (mm->ServiceComps [i]. SCId == SCId))
+	   if (mm->ServiceComps[i].inUse &&
+	       mm->ServiceComps[i].SCId == SCId) {
+	      serviceComponent *sc = &mm->ServiceComps[i];
+	      if (sc->SId != SId || sc->componentNr != compnr)
+	         sc->is_madePublic = 0;
+	      sc->TMid = TMid;
+	      sc->componentNr = compnr;
+	      sc->PS_flag = ps_flag;
+	      sc->CAflag = CAflag;
+	      sc->SId = SId;
+	      sc->SCIdS = ps_flag ? 0 : -1;
 	      return;
+	   }
 
 	   if (!mm->ServiceComps [i]. inUse) {
 	      if (firstFree == -1)

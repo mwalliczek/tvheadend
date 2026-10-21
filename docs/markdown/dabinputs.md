@@ -105,15 +105,16 @@ Setting                        | Description
 -------------------------------|------------------------------------------
 Cron multi-line                | When to tune the ensembles, cron syntax, one time per line. Default: every day at 03:14. Empty: only while a station is used.
 Grab after start               | Also tune them two minutes after Tvheadend has started (default on).
-Time limit per ensemble        | Maximum time on one ensemble, default 15 minutes.
+Time limit per ensemble        | Maximum time on one ensemble, default 60 minutes (minimum 15).
 
 The ensembles are tuned one after the other with a low priority
-subscription, so playing and recording always take precedence. The
-grabber stays on an ensemble until no new EPG data arrived for two
-minutes (the data carousel is complete) or the time limit is reached.
+subscription, so playing and recording always take precedence. Once
+EPG objects arrive, the grabber stays on an ensemble until no new
+objects have arrived for 15 minutes (the carousel is likely complete)
+or the time limit is reached. The time limit is at least 15 minutes.
 Ensembles without an EPG are recognized and skipped later on, see the
 *EPG* column of the ensembles (*Advanced* view): an ensemble is marked
-*No* when no EPG component was signalled for two minutes of reception
+*No* when no EPG component was signalled for 15 minutes of reception
 (not while a reconfiguration of the ensemble is announced). Ensembles
 marked *No* are checked again after a week; set the column to *Unknown*
 to have the next EPG grab check the ensemble again.

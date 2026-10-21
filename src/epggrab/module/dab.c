@@ -26,8 +26,8 @@
  * The scheduler tunes the ensembles that carry an EPG (or were not
  * checked yet) one after the other at the configured times, with a low
  * priority subscription: it stays on an ensemble until no new object
- * arrived for a while (the carousel is complete), at most for the
- * configured time.
+ * has arrived for 15 minutes (the carousel is likely complete), at most
+ * for the configured time.
  */
 
 #include <string.h>
@@ -78,11 +78,11 @@ int dab_epggrab_enabled(void)
 
 #define SCHED_SUBSCRIPTION  "epggrab"
 #define SCHED_TICK          5         /* s */
-#define SCHED_NO_EPG        120       /* s in sync without EPG component */
 #define SCHED_RECHECK       (7*86400) /* s: an ensemble without EPG is checked again */
 #define SCHED_RECONFIG      60        /* s after the last next configuration FIG */
 #define SCHED_NO_SIGNAL     60        /* s without FIC sync */
-#define SCHED_IDLE          120       /* s without a new object: complete */
+#define SCHED_NO_COMPONENT  (15*60)   /* s to wait for an EPG component */
+#define SCHED_COMPLETE_IDLE (15*60)  /* s without a new object: carousel complete */
 #define SCHED_WAIT_TUNER    3600      /* s to wait for a free tuner */
 #define SCHED_INITIAL_DELAY 120       /* s after the start of tvheadend */
 
@@ -282,9 +282,11 @@ static void dab_epggrab_sched_tick(void *aux)
   has_epg = dab_ensemble_find_epg_component(mm, &subChId, &address);
   tvh_mutex_unlock(&mm->mm_tables_lock);
 
-  timeout = (dab_epggrab_mod->sched_timeout ?: 15) * 60;
+  timeout = MAX(dab_epggrab_mod->sched_timeout, 15) * 60;
   if (!has_epg) {
-    if (sched.synced && now - sched.synced > sec2mono(SCHED_NO_EPG)) {
+    if (!sched.synced && now - sched.start > sec2mono(SCHED_NO_SIGNAL)) {
+      dab_epggrab_sched_done(mm, "skipped (no reception)");
+    } else if (now - sched.start > sec2mono(SCHED_NO_COMPONENT)) {
       /* during an announced reconfiguration the service components may
          be signalled for the next configuration only */
       if (now - atomic_get_s64(&mm->mm_next_config) < sec2mono(SCHED_RECONFIG)) {
@@ -293,15 +295,14 @@ static void dab_epggrab_sched_tick(void *aux)
         dab_ensemble_set_epg(mm, DAB_EPG_NO);
         dab_epggrab_sched_done(mm, "skipped (no EPG)");
       }
-    } else if (!sched.synced && now - sched.start > sec2mono(SCHED_NO_SIGNAL)) {
-      dab_epggrab_sched_done(mm, "skipped (no reception)");
     }
     return;
   }
   if (atomic_get(&sched.objects) > 0 &&
-      now - atomic_get_s64(&sched.last_object) > sec2mono(SCHED_IDLE))
-    dab_epggrab_sched_done(mm, "finished");
-  else if (now - sched.start > sec2mono(timeout))
+             now - atomic_get_s64(&sched.last_object) >
+             sec2mono(SCHED_COMPLETE_IDLE)) {
+    dab_epggrab_sched_done(mm, "finished (carousel idle)");
+  } else if (now - sched.start > sec2mono(timeout))
     dab_epggrab_sched_done(mm, "finished (time limit)");
 }
 
@@ -597,9 +598,10 @@ const idclass_t epggrab_mod_dab_class = {
       .type   = PT_U32,
       .id     = "timeout",
       .name   = N_("Time limit per ensemble (minutes)"),
-      .desc   = N_("The EPG grab moves on to the next ensemble when no "
-                   "new EPG data arrived for two minutes, at the latest "
-                   "after this time."),
+      .desc   = N_("Maximum time on each ensemble, default 60 minutes "
+                   "and at least 15 minutes. Once EPG objects arrive, "
+                   "the grab finishes after 15 minutes without a new "
+                   "object, or when this time limit is reached."),
       .off    = offsetof(dab_epggrab_module_t, sched_timeout),
       .opts   = PO_ADVANCED,
       .group  = 1,
@@ -621,7 +623,7 @@ void dab_epggrab_init(void)
   mod->active       = 1;
   mod->sched_cron    = strdup("# Default config (03:14 every day)\n14 3 * * *");
   mod->sched_initial = 1;
-  mod->sched_timeout = 15;
+  mod->sched_timeout = 60;
   dab_epggrab_mod = (dab_epggrab_module_t *)
     epggrab_module_create((epggrab_module_t *)mod, &epggrab_mod_dab_class,
                           "dab", LS_DABEPG, NULL, "DAB: SPI EPG Grabber", 2);

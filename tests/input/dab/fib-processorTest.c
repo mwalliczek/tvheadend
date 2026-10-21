@@ -348,6 +348,19 @@ static void epg_service_fib(fib_t *f, int appType) {
     put(f, 5, 0);
 }
 
+static void epg_component_fib(fib_t *f, int cn, int subch, int address) {
+    fib_init(f);
+    fig0_header_cn(f, 1 + 5, cn, 0, 3);
+    put(f, 12, 5);          /* SCId */
+    put(f, 3, 0);
+    put(f, 1, 0);           /* no CAOrg */
+    put(f, 1, 0);           /* DG flag */
+    put(f, 1, 0);
+    put(f, 6, 60);          /* DSCTy: MOT */
+    put(f, 6, subch);
+    put(f, 10, address);
+}
+
 START_TEST(epgComponentTest) {
     fib_t f;
     int subch = -1, address = -1;
@@ -362,6 +375,29 @@ START_TEST(epgComponentTest) {
     ck_assert_int_eq(subch, 3);
     ck_assert_int_eq(address, 1);
     ck_assert_int_eq(dei->mmi_ensemble->subChannels[3].BitRate, 32);
+
+    /* The announced component stays pending, then the current FIG updates
+       the existing SCId when the reconfiguration takes effect. */
+    fib_init(&f);
+    fig0_header(&f, 1 + 3, 0, 1);
+    put(&f, 6, 4);
+    put(&f, 10, 600);
+    put(&f, 1, 0);
+    put(&f, 1, 0);
+    put(&f, 6, 0);
+    process(&f);
+
+    epg_component_fib(&f, 1, 4, 2);
+    process(&f);
+    ck_assert_int_eq(dab_ensemble_find_epg_component(dei->mmi_ensemble, &subch, &address), 1);
+    ck_assert_int_eq(subch, 3);
+    ck_assert_int_eq(address, 1);
+
+    epg_component_fib(&f, 0, 4, 2);
+    process(&f);
+    ck_assert_int_eq(dab_ensemble_find_epg_component(dei->mmi_ensemble, &subch, &address), 1);
+    ck_assert_int_eq(subch, 4);
+    ck_assert_int_eq(address, 2);
 } END_TEST
 
 
